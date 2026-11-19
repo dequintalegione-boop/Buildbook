@@ -375,6 +375,69 @@ assert(api.available('ssd-batch')===1,'Остаток партии не учёл
 assert(!state().builds.some(x=>x.id==='bad-build'),'Сборка с неизвестной партией была добавлена');
 });
 
+await test('Добавление бэкапа сохраняет текущие данные и восстанавливает связи по ID',()=>{
+api.setState(fixture());
+const backup={
+accounts:[{id:'cash',name:'Наличные',open:9999},{id:'cash-reserve',name:'Резерв',open:200}],
+batches:[{id:'merge-batch',type:'ССД',desc:'SSD из бэкапа',date:'2026-05-01',price:40,qty:3,problemQty:1,problemReason:'Проверить',writtenOffQty:0,txId:'tx-buy'}],
+builds:[{id:'merge-build',num:2,name:'Импортированная сборка',status:'Продана',builder:'Тест',buyer:'',date:'2026-05-02',sold:'2026-05-03',planned:0,price:800,cost:40,txId:'tx-sale',note:'',lines:[{batchId:'merge-batch',qty:1,problem:false}]}],
+tx:[
+{id:'tx-buy',kind:'e',date:'2026-05-01',amount:120,desc:'Закупка SSD',cat:'ССД',grp:'Сборка ПК',qty:3,acc:'cash-reserve',batchId:'merge-batch',note:''},
+{id:'tx-sale',kind:'i',date:'2026-05-03',amount:800,desc:'Продажа ПК №2',cat:'Сборка ПК',grp:'Заработок',qty:1,acc:'cash',buildId:'merge-build',note:''}
+],
+tasks:[{id:'task-backup',text:'Задача из копии',q:1,done:false,buildId:'merge-build'}],
+stockEvents:[{id:'event-backup',kind:'problem',date:'2026-05-01',createdAt:'2026-05-01T10:00:00.000Z',batchId:'merge-batch',batchType:'ССД',batchDesc:'SSD из бэкапа',qty:1,reason:'Проверить'}],
+seq:2,photos:{'merge-build':['data:image/png;base64,AA==']},
+categories:{e:{'Импортированная группа':['Новая категория']},i:{}}
+};
+const result=api.restoreBackup(backup,'add',false),s=state();
+assert(s.batches.some(b=>b.id==='gpu-batch')&&s.batches.some(b=>b.id==='merge-batch'),'Добавление бэкапа удалило текущую партию или не добавило новую');
+assert(s.builds.some(b=>b.id==='merge-build'&&b.lines[0].batchId==='merge-batch'),'Не восстановлена ссылка сборки на партию');
+assert(s.batches.find(b=>b.id==='merge-batch').txId==='tx-buy','Не восстановлена ссылка партии на расход');
+assert(s.builds.find(b=>b.id==='merge-build').txId==='tx-sale','Не восстановлена ссылка сборки на доход');
+assert(s.tx.some(t=>t.id==='tx-buy'&&t.acc==='cash-reserve')&&s.tx.some(t=>t.id==='tx-sale'&&t.buildId==='merge-build'),'Не восстановлены операции и их связи');
+assert(s.tasks.some(t=>t.id==='task-backup'&&t.buildId==='merge-build'),'Не восстановлена задача со ссылкой на сборку');
+assert(s.stockEvents.some(e=>e.id==='event-backup'&&e.batchId==='merge-batch'),'Не восстановлено складское событие');
+assert(api.getPhotos()['merge-build'].length===1,'Не восстановлено фото сборки');
+assert(api.balance('cash')===1800,'Совпадающая касса получила чужой начальный остаток или потеряла исходный');
+assert(api.balance('cash-reserve')===80,'Новая касса не восстановлена с начальными и импортированными операциями');
+assert(result.accounts===1&&result.batches===1&&result.builds===1&&result.tx===2&&result.tasks===1,'Счётчики добавления не совпадают');
+assert(s.categories.e['Импортированная группа'].includes('Новая категория'),'Не объединены справочники категорий');
+});
+await test('Повторное добавление одного бэкапа не создаёт дубликаты ID',()=>{
+const backup={
+accounts:[{id:'cash',name:'Наличные',open:0}],
+batches:[{id:'repeat-batch',type:'ССД',desc:'Повторная партия',date:'2026-05-01',price:10,qty:1,problemQty:0,problemReason:'',writtenOffQty:0}],
+builds:[],tx:[],tasks:[],stockEvents:[{id:'repeat-event',kind:'problem',date:'2026-05-01',batchId:'repeat-batch',qty:1,reason:'Тест'}],seq:0
+};
+api.restoreBackup(backup,'add',false);const before=state();
+const stats=api.restoreBackup(backup,'add',false),after=state();
+assert(after.batches.filter(b=>b.id==='repeat-batch').length===1,'Создан дубликат партии');
+assert(after.stockEvents.filter(e=>e.id==='repeat-event').length===1,'Создан дубликат складского события');
+assert(after.accounts.filter(a=>a.id==='cash').length===1,'Создана дублирующая касса');
+assert(stats.batches===0&&stats.stockEvents===0&&stats.skipped>=3,'Не отражены пропущенные записи');
+assert(after.batches.length===before.batches.length,'Повторный импорт добавил лишние партии');
+});
+await test('Режим «Заменить всё» заменяет данные и восстанавливает фотографии',()=>{
+api.setState(fixture());
+const backup={
+accounts:[{id:'restored-cash',name:'Восстановленная касса',open:500}],
+batches:[{id:'replacement-batch',type:'ССД',desc:'Партия из полной копии',date:'2026-06-01',price:70,qty:4,problemQty:1,problemReason:'Проверить',writtenOffQty:0}],
+builds:[],tx:[],tasks:[],stockEvents:[],seq:0,
+categories:{e:{'Сборка ПК':['Видеокарты']},i:{'Заработок':['Другое']}},
+hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},set:{theme:'dark',year:2026,backup:''},
+photos:{'replacement-build':['data:image/png;base64,AA==']}
+};
+const result=api.restoreBackup(backup,'replace',false),s=state();
+assert(s.batches.length===1&&s.batches[0].id==='replacement-batch','Старые партии остались после замены');
+assert(s.builds.length===0&&s.tx.length===0,'Остались старые сборки или операции');
+assert(s.accounts.length===1&&s.accounts[0].id==='restored-cash','Не заменены кассы');
+assert(s.set.theme==='dark','Не восстановлены настройки');
+assert(api.getPhotos()['replacement-build'].length===1,'Не восстановлены фотографии из полной копии');
+assert(result.batches===1&&result.accounts===1,'Отчёт замены не показывает состав копии');
+assert(api.balance('restored-cash')===500,'Начальный остаток восстановленной кассы рассчитан неверно');
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
