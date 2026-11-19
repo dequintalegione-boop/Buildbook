@@ -4,7 +4,7 @@
 :root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:640px;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
 </style></head><body>
 <h1>Buildbook — автоматические браузерные тесты</h1>
-<p class="muted">Проверяется приложение из <code>index.html</code> в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
+<p class="muted">Проверяется выбранная версия приложения в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
 <div class="card row"><div><b id="summary">Ожидание запуска…</b><div class="muted" id="details">Тесты выполняются локально в этом браузере.</div></div><button id="rerun">Запустить снова</button></div>
 <div class="card"><ol id="results"></ol></div>
 <div id="app-wrap"><iframe id="app" title="Тестируемое приложение" src="../index.html?test=1"></iframe></div>
@@ -13,11 +13,13 @@
 'use strict';
 const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
 const RUNNER_BROWSER=new URLSearchParams(location.search).get('browser')||'auto';
+const APP_VARIANT=new URLSearchParams(location.search).get('app')==='standalone'?'standalone':'index';
+frame.src=APP_VARIANT==='standalone'?'../Buildbook-standalone.html?test=1':'../index.html?test=1';
 let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,tempDatabaseCounter=0;
 const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
-function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · выполнено тестов: '+(passed+failed)}
+function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · приложение: '+APP_VARIANT+' · выполнено тестов: '+(passed+failed)}
 async function test(name,fn){summary.textContent='Выполняется: '+name;try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
@@ -542,6 +544,36 @@ assert(api.available('ssd-batch')===1,'Остаток партии не учёл
 assert(!state().builds.some(x=>x.id==='bad-build'),'Сборка с неизвестной партией была добавлена');
 });
 
+await test('CSV-импорт касс добавляет счета, сохраняет ID и отклоняет некорректные строки',()=>{
+api.setState(fixture());
+const stats=api.importCsv('ID;Название кассы;Начальный остаток\naccount-checking;Расчётный счёт;2500\naccount-duplicate;Карта;100\naccount-invalid;Некорректный баланс;abc','accounts',{id:0,name:1,open:2});
+assert(stats.added===1&&stats.skipped===2,'Ожидалось 1 добавление и 2 пропуска');
+const accounts=state().accounts;
+const imported=accounts.find(x=>x.id==='account-checking');
+assert(imported&&imported.name==='Расчётный счёт'&&imported.open===2500,'Не импортированы реквизиты новой кассы');
+assert(!accounts.some(x=>x.id==='account-duplicate'),'Дублирующая касса ошибочно добавлена');
+assert(stats.errors.length===2,'Не показаны причины ошибочных строк');
+});
+await test('CSV-импорт задач сохраняет исполнителя, срок, приоритет и связь со сборкой',()=>{
+api.setState(fixture());
+const stats=api.importCsv('ID;Задача;Квадрант;Выполнено;Срок;Исполнитель;ID сборки\ntask-csv-1;Проверить тестовую сборку;1;Да;2026-05-10;Иван;build-open\ntask-csv-bad-build;Неизвестная сборка;0;Нет;2026-05-11;Пётр;missing-build\ntask-csv-bad-q;Некорректный приоритет;5;Нет;;;\ntask-csv-empty;;0;Нет;;;','tasks',{id:0,text:1,q:2,done:3,due:4,who:5,build:6});
+assert(stats.added===1&&stats.skipped===3,'Ожидалось 1 добавление и 3 пропуска');
+const imported=state().tasks.find(x=>x.id==='task-csv-1');
+assert(imported&&imported.text==='Проверить тестовую сборку','Текст задачи не импортирован');
+assert(imported.q===1&&imported.done===1,'Приоритет или статус задачи не сохранён');
+assert(imported.due==='2026-05-10'&&imported.who==='Иван'&&imported.build==='build-open','Срок, исполнитель или ID сборки не сохранены');
+assert(stats.errors.length===3,'Не показаны причины пропуска ошибочных задач');
+});
+await test('Автоопределение CSV распознаёт выгрузки касс и задач',()=>{
+assert(api.guessCsvKind(['ID','Название кассы','Начальный остаток','Текущий баланс'])==='accounts','CSV касс распознан как другой тип');
+assert(api.guessCsvKind(['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'])==='tasks','CSV задач распознан как другой тип');
+});
+await test('Автономный HTML-бандл самодостаточен',()=>{
+if(APP_VARIANT!=='standalone')return;
+const external=Array.from(w.document.scripts).map(x=>x.getAttribute('src')).filter(Boolean);
+assert(!external.some(src=>/repository\.js|xlsx\.full\.min\.js/.test(src)),'Автономный HTML зависит от внешнего repository.js или SheetJS');
+assert(w.BuildbookRepository&&w.XLSX,'В автономном HTML не встроен слой хранения или библиотека XLSX');
+});
 await test('Добавление бэкапа сохраняет текущие данные и восстанавливает связи по ID',()=>{
 api.setState(fixture());
 const backup={
