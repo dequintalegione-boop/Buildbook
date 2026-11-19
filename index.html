@@ -54,7 +54,21 @@ const DATA_SCHEMA_VERSION=3;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const repository=window.BuildbookRepository.create(DB_NAME);
-let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='';
+let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='',storageRevision=0,storageConflict=false,remoteStorageRevision=0;
+const storageChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('buildbook-profile:'+DB_NAME):null;
+function markStorageConflict(revision){
+ if(Number.isSafeInteger(revision)&&revision>=0)remoteStorageRevision=Math.max(remoteStorageRevision,revision);
+ if(remoteStorageRevision<=storageRevision)return;
+ if(!storageConflict){
+  storageConflict=true;clearTimeout(tm);
+  toast('Профиль изменён в другой вкладке. Сохранение здесь остановлено.');
+  if(APP_READY)render();
+ }
+}
+if(storageChannel)storageChannel.addEventListener('message',event=>{
+ const data=event&&event.data;
+ if(data&&data.type==='profile-saved'&&Number.isSafeInteger(data.revision))markStorageConflict(data.revision);
+});
 function isPlainRecord(value){return !!value&&typeof value==='object'&&!Array.isArray(value)}
 
 function validMetadataDate(value){return typeof value==='string'&&Number.isFinite(Date.parse(value))}
@@ -180,7 +194,10 @@ async function photosAsBlobs(photos){
 async function load(){
  STARTUP_STAGE='opening-database';
  STARTUP_STAGE='reading-profile';
- const {state:storedState,logs:storedLog,photos:storedPhotos}=await repository.readProfile();
+ const profile=await repository.readProfile();
+ const {state:storedState,logs:storedLog,photos:storedPhotos}=profile;
+ storageRevision=profile.revision;
+ if(remoteStorageRevision>storageRevision)markStorageConflict(remoteStorageRevision);
  const previousState=storedState?JSON.stringify(storedState):'';
  STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
@@ -195,10 +212,16 @@ async function load(){
  last=currentState;
  const journalMigrated=migrateLegacyJournalEntries(currentState);
  const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos||journalMigrated;
- if(needsWrite){
+ if(needsWrite&&!storageConflict){
   STARTUP_STAGE='saving-migrated-profile';
   const photoBlobs=await photosAsBlobs(PH);
-  await repository.writeProfile(S,LOG,photoBlobs);
+  try{
+   storageRevision=await repository.writeProfile(S,LOG,photoBlobs,storageRevision);
+   if(storageChannel)storageChannel.postMessage({type:'profile-saved',revision:storageRevision});
+  }catch(error){
+   if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT')markStorageConflict(error.currentRevision);
+   throw error;
+  }
  }
  storageDirty=false;
  STARTUP_STAGE='ready';
@@ -208,17 +231,33 @@ function persistCurrent(){
  const state=JSON.parse(JSON.stringify(S)),logs=JSON.parse(JSON.stringify(LOG)),photos=JSON.parse(JSON.stringify(PH));
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
+  if(storageConflict)return false;
   const photoBlobs=await photosAsBlobs(photos);
-  await repository.writeProfile(state,logs,photoBlobs);
+  try{
+   storageRevision=await repository.writeProfile(state,logs,photoBlobs,storageRevision);
+  }catch(error){
+   if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT')markStorageConflict(error.currentRevision);
+   throw error;
+  }
+  if(storageChannel)storageChannel.postMessage({type:'profile-saved',revision:storageRevision});
   if(JSON.stringify(S)===stateText&&JSON.stringify(LOG)===logsText&&JSON.stringify(PH)===photosText)storageDirty=false;
+  return true;
  };
  storageWrite=storageWrite.then(run,run);
  return storageWrite;
 }
 function reportStorageError(error){
+ if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT'){
+  markStorageConflict(error.currentRevision);
+  return;
+ }
  const message=error&&error.message||'Неизвестная ошибка сохранения.';
  console.error('Buildbook storage:',error);
- if(storageErrorShown!==message){storageErrorShown=message;toast('Не удалось сохранить данные. Сделайте резервную копию.');}
+ if(storageErrorShown!==message){
+  storageErrorShown=message;
+  const quota=error&&(error.name==='QuotaExceededError'||error.code===22||error.code===1014);
+  toast(quota?'Недостаточно места в браузерном хранилище. Скачайте резервную копию и освободите место.':'Не удалось сохранить данные. Сделайте резервную копию.');
+ }
 }
 function flushSave(){
  clearTimeout(tm);
@@ -405,6 +444,7 @@ const save=()=>{
   LOG=LOG.slice(0,40);
  }
  last=cur;save.skip=0;storageDirty=true;clearTimeout(tm);
+ if(storageConflict)return;
  tm=setTimeout(()=>persistCurrent().catch(reportStorageError),150);
 };
 const toast=m=>{const t=document.createElement('div');t.className='ts';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2200)};
@@ -1751,12 +1791,12 @@ function xlsxImportWizard(buffer){
  renderMappings();
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.14<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.15<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.14-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
+version:'2.15-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
@@ -1847,7 +1887,8 @@ async function requestPersistentStorage(){
 
 function render(){
  if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Не удалось открыть Buildbook</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Данные не были заменены пустой базой. Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p></section>';return}
- $('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
+ const conflictBanner=storageConflict?'<section class="tw" style="padding:16px;margin-bottom:14px;border:1px solid var(--bad)"><b>Данные изменены в другой вкладке</b><p class="mu">Сохранение в этой вкладке остановлено, чтобы не перезаписать более свежий профиль. Изменения, сделанные здесь после конфликта, пока остаются только в памяти этой вкладки. Скачайте отдельную копию, затем перезагрузите приложение и при необходимости объедините резервную копию.</p><button class="btn p" data-a="expzip">Скачать полный бэкап этой вкладки</button> <button class="btn" data-a="reload">Перезагрузить Buildbook</button></section>':'';
+ $('#m').innerHTML=conflictBanner+{home,dash,stock,builds,tx:money,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab));
  if(V.tab==='set')refreshStorageInfo()
 }
@@ -1961,7 +2002,7 @@ ccadd:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o
 ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(old))return;const n=(prompt('Новое название категории',old)||'').trim();if(!n||n==old)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g][o[g].indexOf(old)]=n;S.tx.forEach(t=>{if(t.cat==old&&(t.grp==g||!t.grp))t.cat=n});const hk=g+'::'+old,hk2=g+'::'+n;S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).map(x=>x==hk?hk2:x);if(k=='e'&&g==S.stockGroup)S.batches.forEach(b=>{if(b.type==old)b.type=n});if(k=='i'&&g==S.partSaleGroup&&S.partSaleCategory==old)S.partSaleCategory=n;syncCategories();save();render()},
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
-exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),
+exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift(makeTrashEntry('task',task));S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item||!confirm('Переместить пункт чек-листа в корзину?'))return;S.trash.unshift(makeTrashEntry('checklist',item));S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e)return;if(!Array.isArray(e.changes)||!e.changes.length){alert('Для этой записи нет безопасного набора изменений.');return}if(!confirm('Отменить только действие «'+e.l+'»? Более поздние независимые действия сохранятся. Если изменённые поля уже затронуты последующими операциями, отмена будет заблокирована.'))return;const result=undoJournalEntry(+id);if(!result.ok){alert(result.message);return}toast('Действие отменено. Более поздние операции сохранены.')},

@@ -1,7 +1,7 @@
 (function(global){
 'use strict';
 
-const PROFILE_KEYS=Object.freeze(['s','l','p']);
+const PROFILE_KEYS=Object.freeze(['s','l','p','r']);
 
 function create(databaseName){
  const name=String(databaseName||'buildbook').trim();
@@ -90,16 +90,17 @@ function create(databaseName){
    transaction.oncomplete=()=>{
     if(settled)return;
     settled=true;
-    resolve({state:values.s,logs:values.l,photos:values.p});
+    resolve({state:values.s,logs:values.l,photos:values.p,revision:Number.isSafeInteger(values.r)&&values.r>=0?values.r:0});
    };
    transaction.onerror=()=>fail(transaction.error||new Error('Ошибка чтения локальной базы.'));
    transaction.onabort=()=>fail(transaction.error||new Error('Чтение локальной базы было отменено.'));
   }));
  }
 
- function writeProfile(state,logs,photos){
+ function writeProfile(state,logs,photos,expectedRevision){
+  if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)return Promise.reject(new Error('Не задана корректная версия профиля для сохранения.'));
   return open().then(database=>new Promise((resolve,reject)=>{
-   let transaction,settled=false;
+   let transaction,settled=false,nextRevision=0;
    const fail=error=>{
     if(settled)return;
     settled=true;
@@ -110,14 +111,36 @@ function create(databaseName){
     transaction.oncomplete=()=>{
      if(settled)return;
      settled=true;
-     resolve(true);
+     resolve(nextRevision);
     };
     transaction.onerror=()=>fail(transaction.error||new Error('Не удалось сохранить данные в локальную базу.'));
     transaction.onabort=()=>fail(transaction.error||new Error('Запись в локальную базу была отменена.'));
     const store=transaction.objectStore('kv');
-    store.put(state,'s');
-    store.put(logs,'l');
-    store.put(photos,'p');
+    const revisionRequest=store.get('r');
+    revisionRequest.onsuccess=()=>{
+     const currentRevision=Number.isSafeInteger(revisionRequest.result)&&revisionRequest.result>=0?revisionRequest.result:0;
+     if(currentRevision!==expectedRevision){
+      const conflict=new Error('Профиль уже изменён в другой вкладке. Эта вкладка не будет перезаписывать более свежие данные.');
+      conflict.name='BuildbookStorageConflictError';
+      conflict.code='BUILD_BOOK_STORAGE_CONFLICT';
+      conflict.expectedRevision=expectedRevision;
+      conflict.currentRevision=currentRevision;
+      fail(conflict);
+      try{transaction.abort()}catch(_){}
+      return;
+     }
+     nextRevision=currentRevision+1;
+     try{
+      store.put(state,'s');
+      store.put(logs,'l');
+      store.put(photos,'p');
+      store.put(nextRevision,'r');
+     }catch(error){
+      fail(error);
+      try{transaction.abort()}catch(_){}
+     }
+    };
+    revisionRequest.onerror=()=>fail(revisionRequest.error||new Error('Не удалось проверить версию профиля перед сохранением.'));
    }catch(error){
     if(transaction){try{transaction.abort()}catch(_){}}
     fail(error);

@@ -45,11 +45,52 @@ w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
+await test('Сохранение повышает ревизию профиля атомарно',async()=>{
+const name='buildbook-revision-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
+try{
+const initial=await repository.readProfile();
+assert(initial.revision===0,'Пустой профиль должен начинать с ревизии 0');
+const revision=await repository.writeProfile({marker:'Версия 1'},[],{},initial.revision);
+assert(revision===1,'Первая запись должна увеличить ревизию до 1');
+const loaded=await repository.readProfile();
+assert(loaded.revision===1&&loaded.state.marker==='Версия 1','Ревизия или состояние не сохранились');
+}finally{await repository.deleteDatabase()}
+});
+await test('Устаревшая вкладка не перезаписывает более свежий профиль',async()=>{
+const name='buildbook-stale-tab-'+Math.random().toString(36).slice(2),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+try{
+const a=await first.readProfile(),b=await second.readProfile();
+await first.writeProfile({marker:'Изменение вкладки A'},[{id:'A'}],{},a.revision);
+let conflict=null;
+try{await second.writeProfile({marker:'Старое состояние вкладки B'},[{id:'B'}],{},b.revision)}catch(error){conflict=error}
+assert(conflict&&conflict.code==='BUILD_BOOK_STORAGE_CONFLICT','Запись устаревшей вкладки не была заблокирована');
+const actual=await second.readProfile();
+assert(actual.revision===1&&actual.state.marker==='Изменение вкладки A','Старая вкладка перезаписала более свежие данные');
+assert(actual.logs[0].id==='A','Журнал более свежего профиля был потерян');
+}finally{await first.deleteDatabase()}
+});
+await test('Одновременные вкладки не могут сохранить один и тот же номер ревизии',async()=>{
+const name='buildbook-race-'+Math.random().toString(36).slice(2),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+try{
+const [a,b]=await Promise.all([first.readProfile(),second.readProfile()]);
+const results=await Promise.allSettled([
+first.writeProfile({writer:'A'},[{writer:'A'}],{},a.revision),
+second.writeProfile({writer:'B'},[{writer:'B'}],{},b.revision)
+]);
+assert(results.filter(x=>x.status==='fulfilled').length===1,'Должна пройти ровно одна конкурирующая запись');
+const rejected=results.find(x=>x.status==='rejected');
+assert(rejected&&rejected.reason.code==='BUILD_BOOK_STORAGE_CONFLICT','Вторая запись должна получить конфликт ревизии');
+const actual=await first.readProfile();
+assert(actual.revision===1,'Параллельные операции некорректно изменили ревизию');
+assert(['A','B'].includes(actual.state.writer),'В базе нет ни одной из успешно записанных версий');
+}finally{await first.deleteDatabase()}
+});
+
 await test('Слой хранения читает состояние, журнал и фотографии',async()=>{
 const name='buildbook-storage-test-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
 try{
 const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
-await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]});
+await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
 const stored=await repository.readProfile();
 assert(stored.state.marker==='Состояние','Не прочитано состояние профиля');
 assert(stored.logs[0].id==='journal-entry','Не прочитан журнал');
@@ -60,9 +101,9 @@ assert((await repository.read('s')).marker==='Состояние','Отдель�
 await test('Слой хранения откатывает частичную запись при ошибке',async()=>{
 const name='buildbook-storage-atomic-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
 try{
-await repository.writeProfile({marker:'До ошибки'},[{id:'old-log'}],{});
+await repository.writeProfile({marker:'До ошибки'},[{id:'old-log'}],{},0);
 let rejected=false;
-try{await repository.writeProfile({marker:'После ошибки'},[{invalid:()=>true}],{})}catch(error){rejected=true}
+try{await repository.writeProfile({marker:'После ошибки'},[{invalid:()=>true}],{},1)}catch(error){rejected=true}
 assert(rejected,'Ошибка клонирования не была обработана');
 const stored=await repository.readProfile();
 assert(stored.state.marker==='До ошибки'&&stored.logs[0].id==='old-log','Часть неудачной записи попала в базу');
