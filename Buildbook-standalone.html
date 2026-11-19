@@ -675,7 +675,17 @@ const draw=()=>{
  }).join('')||'<p class="mu">Деталей пока нет</p>';
 const c=L.reduce((n,l)=>{const b=S.batches.find(b=>b.id==l.batchId);return n+(b?b.price*l.qty:0)},0),p=(+f.elements.price.value||+f.elements.planned.value||0)-c;f.querySelector('#sm').innerHTML=`Себестоимость: <b>${R(c)}</b>. Заработок: <b class="${p>=0?'ok':'bad'}">${R(p)}</b>`};
 f.addEventListener('change',e=>{const t=e.target;if(t.dataset.i!=null){const i=+t.dataset.i;if(t.dataset.k=='qty')L[i].qty=Math.max(1,+t.value||1);else{const parts=String(t.value).split('::');L[i].batchId=parts[0]||'';L[i].problem=parts[1]=='problem'}draw()}});f.querySelector('[data-add]').onclick=()=>{L.push({batchId:'',qty:1,problem:false});draw()};f.querySelector('#ln').onclick=e=>{if(e.target.dataset.r!=null){L.splice(+e.target.dataset.r,1);draw()}};const dp=()=>f.querySelector('#ph').innerHTML=P.map((u,i)=>`<span style="position:relative;display:inline-block;margin:0 6px 6px 0"><img src="${u}" data-zoom="${i}" alt="Фото теста — нажмите для увеличения" title="Увеличить фото" style="height:64px;border-radius:8px;display:block;cursor:zoom-in"><button type="button" class="btn ic" data-p="${i}" style="position:absolute;top:2px;right:2px" title="Убрать фото">✕</button></span>`).join('');
-f.querySelector('#ph').onclick=e=>{if(e.target.dataset.p!=null){P.splice(+e.target.dataset.p,1);dp()}else if(e.target.dataset.zoom!=null){const photo=P[+e.target.dataset.zoom];if(!photo)return;const overlay=document.createElement('div');overlay.className='ov';overlay.innerHTML='<div class="md w" style="max-width:900px;max-height:90vh;overflow:auto"><div class="hd"><b>Фото тестирования</b><button type="button" class="btn" data-close>Закрыть</button></div><img src="'+esc(photo)+'" alt="Фото тестирования" style="display:block;max-width:100%;max-height:75vh;margin:auto;border-radius:10px"></div>';overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close]'))overlay.remove()});document.body.append(overlay)}};f.elements.pf.onchange=async e=>{for(const fl of e.target.files)P.push(await shrink(fl));e.target.value='';dp()};
+f.querySelector('#ph').onclick=e=>{if(e.target.dataset.p!=null){P.splice(+e.target.dataset.p,1);dp()}else if(e.target.dataset.zoom!=null){const photo=P[+e.target.dataset.zoom];if(!photo)return;const overlay=document.createElement('div');overlay.className='ov';overlay.innerHTML='<div class="md w" style="max-width:900px;max-height:90vh;overflow:auto"><div class="hd"><b>Фото тестирования</b><button type="button" class="btn" data-close>Закрыть</button></div><img src="'+esc(photo)+'" alt="Фото тестирования" style="display:block;max-width:100%;max-height:75vh;margin:auto;border-radius:10px"></div>';overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close]'))overlay.remove()});document.body.append(overlay)}};f.elements.pf.onchange=async e=>{
+ const files=Array.from(e.target.files||[]);
+ e.target.value='';
+ let failed=0;
+ for(const file of files){
+  try{P.push(await shrink(file))}
+  catch(error){failed++;console.warn('Buildbook: фото пропущено',file&&file.name,error)}
+ }
+ dp();
+ if(failed)toast('Не удалось обработать фото: '+failed);
+};
 f.elements.price.oninput=f.elements.planned.oninput=draw;draw();dp()}
 function builds(){const f=V.b,q=f.q.toLowerCase(),rows=S.builds.filter(b=>(!f.st||b.status==f.st)&&(!q||(b.name+' '+b.builder+' '+b.buyer).toLowerCase().includes(q))&&(!f.from||b.date>=f.from)&&(!f.to||b.date<=f.to)).sort((a,b)=>b.num-a.num),done=S.builds.filter(b=>b.status==ST[3]);
 return head('Сборки','<button class="btn" data-a="calc">Расчёт</button> <label class="btn" style="display:inline-block;cursor:pointer">Импорт ZIP-карточки<input type="file" accept=".zip,application/zip" data-buildzip hidden></label> <button class="btn p" data-a="badd">+ Сборка</button>')+`<div class="k">${kpi('Заработок с проданных',R(done.reduce((n,b)=>n+profit(b),0)),'ok')}${kpi('В работе',S.builds.filter(b=>b.status==ST[0]).length)}${kpi('Готовы к продаже',S.builds.filter(b=>b.status==ST[1]||b.status==ST[2]).length)}${kpi('Продано',done.length)}</div><div class="fl"><select data-f="b.st">${opt([['','Все статусы'],...ST],f.st)}</select><input data-f="b.q" placeholder="Поиск по названию, сборщику, покупателю" value="${esc(f.q)}" style="min-width:220px"><label>С даты<input type="date" data-f="b.from" value="${esc(f.from)}"></label><label>По дату<input type="date" data-f="b.to" value="${esc(f.to)}"></label></div>`+table(['№','Название','Статус','Сборщик','Себестоимость','Цена','Заработок','Маржа',''],rows.map(b=>{const p=profit(b),s=sale(b);return`<tr><td>${b.num}</td><td>${esc(b.name||'Без названия')}</td><td><span class="bd ${b.status==ST[3]?'ok':''}">${b.status}</span></td><td>${esc(b.builder)}</td><td class="r">${R(cost(b))}</td><td class="r">${R(s)}${b.price?'':' <small>план</small>'}</td><td class="r ${b.status==ST[3]?(p>=0?'ok':'bad'):'mu'}">${R(p)}</td><td class="r">${s?Math.round(p/s*100)+'%':''}</td>${btns('b',b.id).replace('<td class="r">','<td class="r"><button class="btn ic" data-a="btxt" data-id="'+b.id+'" title="Скачать карточку TXT">TXT</button> <button class="btn ic" data-a="bprint" data-id="'+b.id+'" title="Открыть системную печать">⎙</button> <button class="btn ic" data-a="bdoc" data-id="'+b.id+'" title="Экспорт карточки и фото в ZIP">ZIP</button> ')}</tr>`}),'Сборок нет. Нажмите «+ Сборка», выберите детали со склада, и себестоимость посчитается сама.')}
@@ -932,7 +942,51 @@ return head('Дашборд',perBar()+'<button class="btn'+(ed?' p':'')+'" data-
 }
 
 /* фото, архив, расчёт */
-const shrink=fl=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1100/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);r(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(fl)});
+function shrink(fl){
+ return new Promise((resolve,reject)=>{
+  if(!fl||typeof fl!=='object'||typeof fl.size!=='number'||fl.size<=0){
+   reject(new Error('Выбран пустой или некорректный файл.'));
+   return;
+  }
+  if(fl.type&&!/^image\//i.test(fl.type)){
+   reject(new Error('Выберите файл изображения.'));
+   return;
+  }
+  let objectUrl='',settled=false;
+  const image=new Image();
+  const finish=(error,value)=>{
+   if(settled)return;
+   settled=true;
+   if(objectUrl){try{URL.revokeObjectURL(objectUrl)}catch(_){}}
+   if(error)reject(error);else resolve(value);
+  };
+  image.onload=()=>{
+   try{
+    const width=Number(image.naturalWidth||image.width),height=Number(image.naturalHeight||image.height);
+    if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0){
+     throw new Error('У изображения не удалось определить размеры.');
+    }
+    const scale=Math.min(1,1100/Math.max(width,height));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(width*scale));
+    canvas.height=Math.max(1,Math.round(height*scale));
+    const context=canvas.getContext('2d');
+    if(!context)throw new Error('Браузер не смог подготовить изображение для сжатия.');
+    context.fillStyle='#fff';
+    context.fillRect(0,0,canvas.width,canvas.height);
+    context.drawImage(image,0,0,canvas.width,canvas.height);
+    const result=canvas.toDataURL('image/jpeg',.75);
+    if(!/^data:image\/jpeg;base64,/.test(result))throw new Error('Браузер не смог сжать изображение.');
+    finish(null,result);
+   }catch(error){finish(error instanceof Error?error:new Error('Не удалось обработать изображение.'))}
+  };
+  image.onerror=()=>finish(new Error('Файл не удалось открыть как изображение. Проверьте файл и попробуйте другой.'));
+  try{
+   objectUrl=URL.createObjectURL(fl);
+   image.src=objectUrl;
+  }catch(error){finish(error instanceof Error?error:new Error('Не удалось прочитать выбранное изображение.'))}
+ });
+}
 const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})(),crc=u=>{let c=-1;for(const b of u)c=crcT[(c^b)&255]^(c>>>8);return(c^-1)>>>0};
 function zipBytes(files){
  const E=new TextEncoder(),local=[],central=[];
@@ -1019,8 +1073,8 @@ function bytesToDataUrl(bytes,mime){
  for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
  return 'data:'+(mime||'application/octet-stream')+';base64,'+btoa(binary);
 }
-function createZipBackupBlob(){
- const snapshot=JSON.parse(JSON.stringify(S)),manifest=[],files=[];
+function createZipBackupBlob(stateSource=S,photoSource=PH){
+ const snapshot=JSON.parse(JSON.stringify(stateSource||S)),photos=photoSource||PH,manifest=[],files=[];
  let index=0;
  const addPhoto=(owner,id,photo)=>{
   const parsed=dataUrlToBytes(photo),ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif' })[parsed.mime]||'bin';
@@ -1028,8 +1082,8 @@ function createZipBackupBlob(){
   files.push([file,parsed.bytes]);
   manifest.push({owner,id,index:manifest.filter(x=>x.owner===owner&&x.id===id).length,file,mime:parsed.mime});
  };
- Object.entries(PH||{}).forEach(([buildId,photos])=>{
-  if(Array.isArray(photos))photos.forEach(photo=>addPhoto('build',buildId,photo));
+ Object.entries(photos||{}).forEach(([buildId,items])=>{
+  if(Array.isArray(items))items.forEach(photo=>addPhoto('build',buildId,photo));
  });
  (snapshot.trash||[]).forEach(item=>{
   if(item&&item.type==='build'&&Array.isArray(item.photos)){
@@ -1248,11 +1302,14 @@ function buildCardImportWizard(buffer){
 
 function downloadZipBackup(){
  try{
-  S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save();render();
-  const blob=createZipBackupBlob(),a=document.createElement('a'),url=URL.createObjectURL(blob);
-  a.href=url;a.download='buildbook-backup-'+today()+'.zip';a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),2000);toast('ZIP-бэкап сформирован');
- }catch(error){alert('Не удалось создать ZIP-бэкап: '+(error.message||'ошибка'))}
+  const backupAt=new Date().toLocaleString('ru-RU');
+  const snapshot=createBackupSnapshot(backupAt),photos=snapshot.photos;
+  delete snapshot.photos;
+  const blob=createZipBackupBlob(snapshot,photos);
+  completeBackupExport(blob,'buildbook-backup-'+today()+'.zip',backupAt);
+  render();
+  toast('ZIP-бэкап сформирован');
+ }catch(error){alert('Не удалось создать ZIP-бэкап: '+(error&&error.message||'ошибка'))}
 }
 function importZipWizard(buffer){
  let data;
@@ -1609,10 +1666,41 @@ function validBackup(data){
  return Number.isSafeInteger(version)&&version>=0&&version<=DATA_SCHEMA_VERSION;
 }
 function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,tasks:(data.tasks||[]).length,checklist:(data.checklist||[]).length}}
+function createBackupSnapshot(backupAt){
+ const snapshot=JSON.parse(JSON.stringify(S));
+ if(backupAt)snapshot.set.backup=backupAt;
+ snapshot.photos=JSON.parse(JSON.stringify(PH));
+ return snapshot;
+}
+function markBackupCreated(backupAt){
+ S.set.backup=backupAt||new Date().toLocaleString('ru-RU');
+ save.skip=1;save();
+}
+function completeBackupExport(blob,filename,backupAt,download=triggerFileDownload){
+ download(blob,filename);
+ if(backupAt)markBackupCreated(backupAt);
+}
+function triggerFileDownload(blob,filename){
+ const url=URL.createObjectURL(blob),link=document.createElement('a');
+ try{
+  link.href=url;link.download=filename;link.click();
+ }catch(error){
+  URL.revokeObjectURL(url);
+  throw error;
+ }
+ setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
 function downloadBackup(filename,markDate){
- if(markDate){S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save()}
- const blob=new Blob([JSON.stringify({...S,photos:PH})],{type:'application/json'}),a=document.createElement('a'),url=URL.createObjectURL(blob);
- a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+ try{
+  const backupAt=markDate?new Date().toLocaleString('ru-RU'):null;
+  const snapshot=createBackupSnapshot(backupAt);
+  const blob=new Blob([JSON.stringify(snapshot)],{type:'application/json'});
+  completeBackupExport(blob,filename,backupAt);
+  return true;
+ }catch(error){
+  alert('Не удалось создать резервную копию: '+(error&&error.message||'ошибка'));
+  return false;
+ }
 }
 function mergeBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
@@ -1888,15 +1976,15 @@ function xlsxImportWizard(buffer){
  renderMappings();
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Демо-данные</b><p class="mu">Добавляет пример закупок, сборок, кассовых операций и задач. Ваши существующие записи не заменяются. Удаление затрагивает только созданные демо-записи.</p><button class="btn p" data-a="demoload">Загрузить демо-данные</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены.':'Демо-данные не загружены.')+'</p></section><section><b>Журнал изменений</b><label>Хранить последних записей<select data-f="logLimit">'+opt([[20,'20'],[40,'40'],[100,'100'],[250,'250'],[500,'500'],[1000,'1000']],String(S.set.logLimit||40))+'</select></label><p class="mu">Старые записи сверх лимита удаляются из локального журнала.</p></section><section><b>Дополнительные разделы</b><label><input type="checkbox" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'> Долги и инвестиции <span class="bd">Скоро</span></label><p class="mu">Модуль не реализуется по исходному ТЗ.</p></section><section><b>Защита полей паролем</b><p class="mu">Заглушка по исходному ТЗ. Пароли и авторизация в текущей версии не используются.</p><button class="btn" disabled>Настроить защиту полей — скоро</button></section>'+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.16<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Демо-данные</b><p class="mu">Добавляет пример закупок, сборок, кассовых операций и задач. Ваши существующие записи не заменяются. Удаление затрагивает только созданные демо-записи.</p><button class="btn p" data-a="demoload">Загрузить демо-данные</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены.':'Демо-данные не загружены.')+'</p></section><section><b>Журнал изменений</b><label>Хранить последних записей<select data-f="logLimit">'+opt([[20,'20'],[40,'40'],[100,'100'],[250,'250'],[500,'500'],[1000,'1000']],String(S.set.logLimit||40))+'</select></label><p class="mu">Старые записи сверх лимита удаляются из локального журнала.</p></section><section><b>Дополнительные разделы</b><label><input type="checkbox" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'> Долги и инвестиции <span class="bd">Скоро</span></label><p class="mu">Модуль не реализуется по исходному ТЗ.</p></section><section><b>Защита полей паролем</b><p class="mu">Заглушка по исходному ТЗ. Пароли и авторизация в текущей версии не используются.</p><button class="btn" disabled>Настроить защиту полей — скоро</button></section>'+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.17<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.16-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
+version:'2.17-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),shrinkPhoto:file=>shrink(file),createBackupSnapshot:date=>createBackupSnapshot(date),createZipBackup:date=>{const snapshot=createBackupSnapshot(date),photos=snapshot.photos;delete snapshot.photos;return createZipBackupBlob(snapshot,photos)},completeBackupExport:(blob,name,date,download)=>completeBackupExport(blob,name,date,download),backupTimestamp:()=>S.set.backup||'',photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
 render:()=>render(),
@@ -2100,7 +2188,7 @@ ccadd:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o
 ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(old))return;const n=(prompt('Новое название категории',old)||'').trim();if(!n||n==old)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g][o[g].indexOf(old)]=n;S.tx.forEach(t=>{if(t.cat==old&&(t.grp==g||!t.grp))t.cat=n});const hk=g+'::'+old,hk2=g+'::'+n;S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).map(x=>x==hk?hk2:x);if(k=='e'&&g==S.stockGroup)S.batches.forEach(b=>{if(b.type==old)b.type=n});if(k=='i'&&g==S.partSaleGroup&&S.partSaleCategory==old)S.partSaleCategory=n;syncCategories();save();render()},
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
-exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
+exp:()=>{if(downloadBackup('buildbook-'+today()+'.json',true)){render();toast('Копия скачана')}},expzip:()=>downloadZipBackup(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift(makeTrashEntry('task',task));S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item||!confirm('Переместить пункт чек-листа в корзину?'))return;S.trash.unshift(makeTrashEntry('checklist',item));S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e)return;if(!Array.isArray(e.changes)||!e.changes.length){alert('Для этой записи нет безопасного набора изменений.');return}if(!confirm('Отменить только действие «'+e.l+'»? Более поздние независимые действия сохранятся. Если изменённые поля уже затронуты последующими операциями, отмена будет заблокирована.'))return;const result=undoJournalEntry(+id);if(!result.ok){alert(result.message);return}toast('Действие отменено. Более поздние операции сохранены.')},
