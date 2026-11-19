@@ -66,6 +66,7 @@ const get=(d,k)=>new Promise((resolve,reject)=>{
 });
 function isPlainRecord(value){return !!value&&typeof value==='object'&&!Array.isArray(value)}
 function migrateState(source){
+ if(source!=null&&!isPlainRecord(source))throw new Error('Файл профиля имеет неверный формат. Данные не изменены.');
  const raw=isPlainRecord(source)?source:{},defaults=defaultState();
  const parsedVersion=raw.schemaVersion==null?0:Number(raw.schemaVersion);
  if(!Number.isSafeInteger(parsedVersion)||parsedVersion<0)throw new Error('В базе данных обнаружен некорректный номер схемы. Данные не изменены.');
@@ -1111,7 +1112,11 @@ function importCsvWizard(raw){
 }
 
 
-function validBackup(data){return !!data&&typeof data==='object'&&Array.isArray(data.batches)&&Array.isArray(data.builds)&&Array.isArray(data.tx)}
+function validBackup(data){
+ if(!isPlainRecord(data)||!Array.isArray(data.batches)||!Array.isArray(data.builds)||!Array.isArray(data.tx))return false;
+ const version=data.schemaVersion==null?0:Number(data.schemaVersion);
+ return Number.isSafeInteger(version)&&version>=0&&version<=DATA_SCHEMA_VERSION;
+}
 function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,tasks:(data.tasks||[]).length}}
 function downloadBackup(filename,markDate){
  if(markDate){S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save()}
