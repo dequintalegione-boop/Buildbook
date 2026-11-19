@@ -19,6 +19,8 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 .ac2{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:14px}.ts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--t);color:var(--bg);padding:9px 18px;border-radius:99px;z-index:20}
 .ft{margin-top:36px;padding:14px 16px;border:1px solid var(--b);border-radius:12px;color:var(--m);text-align:center}.ft b{color:var(--t);letter-spacing:.02em}
 .from-build td{background:color-mix(in srgb,var(--w) 11%,var(--s))}.cat-group{border:1px solid var(--b);border-radius:10px;padding:12px;margin:10px 0;background:var(--s)}.cat-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--b)}.cat-item:first-child{border-top:0}.cat-actions{display:flex;gap:4px;flex-wrap:wrap}.muted-item{opacity:.55}.sell-scroll{max-height:52vh;overflow:auto;border:1px solid var(--b);border-radius:10px}.sell-scroll table{min-width:700px}.sell-scroll input[type=number]{min-width:85px}.sell-scroll tr:has(input[type=checkbox]:checked){background:color-mix(in srgb,var(--a) 8%,transparent)}
+.rpt-toolbar{align-items:center}.rpt-tabs{display:flex;gap:6px;flex-wrap:wrap}.rpt-scroll{overflow:auto;background:var(--s);border:1px solid var(--b);border-radius:12px}.rpt-scroll table{min-width:1180px}.rpt-scroll th{position:sticky;top:0;z-index:2}.rpt-scroll th:first-child,.rpt-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--s)}.rpt-scroll th:first-child{z-index:3;background:var(--s2)}.rpt-group td,.rpt-group th{font-weight:700;background:var(--s2)!important}.rpt-total td,.rpt-total th{font-weight:800;background:color-mix(in srgb,var(--a) 9%,var(--s))!important;border-top:2px solid var(--a)}.rpt-cat th{font-weight:500;padding-left:26px}.rpt-note{margin:10px 0;color:var(--m);font-size:13px}.rpt-summary{min-width:0!important}.rpt-summary td:first-child{min-width:150px}.rpt-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}.rpt-detail{min-width:850px!important}.rpt-chart{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px;margin:12px 0;overflow:hidden}
+@media(max-width:760px){.rpt-kpi{grid-template-columns:1fr 1fr}.rpt-scroll table{min-width:1060px}}
 @media(max-width:860px){.k{grid-template-columns:1fr 1fr}.kp:first-child{grid-column:1/-1}}
 @media(max-width:760px){body{grid-template-columns:1fr;padding-bottom:64px}nav{position:fixed;inset:auto 0 0 0;height:auto;flex-direction:row;justify-content:space-around;border:0;border-top:1px solid var(--b);padding:6px;z-index:5}.lg{display:none}nav button{padding:8px 10px;font-size:13px}main{padding:18px 14px}.g2{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:no-preference){.md{animation:up .18s ease-out}@keyframes up{from{transform:translateY(10px);opacity:0}}}
@@ -28,7 +30,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 .hb{display:grid;grid-template-columns:minmax(80px,120px) 1fr auto;gap:10px;align-items:center;margin:6px 0}.hb i{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--a) var(--w),var(--s2) var(--w))}.hb span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pw{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.lgd{display:flex;align-items:center;gap:6px;font-size:13px;margin:2px 0}.lgd i{width:10px;height:10px;border-radius:3px}
 </style></head><body>
-<nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
+<nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="reports">Отчёты</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
 <main id="m"></main>
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
@@ -37,7 +39,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 let T=['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее'],ST=['Собирается','Собрана','Протестирована','Продана'],MN=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},DEFAULT_INC={'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']};
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
-let S={accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],batches:[],builds:[],tx:[],seq:0,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},set:{theme:'auto',year:new Date().getFullYear(),backup:''}},V={tab:'home',s:{type:'',q:'',av:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''}},dip;
+let S={accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],batches:[],builds:[],tx:[],seq:0,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},set:{theme:'auto',year:new Date().getFullYear(),backup:''}},V={tab:'home',s:{type:'',q:'',av:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''},report:'expenses'},dip;
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const idb=()=>new Promise((r,j)=>{const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
 let LOG=[],last='',PH={};
@@ -126,6 +128,144 @@ const v={kind:'transfer',date:d.date,amount,fromAcc:d.fromAcc,toAcc:d.toAcc,cat:
 if(o)Object.assign(o,v);else S.tx.push({id:uid(),...v});save();render();toast('Перевод сохранён')
 },false,'Сохранить перевод');return f;
 }
+
+const REPORT_MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const reportYears=()=>{
+const years=[];
+S.tx.forEach(t=>{if((t.kind=='i'||t.kind=='e')&&/^\d{4}-/.test(t.date||''))years.push(+t.date.slice(0,4))});
+S.builds.forEach(b=>{if(b.status==ST[3]&&/^\d{4}-/.test(b.sold||''))years.push(+b.sold.slice(0,4))});
+const unique=Array.from(new Set(years.filter(y=>y>=1900&&y<=9999))).sort((a,b)=>b-a);
+return unique.length?unique:[new Date().getFullYear()];
+};
+const activeReportYear=()=>{const ys=reportYears();return ys.includes(+S.set.year)?+S.set.year:ys[0]};
+const reportResolveGroup=(t,groups)=>{
+if(t.grp&&groups[t.grp]&&groups[t.grp].includes(t.cat))return t.grp;
+return Object.keys(groups).find(g=>groups[g].includes(t.cat))||t.grp||'Без группы';
+};
+function reportMatrixData(kind,year){
+const categories=kind=='e'?EXP:INC;
+const txs=S.tx.filter(t=>t.kind==kind&&(t.date||'').slice(0,4)==String(year));
+const grouped={};
+Object.keys(categories).forEach(g=>grouped[g]=[]);
+const prepared=txs.map(t=>({t:t,g:reportResolveGroup(t,categories)}));
+prepared.forEach(x=>{if(!grouped[x.g])grouped[x.g]=[];if(x.t.cat&&!grouped[x.g].includes(x.t.cat))grouped[x.g].push(x.t.cat)});
+const groups=Object.entries(grouped).map(entry=>{
+const name=entry[0],cats=entry[1];
+const rows=cats.map(cat=>{
+const monthly=Array.from({length:12},(_,i)=>prepared.filter(x=>x.g==name&&x.t.cat==cat&&+x.t.date.slice(5,7)==i+1).reduce((n,x)=>n+(+x.t.amount||0),0));
+const total=monthly.reduce((n,v)=>n+v,0);
+return {category:cat,monthly,total,average:total/12};
+});
+const monthly=Array.from({length:12},(_,i)=>rows.reduce((n,r)=>n+r.monthly[i],0));
+const total=monthly.reduce((n,v)=>n+v,0);
+return {name:name,rows:rows,monthly:monthly,total:total,average:total/12};
+});
+const monthly=Array.from({length:12},(_,i)=>groups.reduce((n,g)=>n+g.monthly[i],0));
+const total=monthly.reduce((n,v)=>n+v,0);
+return {groups:groups,monthly:monthly,total:total,average:total/12};
+}
+function reportCells(values,firstIsCount){
+return values.map((v,i)=>'<td class="r" data-value="'+Number(v)+'">'+(firstIsCount&&i===0?new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(v):R(v))+'</td>').join('');
+}
+function reportMatrixHtml(kind,year){
+const data=reportMatrixData(kind,year);
+let html='<div class="rpt-scroll"><table class="rpt-matrix"><thead><tr><th>Группа / категория</th>';
+REPORT_MONTHS.forEach(m=>html+='<th class="r">'+m+'</th>');
+html+='<th class="r">Итого за год</th><th class="r">Среднее / месяц</th></tr></thead><tbody>';
+data.groups.forEach(g=>{
+html+='<tr class="rpt-group"><th scope="row">'+esc(g.name)+' · итого</th>'+reportCells(g.monthly)+'<td class="r" data-value="'+g.total+'">'+R(g.total)+'</td><td class="r" data-value="'+g.average+'">'+R(g.average)+'</td></tr>';
+g.rows.forEach(r=>{
+html+='<tr class="rpt-cat"><th scope="row">'+esc(r.category)+'</th>'+reportCells(r.monthly)+'<td class="r" data-value="'+r.total+'">'+R(r.total)+'</td><td class="r" data-value="'+r.average+'">'+R(r.average)+'</td></tr>';
+});
+});
+html+='<tr class="rpt-total"><th scope="row">ИТОГО</th>'+reportCells(data.monthly)+'<td class="r" data-value="'+data.total+'">'+R(data.total)+'</td><td class="r" data-value="'+data.average+'">'+R(data.average)+'</td></tr></tbody></table></div>';
+html+='<p class="rpt-note">Среднее рассчитано за 12 месяцев выбранного года, включая месяцы без операций. Переводы между кассами в отчёт не входят.</p>';
+return html;
+}
+function reportSummaryData(year){
+const income=Array(12).fill(0),expense=Array(12).fill(0);
+S.tx.forEach(t=>{
+if((t.kind!='i'&&t.kind!='e')||(t.date||'').slice(0,4)!=String(year))return;
+const i=+t.date.slice(5,7)-1;if(i<0||i>11)return;
+if(t.kind=='i')income[i]+=+t.amount||0;else expense[i]+=+t.amount||0;
+});
+const net=income.map((v,i)=>v-expense[i]);
+const total=a=>a.reduce((n,v)=>n+v,0);
+return {income:income,expense:expense,net:net,totals:{income:total(income),expense:total(expense),net:total(net)},averages:{income:total(income)/12,expense:total(expense)/12,net:total(net)/12}};
+}
+function reportSummaryHtml(year){
+const d=reportSummaryData(year);
+const max=Math.max(1,...d.income,...d.expense),w=600,g=w/12,bw=14;
+let bars='';
+for(let i=0;i<12;i++){
+const hi=d.income[i]/max*105,he=d.expense[i]/max*105,x=i*g+g/2-bw;
+bars+='<rect x="'+x+'" y="'+(120-hi)+'" width="'+(bw-2)+'" height="'+hi+'" rx="3" fill="var(--ok)"><title>'+REPORT_MONTHS[i]+': доходы '+R(d.income[i])+'</title></rect>';
+bars+='<rect x="'+(x+bw)+'" y="'+(120-he)+'" width="'+(bw-2)+'" height="'+he+'" rx="3" fill="var(--bad)"><title>'+REPORT_MONTHS[i]+': расходы '+R(d.expense[i])+'</title></rect>';
+bars+='<text x="'+(i*g+g/2)+'" y="143" text-anchor="middle" font-size="10" fill="var(--m)">'+MN[i]+'</text>';
+}
+let rows='';
+for(let i=0;i<12;i++)rows+='<tr><th scope="row">'+REPORT_MONTHS[i]+'</th>'+reportCells([d.income[i],d.expense[i],d.net[i]])+'</tr>';
+rows+='<tr class="rpt-total"><th scope="row">ИТОГО за год</th>'+reportCells([d.totals.income,d.totals.expense,d.totals.net])+'</tr>';
+rows+='<tr class="rpt-total"><th scope="row">Среднее / месяц</th>'+reportCells([d.averages.income,d.averages.expense,d.averages.net])+'</tr>';
+return '<div class="k rpt-kpi">'+kpi('Доходы за год',R(d.totals.income),'ok')+kpi('Расходы за год',R(d.totals.expense),'bad')+kpi('Чистые сбережения',R(d.totals.net),d.totals.net>=0?'ok':'bad')+kpi('В среднем за месяц',R(d.averages.net),d.averages.net>=0?'ok':'bad')+'</div><div class="rpt-chart"><svg viewBox="0 0 600 154" width="100%" role="img" aria-label="Доходы и расходы по месяцам">'+bars+'</svg><small>Зелёный — доходы, красный — расходы. Нулевые месяцы сохранены на графике.</small></div><div class="rpt-scroll"><table class="rpt-summary"><thead><tr><th>Месяц</th><th class="r">Доходы</th><th class="r">Расходы</th><th class="r">Чистые сбережения</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="rpt-note">Чистые сбережения = доходы минус расходы. Переводы между кассами исключены.</p>';
+}
+function reportBuildData(year){
+const builds=S.builds.filter(b=>b.status==ST[3]&&(b.sold||'').slice(0,4)==String(year)).sort((a,b)=>(a.sold||'').localeCompare(b.sold||'')||(+a.num-(+b.num)));
+const months=Array.from({length:12},()=>({count:0,revenue:0,cost:0,profit:0}));
+builds.forEach(b=>{
+const i=+(b.sold||'').slice(5,7)-1;if(i<0||i>11)return;
+const revenue=+sale(b)||0,cogs=+cost(b)||0,p=revenue-cogs;
+months[i].count++;months[i].revenue+=revenue;months[i].cost+=cogs;months[i].profit+=p;
+});
+const totals={count:builds.length,revenue:months.reduce((n,x)=>n+x.revenue,0),cost:months.reduce((n,x)=>n+x.cost,0),profit:months.reduce((n,x)=>n+x.profit,0)};
+return {builds:builds,months:months,totals:totals};
+}
+function reportBuildHtml(year){
+const d=reportBuildData(year);
+let monthRows='';
+d.months.forEach((m,i)=>monthRows+='<tr><th scope="row">'+REPORT_MONTHS[i]+'</th>'+reportCells([m.count,m.revenue,m.cost,m.profit],true)+'</tr>');
+monthRows+='<tr class="rpt-total"><th scope="row">ИТОГО за год</th>'+reportCells([d.totals.count,d.totals.revenue,d.totals.cost,d.totals.profit],true)+'</tr>';
+monthRows+='<tr class="rpt-total"><th scope="row">Среднее / месяц</th>'+reportCells([d.totals.count/12,d.totals.revenue/12,d.totals.cost/12,d.totals.profit/12],true)+'</tr>';
+const detailRows=d.builds.map(b=>{
+const revenue=+sale(b)||0,cogs=+cost(b)||0,p=revenue-cogs,margin=revenue?p/revenue*100:0;
+return '<tr><td>№'+b.num+'</td><td>'+esc(b.name||'Без названия')+'</td><td>'+D(b.sold)+'</td><td class="r" data-value="'+cogs+'">'+R(cogs)+'</td><td class="r" data-value="'+revenue+'">'+R(revenue)+'</td><td class="r '+(p>=0?'ok':'bad')+'" data-value="'+p+'">'+R(p)+'</td><td class="r" data-value="'+margin+'">'+(Math.round(margin*100)/100).toLocaleString('ru-RU')+'%</td></tr>';
+}).join('');
+return '<div class="k rpt-kpi">'+kpi('Продано ПК',d.totals.count+' шт.')+kpi('Выручка по ПК',R(d.totals.revenue))+kpi('Себестоимость',R(d.totals.cost))+kpi('Прибыль по сборкам',R(d.totals.profit),d.totals.profit>=0?'ok':'bad')+'</div><h2>По месяцам продажи</h2><div class="rpt-scroll"><table class="rpt-summary"><thead><tr><th>Месяц продажи</th><th class="r">Кол-во ПК</th><th class="r">Выручка</th><th class="r">Себестоимость</th><th class="r">Прибыль</th></tr></thead><tbody>'+monthRows+'</tbody></table></div><h2>Проданные сборки</h2>'+(detailRows?'<div class="rpt-scroll"><table class="rpt-detail"><thead><tr><th>Сборка</th><th>Название</th><th>Дата продажи</th><th class="r">Себестоимость</th><th class="r">Цена продажи</th><th class="r">Прибыль</th><th class="r">Маржа</th></tr></thead><tbody>'+detailRows+'</tbody></table></div>':'<p class="em">В выбранном году нет проданных сборок.</p>')+'<p class="rpt-note">Отчёт группирует ПК по дате продажи и использует зафиксированную себестоимость проданной сборки. Эти показатели показываются отдельно от общей сводки движения денег.</p>';
+}
+function reportCsv(){
+const year=activeReportYear(),tab=V.report||'expenses',rows=[];
+if(tab=='expenses'||tab=='income'){
+const d=reportMatrixData(tab=='expenses'?'e':'i',year);
+rows.push(['Группа / категория'].concat(REPORT_MONTHS,['Итого за год','Среднее / месяц']));
+d.groups.forEach(g=>{rows.push([g.name+' — итого'].concat(g.monthly,[g.total,g.average]));g.rows.forEach(r=>rows.push(['  '+r.category].concat(r.monthly,[r.total,r.average])))});
+rows.push(['ИТОГО'].concat(d.monthly,[d.total,d.average]));
+}else if(tab=='summary'){
+const d=reportSummaryData(year);rows.push(['Месяц','Доходы','Расходы','Чистые сбережения']);
+REPORT_MONTHS.forEach((m,i)=>rows.push([m,d.income[i],d.expense[i],d.net[i]]));
+rows.push(['ИТОГО за год',d.totals.income,d.totals.expense,d.totals.net],['Среднее / месяц',d.averages.income,d.averages.expense,d.averages.net]);
+}else{
+const d=reportBuildData(year);rows.push(['Номер сборки','Название','Дата продажи','Себестоимость','Цена продажи','Прибыль','Маржа %']);
+d.builds.forEach(b=>{const revenue=+sale(b)||0,cogs=+cost(b)||0,p=revenue-cogs;rows.push([b.num,b.name||'',b.sold,cogs,revenue,p,revenue?p/revenue*100:0])});
+rows.push(['ИТОГО','','',d.totals.cost,d.totals.revenue,d.totals.profit,'']);
+}
+const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+const csv=rows.map(r=>r.map(quote).join(';')).join('\r\n');
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='buildbook-otchet-'+tab+'-'+year+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);toast('Отчёт CSV сформирован');
+}
+function reports(){
+const year=activeReportYear(),years=reportYears(),tab=['expenses','income','summary','builds'].includes(V.report)?V.report:'expenses';
+const names=[['expenses','Расходы'],['income','Доходы'],['summary','Сводка'],['builds','Прибыль по сборкам']];
+const tabs=names.map(x=>'<button class="btn '+(tab==x[0]?'p':'')+'" data-a="rptab" data-id="'+x[0]+'">'+x[1]+'</button>').join('');
+const selector='<label style="display:flex;align-items:center;gap:8px;grid-auto-flow:column">Год<select data-f="year">'+opt(years.map(y=>[y,String(y)]),year)+'</select></label>';
+const exportButton='<button class="btn" data-a="rcsv">Скачать CSV</button>';
+let body='';
+if(tab=='expenses')body=reportMatrixHtml('e',year);
+else if(tab=='income')body=reportMatrixHtml('i',year);
+else if(tab=='summary')body=reportSummaryHtml(year);
+else body=reportBuildHtml(year);
+return head('Отчёты')+'<div class="fl rpt-toolbar"><div class="rpt-tabs">'+tabs+'</div>'+selector+exportButton+'</div>'+body;
+}
+
 function home(){const y=S.set.year,mo=Array.from({length:12},()=>({i:0,e:0,p:0}));S.tx.forEach(t=>{if(t.date.slice(0,4)==y&&(t.kind=='i'||t.kind=='e'))mo[+t.date.slice(5,7)-1][t.kind]+=t.amount});S.builds.forEach(b=>{if(b.status==ST[3]&&(b.sold||'').slice(0,4)==y)mo[+b.sold.slice(5,7)-1].p+=profit(b)});
 const cm=today().slice(0,7),tot=S.accounts.reduce((n,a)=>n+bal(a),0),val=S.batches.filter(b=>!b.problem).reduce((n,b)=>n+b.price*avail(b),0),yrs=[...new Set([new Date().getFullYear(),y,...S.tx.map(t=>+t.date.slice(0,4))])].sort((a,b)=>b-a),mx=Math.max(1,...mo.map(m=>Math.max(m.i,m.e))),sum=k=>mo.reduce((n,m)=>n+m[k],0);
 const bars=mo.map((m,i)=>{const a=m.i/mx*110,c=m.e/mx*110;return`<rect x="${i*50+8}" y="${120-a}" width="16" height="${a}" rx="3" fill="var(--ok)"/><rect x="${i*50+26}" y="${120-c}" width="16" height="${c}" rx="3" fill="var(--bad)"/><text x="${i*50+25}" y="138" text-anchor="middle" font-size="11" fill="var(--m)">${MN[i]}</text>`}).join('');
@@ -191,11 +331,11 @@ cats.forEach(cat=>{const h=hiddenC.includes(g+'::'+cat),protectedType=kind=='e'&
 html+='</section>'});
 return html+'</section>';
 }
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.6<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.7<br>Developed by <b>Quinta Legione</b></div>'}
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'1.6-test',database:DB_NAME,ready:()=>APP_READY,
+version:'1.7-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),
@@ -211,9 +351,9 @@ buildLiveCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?live(b)
 dbName:()=>DB_NAME
 })})}
 /* ядро */
-function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
+function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
 const find=(a,id)=>S[a].find(x=>x.id==id);
-function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>{const b=find('batches',id);if(b.problem){if(confirm('Снять пометку «проблема»?')){b.problem=0;b.reason=''}}else{const r=prompt('Что не так с деталью?');if(!r)return;b.problem=1;b.reason=r}save();render()},
 pd:()=>{const b=find('batches',id);if(used(b)){alert('Деталь стоит в сборках, удалить нельзя');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи, чтобы не потерять возможность возврата товара.');return}if(!confirm('Удалить партию «'+b.desc+'»?'))return;S.batches=S.batches.filter(x=>x!=b);if(b.txId&&confirm('Удалить и связанный расход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
 bd:()=>{const b=find('builds',id);if(!confirm('Удалить сборку №'+b.num+'? Детали вернутся на склад.'))return;S.builds=S.builds.filter(x=>x!=b);delete PH[b.id];if(b.txId&&confirm('Удалить и связанный доход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},

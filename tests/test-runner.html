@@ -138,6 +138,63 @@ assert(api.balance('card')===transferBaseline.card,'Сумма не списал
 const s=state();assert(s.tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)===transferBaseline.income,'Доходы изменились после удаления перевода');
 assert(s.tx.filter(x=>x.kind==='e').reduce((n,x)=>n+x.amount,0)===transferBaseline.expense,'Расходы изменились после удаления перевода');
 });
+
+await test('Раздел отчётов открывается и годы выбираются из данных',()=>{
+const d=fixture();
+d.tx=[
+{id:'e-gpu',kind:'e',date:'2026-01-10',amount:120,cat:'Видеокарты',grp:'Сборка ПК',desc:'Закупка GPU',acc:'cash'},
+{id:'e-fuel',kind:'e',date:'2026-02-10',amount:80,cat:'Бензин',grp:'Транспорт',desc:'Топливо',acc:'cash'},
+{id:'i-other',kind:'i',date:'2026-01-11',amount:500,cat:'Другое',grp:'Заработок',desc:'Дополнительный доход',acc:'cash'},
+{id:'i-salary',kind:'i',date:'2026-02-11',amount:200,cat:'Заработная плата',grp:'Заработок',desc:'Зарплата',acc:'cash'},
+{id:'old-income',kind:'i',date:'2025-06-01',amount:250,cat:'Другое',grp:'Заработок',desc:'Доход прошлого года',acc:'cash'},
+{id:'report-transfer',kind:'transfer',date:'2026-01-15',amount:1000,fromAcc:'cash',toAcc:'card',cat:'Перевод между кассами',desc:'Перевод'}
+];
+d.builds.push({id:'build-sold-report',num:2,name:'Отчётная сборка',status:'Продана',builder:'Тест',buyer:'',date:'2026-02-01',sold:'2026-02-20',planned:1600,price:1500,cost:1000,note:'',lines:[]});
+api.setState(d);await sleep(250);api.action('nav','reports');
+assert(w.document.querySelector('#m h1').textContent==='Отчёты','Не открыт раздел отчётов');
+const select=w.document.querySelector('[data-f="year"]');assert(select,'Не найден выбор года');
+assert([...select.options].some(o=>o.value==='2025')&&[...select.options].some(o=>o.value==='2026'),'Список годов не собран из дат данных');
+});
+await test('Отчёт расходов показывает 12 месяцев, категории, итоги и среднее',()=>{
+api.action('rptab','expenses');
+const table=w.document.querySelector('#m .rpt-matrix');assert(table,'Таблица расходов не отображается');
+assert(table.querySelectorAll('thead th').length===15,'Должно быть 12 месяцев и 2 итоговых столбца');
+const gpu=[...table.querySelectorAll('tbody tr')].find(r=>r.textContent.includes('Видеокарты')&&!r.classList.contains('rpt-group'));
+assert(gpu,'Категория «Видеокарты» не отображается');
+assert(gpu.querySelectorAll('td')[0].dataset.value==='120','Январские расходы по видеокартам рассчитаны неверно');
+const total=table.querySelector('tr.rpt-total');assert(total&&[...total.querySelectorAll('td')].some(x=>x.dataset.value==='200'),'Годовой итог расходов должен быть 200 ₽');
+assert(table.textContent.includes('Среднее / месяц'),'Нет среднего значения по строке');
+});
+await test('Отчёт доходов не включает переводы между кассами',()=>{
+api.action('rptab','income');
+const table=w.document.querySelector('#m .rpt-matrix');assert(table,'Таблица доходов не отображается');
+const other=[...table.querySelectorAll('tbody tr')].find(r=>r.textContent.includes('Другое')&&!r.classList.contains('rpt-group'));
+assert(other,'Категория доходов «Другое» не отображается');
+assert(other.querySelectorAll('td')[0].dataset.value==='500','Январский доход в категории «Другое» рассчитан неверно');
+const total=table.querySelector('tr.rpt-total');assert([...total.querySelectorAll('td')].some(x=>x.dataset.value==='700'),'Перевод ошибочно попал в годовой доход или доход рассчитан неверно');
+});
+await test('Сводка показывает помесячные доходы, расходы и чистые сбережения',()=>{
+api.action('rptab','summary');
+const table=w.document.querySelector('#m .rpt-summary');assert(table,'Таблица сводки не отображается');
+const jan=[...table.querySelectorAll('tbody tr')].find(r=>r.textContent.includes('Январь'));
+assert(jan,'Нет строки января');
+const vals=[...jan.querySelectorAll('td')].map(x=>+x.dataset.value);
+assert(vals[0]===500&&vals[1]===120&&vals[2]===380,'Январская сводка должна быть 500 / 120 / 380 ₽');
+const total=table.querySelectorAll('tr.rpt-total')[0],sum=[...total.querySelectorAll('td')].map(x=>+x.dataset.value);
+assert(sum[0]===700&&sum[1]===200&&sum[2]===500,'Годовые итоги или исключение переводов неверны');
+assert(w.document.querySelector('#m svg[aria-label="Доходы и расходы по месяцам"]'),'Не отображается график сводки');
+});
+await test('Прибыль по сборкам рассчитывается по дате продажи и фиксированной себестоимости',()=>{
+api.action('rptab','builds');
+const details=w.document.querySelector('#m .rpt-detail');assert(details,'Нет таблицы проданных сборок');
+const row=[...details.querySelectorAll('tbody tr')].find(r=>r.textContent.includes('№2'));
+assert(row,'Проданная сборка не попала в отчёт');
+const values=[...row.querySelectorAll('td[data-value]')].map(x=>+x.dataset.value);
+assert(values[0]===1000&&values[1]===1500&&values[2]===500,'Себестоимость, выручка или прибыль рассчитаны неверно');
+assert(w.document.querySelector('#m').textContent.includes('Февраль'),'Прибыль не привязана к месяцу фактической продажи');
+assert(w.document.querySelector('[data-a="rcsv"]'),'Нет экспорта отчёта в CSV');
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
