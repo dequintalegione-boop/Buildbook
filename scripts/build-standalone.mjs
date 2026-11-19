@@ -23,26 +23,32 @@ function assertOneReference(source, needle, label) {
 
 const xlsxTag = '<script src="./vendor/xlsx.full.min.js"></script>';
 const repositoryTag = '<script src="./repository.js"></script>';
+const xlsxSlot = '<!-- BUILDBOOK_XLSX_BUNDLE -->';
+const repositorySlot = '<!-- BUILDBOOK_REPOSITORY_BUNDLE -->';
 assertOneReference(html, xlsxTag, 'SheetJS');
 assertOneReference(html, repositoryTag, 'IndexedDB repository');
 
-let standalone = html.replace(
-  xlsxTag,
+let standalone = html.replace(xlsxTag, xlsxSlot).replace(repositoryTag, repositorySlot);
+if (/<script\\s+src=/i.test(standalone)) {
+  throw new Error('The standalone template still contains an external script dependency.');
+}
+standalone = standalone.replace(
+  xlsxSlot,
   `<script>
 /* Bundled locally from vendor/xlsx.full.min.js. */
 ${xlsx}
 </script>`
 );
 standalone = standalone.replace(
-  repositoryTag,
+  repositorySlot,
   `<script>
 /* Bundled locally from repository.js. */
 ${repository}
 </script>`
 );
 
-if (standalone.includes(xlsxTag) || standalone.includes(repositoryTag)) {
-  throw new Error('The standalone bundle still references an external repository or SheetJS file.');
+if (standalone.includes(xlsxSlot) || standalone.includes(repositorySlot)) {
+  throw new Error('A standalone bundle placeholder was not replaced.');
 }
 
 await writeFile(outputPath, standalone, 'utf8');
