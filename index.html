@@ -497,7 +497,235 @@ cats.forEach(cat=>{const h=hiddenC.includes(g+'::'+cat),protectedType=kind=='e'&
 html+='</section>'});
 return html+'</section>';
 }
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.0<br>Developed by <b>Quinta Legione</b></div>'}
+
+function parseCsv(raw){
+ const text=String(raw||'').replace(/^\uFEFF/,'');
+ let delimiter=';',quote=false,counts={';':0,',':0,'\t':0};
+ for(let i=0;i<text.length;i++){
+  const ch=text[i];
+  if(ch=='"'){if(quote&&text[i+1]=='"'){i++;continue}quote=!quote;continue}
+  if(!quote&&(ch==';'||ch==','||ch=='\t'))counts[ch]++;
+  if(!quote&&(ch=='\n'||ch=='\r'))break;
+ }
+ delimiter=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0]||';';
+ const rows=[];let row=[],cell='',quoted=false;
+ for(let i=0;i<text.length;i++){
+  const ch=text[i];
+  if(quoted){
+   if(ch=='"'&&text[i+1]=='"'){cell+='"';i++}
+   else if(ch=='"')quoted=false;
+   else cell+=ch;
+  }else if(ch=='"')quoted=true;
+  else if(ch==delimiter){row.push(cell);cell=''}
+  else if(ch=='\n'){row.push(cell.replace(/\r$/,''));if(row.some(v=>String(v).trim()!==''))rows.push(row);row=[];cell=''}
+  else if(ch=='\r'&&text[i+1]=='\n'){}
+  else cell+=ch;
+ }
+ row.push(cell.replace(/\r$/,''));
+ if(row.some(v=>String(v).trim()!==''))rows.push(row);
+ return rows;
+}
+const csvHeaderNorm=value=>String(value??'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]/g,'');
+const csvNumber=value=>{
+ const raw=String(value??'').replace(/[\s\u00a0₽]/g,'').replace(',','.');
+ if(raw==='')return NaN;
+ const n=Number(raw);return Number.isFinite(n)?n:NaN;
+};
+function csvDate(value){
+ const s=String(value??'').trim();if(!s)return'';
+ if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+ let m=/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(s);
+ if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+ if(/^\d{5}(\.\d+)?$/.test(s)){
+  const n=Number(s);if(n>20000&&n<100000)return new Date(Date.UTC(1899,11,30)+Math.floor(n)*86400000).toISOString().slice(0,10);
+ }
+ return'';
+}
+const CSV_FIELDS={
+ batches:[
+  ['id','ID партии',['id','ид','идентификатор','идентификаторпартии']],
+  ['type','Тип комплектующего',['тип','категория','type']],
+  ['desc','Описание / модель',['описание','модель','название','desc','наименование']],
+  ['date','Дата закупки',['дата','датазакупки','date']],
+  ['price','Цена за штуку',['цена','ценазашт','ценазаштуку','price','стоимость']],
+  ['qty','Количество в партии',['колво','количество','qty','count','количествошт']],
+  ['supplier','Поставщик',['поставщик','supplier']],
+  ['link','Ссылка на объявление',['ссылка','ссылканаобъявление','link','url']],
+  ['note','Комментарий',['комментарий','примечание','note']],
+  ['problemQty','Проблемные единицы',['проблемныеостатки','проблемныедетали','проблемноеколичество','problemqty']],
+  ['writtenOffQty','Списано единиц',['списано','списаноколичество','списанныеединицы','writtenoffqty']],
+  ['problemReason','Причина проблемы',['причинапроблемы','проблемаописание','причина','problemreason']],
+  ['problemFlag','Старая отметка «Проблема»',['проблема','problem']]
+ ],
+ builds:[
+  ['id','ID сборки',['id','ид','идентификатор','идентификаторсборки']],
+  ['num','Номер сборки',['номер','номерсборки','num']],
+  ['name','Название',['название','метка','name']],
+  ['status','Статус',['статус','status']],
+  ['builder','Сборщик',['сборщик','builder']],
+  ['buyer','Покупатель',['покупатель','комупродали']],
+  ['date','Дата сборки',['датасборки','дата','date']],
+  ['sold','Дата продажи',['датапродажи','продана','sold']],
+  ['planned','Плановая цена',['плановаяцена','плановаяценапродажи','planned']],
+  ['price','Цена продажи',['ценапродажи','цена','price']],
+  ['cost','Себестоимость',['себестоимость','cost']],
+  ['lines','Состав / комплектующие (ID:кол-во)',['комплектующие','компоненты','состав','детали','parts','lines']],
+  ['note','Комментарий',['комментарий','примечание','note']]
+ ],
+ tx:[
+  ['id','ID операции',['id','ид','идентификатор','идентификатороперации']],
+  ['kind','Тип операции',['тип','вид','типоперации','kind','операция']],
+  ['date','Дата',['дата','date']],
+  ['amount','Сумма',['сумма','amount','итого']],
+  ['desc','Описание',['описание','комментарий','название','desc']],
+  ['cat','Категория',['категория','cat']],
+  ['grp','Группа категорий',['группа','группакатегорий','grp']],
+  ['qty','Количество',['колво','количество','qty']],
+  ['acc','Касса',['касса','счет','счёт','acc','кошелек']],
+  ['fromAcc','Касса отправления',['откуда','изкассы','исходнаякасса','fromacc']],
+  ['toAcc','Касса получения',['куда','вкассу','целевыякасса','toacc']],
+  ['note','Комментарий',['примечание','комментарий','note']],
+  ['batchId','ID партии',['batchid','идпартии']],
+  ['buildId','ID сборки',['buildid','идсборки']],
+  ['costAmount','Себестоимость продажи',['себестоимость','costamount']],
+  ['grossProfit','Валовая прибыль',['валоваяприбыль','grossprofit']],
+  ['unitCost','Себестоимость за штуку',['себестоимостьзашт','unitcost']],
+  ['unitPrice','Цена за штуку',['ценазаштуку','unitprice']],
+  ['partSale','Продажа комплектующего',['продажакомплектующего','partsale']],
+  ['sourceBuildId','Исходная сборка ID',['исходнаясборкаid','sourcebuildid']],
+  ['sourceBuildNum','Исходная сборка №',['исходнаясборка','sourcebuildnum']],
+  ['batchDesc','Описание партии',['описаниепартии','batchdesc']],
+  ['batchType','Тип партии',['типпартии','batchtype']]
+ ]
+};
+function guessCsvKind(headers){
+ const h=headers.map(csvHeaderNorm);
+ if(h.some(x=>['сумма','amount'].includes(x))||h.includes('типоперации'))return'tx';
+ if(h.includes('статус')||h.includes('номерсборки')||h.includes('ценапродажи'))return'builds';
+ return'batches';
+}
+function csvMappingHtml(kind,headers){
+ return CSV_FIELDS[kind].map(field=>{
+  const key=field[0],aliases=field[2].map(csvHeaderNorm);
+  const def=headers.findIndex(h=>aliases.includes(csvHeaderNorm(h)));
+  const options=[['','— Не импортировать —'],...headers.map((h,i)=>[String(i),h||('Столбец '+(i+1))])];
+  return '<label>'+esc(field[1])+'<select name="map_'+key+'">'+opt(options,def>=0?String(def):'')+'</select></label>';
+ }).join('');
+}
+function csvAccount(value){
+ const v=String(value??'').trim();if(!v)return S.accounts[0]||null;
+ let account=S.accounts.find(a=>a.id==v||csvHeaderNorm(a.name)==csvHeaderNorm(v));
+ if(!account){account={id:uid(),name:v,open:0};S.accounts.push(account)}
+ return account;
+}
+function applyCsvImport(matrix,kind,mapping,defaultKind){
+ const stats={added:0,skipped:0,errors:[]},data=matrix.slice(1);
+ const value=(row,key)=>{
+  const index=mapping[key];
+  if(index===undefined||index===null||index==='')return'';
+  return String(row[Number(index)]??'').trim();
+ };
+ const fail=(rowNo,reason)=>{stats.skipped++;if(stats.errors.length<20)stats.errors.push({row:rowNo,reason})};
+ for(let ri=0;ri<data.length;ri++){
+  const row=data[ri];if(!row||!row.some(v=>String(v??'').trim()!==''))continue;
+  const rowNo=ri+2;
+  try{
+   if(kind=='batches'){
+    const type=value(row,'type'),desc=value(row,'desc'),date=csvDate(value(row,'date'));
+    const price=csvNumber(value(row,'price')),qty=csvNumber(value(row,'qty'));
+    if(!type||!desc||!date||!Number.isFinite(price)||price<0||!Number.isInteger(qty)||qty<1)throw new Error('Нужны тип, описание, дата, цена и целое количество больше нуля.');
+    const sourceId=value(row,'id'),id=sourceId||uid();
+    if(S.batches.some(b=>b.id==id))throw new Error('Партия с таким ID уже существует.');
+    let bad=csvNumber(value(row,'problemQty'));if(!Number.isFinite(bad))bad=0;
+    let off=csvNumber(value(row,'writtenOffQty'));if(!Number.isFinite(off))off=0;
+    const oldProblem=/^(1|true|да|yes|проблема)$/i.test(value(row,'problemFlag'));
+    if(oldProblem&&!value(row,'problemQty'))bad=qty;
+    if(!Number.isInteger(bad)||!Number.isInteger(off)||bad<0||off<0||bad+off>qty)throw new Error('Проблемное и списанное количество должно быть целым и не превышать количество партии.');
+    S.batches.push({id,type,desc,date,price,qty,supplier:value(row,'supplier'),link:value(row,'link'),note:value(row,'note'),problemQty:bad,problemReason:value(row,'problemReason'),writtenOffQty:off});
+    stats.added++;
+   }else if(kind=='builds'){
+    const sourceId=value(row,'id'),id=sourceId||uid();
+    if(S.builds.some(b=>b.id==id))throw new Error('Сборка с таким ID уже существует.');
+    const date=csvDate(value(row,'date'))||today(),status=value(row,'status');
+    const numRaw=csvNumber(value(row,'num'));let num=Number.isInteger(numRaw)&&numRaw>0?numRaw:S.seq+1;
+    if(S.builds.some(b=>+b.num==num))num=Math.max(S.seq,...S.builds.map(b=>+b.num||0))+1;
+    const lines=[],pending={normal:{},problem:{}},rawLines=value(row,'lines');
+    if(rawLines){
+     rawLines.split(/[|;]/).map(x=>x.trim()).filter(Boolean).forEach(token=>{
+      const parts=token.split(':'),batchId=parts[0],qty=csvNumber(parts[1]),problem=parts[2]=='problem';
+      const batch=S.batches.find(b=>b.id==batchId);
+      if(!batch||!Number.isInteger(qty)||qty<1)throw new Error('В составе указан неизвестный ID партии или некорректное количество: '+token);
+      const bucket=problem?'problem':'normal',available=problem?problemAvailable(batch):goodAvailable(batch);
+      pending[bucket][batchId]=(pending[bucket][batchId]||0)+qty;
+      if(pending[bucket][batchId]>available)throw new Error('Недостаточно '+(problem?'проблемных':'нормальных')+' деталей для строки состава: '+batch.desc);
+      const found=lines.find(l=>l.batchId==batchId&&!!l.problem==problem);
+      if(found)found.qty+=qty;else lines.push({batchId,qty,problem});
+     });
+    }
+    const x={id,num,name:value(row,'name'),status:ST.includes(status)?status:ST[0],builder:value(row,'builder'),buyer:value(row,'buyer'),date,sold:csvDate(value(row,'sold')),planned:csvNumber(value(row,'planned'))||0,price:csvNumber(value(row,'price'))||0,note:value(row,'note'),lines};
+    if(x.status==ST[3]){x.sold=x.sold||date;const importedCost=csvNumber(value(row,'cost'));x.cost=Number.isFinite(importedCost)&&importedCost>=0?importedCost:live(x)}
+    else x.cost=null;
+    S.builds.push(x);S.seq=Math.max(S.seq,+num||0);stats.added++;
+   }else if(kind=='tx'){
+    const date=csvDate(value(row,'date')),amount=csvNumber(value(row,'amount'));
+    if(!date||!Number.isFinite(amount)||amount<=0)throw new Error('Нужны корректная дата и сумма больше нуля.');
+    const kindRaw=csvHeaderNorm(value(row,'kind'));
+    let txKind=defaultKind||'e';
+    if(['доход','приход','income','i'].includes(kindRaw))txKind='i';
+    else if(['расход','expense','e'].includes(kindRaw))txKind='e';
+    else if(['перевод','переводмеждукассами','transfer'].includes(kindRaw))txKind='transfer';
+    const sourceId=value(row,'id'),id=sourceId||uid();
+    if(S.tx.some(t=>t.id==id))throw new Error('Операция с таким ID уже существует.');
+    const cat=value(row,'cat')||'Другое',desc=value(row,'desc')||cat,note=value(row,'note');
+    const qtyRaw=csvNumber(value(row,'qty')),qty=Number.isInteger(qtyRaw)&&qtyRaw>0?qtyRaw:1;
+    const common={id,kind:txKind,date,amount,desc,cat,grp:value(row,'grp')||categoryGroup(txKind=='e'?'e':'i',cat)||'Импорт',qty,note};
+    if(txKind=='transfer'){
+     const from=csvAccount(value(row,'fromAcc')),to=csvAccount(value(row,'toAcc'));
+     if(!from||!to||from.id==to.id)throw new Error('Для перевода нужны две разные кассы.');
+     S.tx.push({...common,cat:'Перевод между кассами',grp:'Переводы',fromAcc:from.id,toAcc:to.id});
+    }else{
+     const account=csvAccount(value(row,'acc'));if(!account)throw new Error('Не найдена касса для операции.');
+     const batchId=value(row,'batchId'),buildId=value(row,'buildId');
+     if(batchId&&!S.batches.some(b=>b.id==batchId))throw new Error('Не найдена партия по указанному ID.');
+     if(buildId&&!S.builds.some(b=>b.id==buildId))throw new Error('Не найдена сборка по указанному ID.');
+     const partSale=/^(1|true|да|yes)$/i.test(value(row,'partSale'));
+     const tx={...common,acc:account.id,batchId:batchId||undefined,buildId:buildId||undefined};
+     if(partSale){tx.partSale=true;tx.costAmount=csvNumber(value(row,'costAmount'))||0;tx.grossProfit=csvNumber(value(row,'grossProfit'))||0;tx.unitCost=csvNumber(value(row,'unitCost'))||0;tx.unitPrice=csvNumber(value(row,'unitPrice'))||0;tx.batchDesc=value(row,'batchDesc');tx.batchType=value(row,'batchType');tx.sourceBuildId=value(row,'sourceBuildId')||null;tx.sourceBuildNum=value(row,'sourceBuildNum')||null}
+     S.tx.push(tx);
+    }
+    stats.added++;
+   }else throw new Error('Неизвестный тип импорта.');
+  }catch(error){fail(rowNo,error&&error.message?error.message:'Не удалось разобрать строку.')}
+ }
+ if(stats.added){save();render()}
+ return stats;
+}
+function importCsvWizard(raw){
+ const matrix=parseCsv(raw);
+ if(matrix.length<2){alert('В CSV не найдены строки с данными.');return}
+ const headers=matrix[0].map((h,i)=>String(h??'').trim()||('Столбец '+(i+1)));
+ const guess=guessCsvKind(headers);
+ const preview=matrix.slice(1,5).map(row=>'<tr>'+headers.map((h,i)=>'<td>'+esc(row[i]??'')+'</td>').join('')+'</tr>').join('');
+ const previewHtml='<div class="sell-scroll"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div>';
+ const body='<p class="mu">Строк в файле: '+(matrix.length-1)+'. Сначала проверьте тип таблицы и сопоставление столбцов. Обязательные поля отмечены в описаниях.</p><label>Что импортируем<select name="importKind">'+opt([['batches','Склад'],['builds','Сборки'],['tx','Операции']],guess)+'</select></label><div id="csv-mapping" class="g2"></div><div id="csv-default-kind"></div><h3 style="margin-top:8px">Предпросмотр (первые строки)</h3>'+previewHtml;
+ const f=modal('Импорт CSV',body,form=>{
+  const kind=form.elements.importKind.value,mapping={};
+  CSV_FIELDS[kind].forEach(field=>mapping[field[0]]=form.elements['map_'+field[0]].value);
+  const stats=applyCsvImport(matrix,kind,mapping,form.elements.defaultKind?form.elements.defaultKind.value:'e');
+  const errs=stats.errors.length?'<h3>Причины пропуска</h3><div class="sell-scroll"><table><thead><tr><th>Строка</th><th>Причина</th></tr></thead><tbody>'+stats.errors.map(x=>'<tr><td>'+x.row+'</td><td>'+esc(x.reason)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="mu">Ошибочных строк нет.</p>';
+  const more=stats.skipped>stats.errors.length?'<p class="mu">Показаны первые '+stats.errors.length+' ошибок из '+stats.skipped+'.</p>':'';
+  modal('Результат импорта','<div class="k">'+kpi('Добавлено',stats.added,'ok')+kpi('Пропущено',stats.skipped,stats.skipped?'w':'')+'</div>'+errs+more,()=>true,true,'Закрыть');
+ },true,'Импортировать');
+ const renderFields=()=>{
+  const kind=f.elements.importKind.value;
+  f.querySelector('#csv-mapping').innerHTML=csvMappingHtml(kind,headers);
+  f.querySelector('#csv-default-kind').innerHTML=kind=='tx'?'<label>Тип по умолчанию, если столбец типа не сопоставлен<select name="defaultKind">'+opt([['e','Расход'],['i','Доход']], 'e')+'</select></label>':'';
+ };
+ f.elements.importKind.addEventListener('change',renderFields);renderFields();
+}
+
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.1<br>Developed by <b>Quinta Legione</b></div>'}
+
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
@@ -514,7 +742,7 @@ used:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?used(b):null},
 balance:accountId=>{const a=S.accounts.find(x=>x.id==accountId);return a?bal(a):null},
 buildCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?cost(b):null},
 buildLiveCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?live(b):null},
-normalAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?goodAvailable(b):null},problemAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?problemAvailable(b):null},writtenOff:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?writtenOff(b):null},stockEvents:()=>JSON.parse(JSON.stringify(S.stockEvents||[])),dbName:()=>DB_NAME
+normalAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?goodAvailable(b):null},problemAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?problemAvailable(b):null},writtenOff:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?writtenOff(b):null},stockEvents:()=>JSON.parse(JSON.stringify(S.stockEvents||[])),parseCsv:raw=>parseCsv(raw),importCsv:(raw,kind,mapping,defaultKind)=>applyCsvImport(parseCsv(raw),kind,mapping,defaultKind),dbName:()=>DB_NAME
 })})}
 function globalSearch(){
 const body='<p class="gsearch-help">Поиск по комплектующим, сборкам, операциям и задачам. Нажмите Ctrl+K, чтобы открыть поиск из любого раздела.</p><input name="query" type="search" autocomplete="off" placeholder="Введите название, категорию, описание или текст задачи"><div id="gsearch-count" class="gsearch-help">Введите минимум 2 символа</div><div id="gsearch-results" class="gsearch-results"></div>';
@@ -571,7 +799,7 @@ exp:()=>{S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save();cons
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{if(confirm('Удалить задачу?')){S.tasks=S.tasks.filter(t=>t.id!=id);save();render()}},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
 bdoc:()=>{const b=find('builds',id),r=b.lines.map(l=>{const p=find('batches',l.batchId);return p?`<tr><td>${p.type}</td><td>${esc(p.desc)}</td><td>${l.qty}</td></tr>`:''}).join(''),h=`<html><head><meta charset="utf-8"></head><body><h1>ПК №${b.num} ${esc(b.name)}</h1><p>Статус: ${b.status}<br>Дата сборки: ${D(b.date)}<br>Сборщик: ${esc(b.builder)}${b.price?`<br>Цена: ${R(b.price)}`:''}</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr>${r}</table><p>${esc(b.note)}</p></body></html>`,l=document.createElement('a');const ph=PH[b.id]||[],dl=(bl,n)=>{l.href=URL.createObjectURL(bl);l.download=n;l.click()},E=new TextEncoder().encode('\ufeff'+h);ph.length?dl(zip([['PC-'+b.num+'.doc',E],...ph.map((u,i)=>['photos/test-'+(i+1)+'.jpg',Uint8Array.from(atob(u.split(',')[1]),c=>c.charCodeAt(0))])]),'PC-'+b.num+'.zip'):dl(new Blob([E],{type:'application/msword'}),'PC-'+b.num+'.doc')},
-csv:()=>{const E={batches:[['Тип','Описание','Дата','Цена','Кол-во','Поставщик','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.type,b.desc,b.date,b.price,b.qty,b.supplier,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['№','Название','Статус','Сборщик','Дата сборки','Дата продажи','Себестоимость','Цена'],b=>[b.num,b.name,b.status,b.builder,b.date,b.sold,cost(b),b.price]],tx:[['Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','Себестоимость','Валовая прибыль'],t=>[t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
+csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
 dty:()=>{const w=DD()[id],t=Wd[w.id][2];w.type=t[(t.indexOf(w.type)+1)%t.length];save.skip=1;save();render()},dwd:()=>{const w=DD()[id];w.w=w.w?0:1;save.skip=1;save();render()},drm:()=>{DD().splice(id,1);save.skip=1;save();render()},dadd:()=>{DD().push({id,type:Wd[id][2][0],w:0});save.skip=1;save();render()},
@@ -595,7 +823,7 @@ else if(key==='e'){V.tab='tx';render();tform(0,'e')}
 
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');a&&act(a.dataset.a,a.dataset.id)});
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
-document.addEventListener('change',e=>{if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];if(!fl)return;fl.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.batches)||!Array.isArray(d.builds)||!Array.isArray(d.tx))throw 0;if(confirm('Заменить все текущие данные данными из копии?')){S=Object.assign(S,d);PH=S.photos||{};delete S.photos;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));INC=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));syncCategories();normalizeStock();save();render();toast('Данные загружены')}}catch(_){alert('Файл не похож на копию Buildbook')}})});
+document.addEventListener('change',e=>{if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];if(!fl)return;fl.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.batches)||!Array.isArray(d.builds)||!Array.isArray(d.tx))throw 0;if(confirm('Заменить все текущие данные данными из копии?')){S=Object.assign(S,d);PH=S.photos||{};delete S.photos;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));INC=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));syncCategories();normalizeStock();save();render();toast('Данные загружены')}}catch(_){alert('Файл не похож на копию Buildbook')}})});
 document.addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.closest('.tk');t&&e.dataTransfer.setData('text/plain',t.dataset.id)});
 document.addEventListener('dragover',e=>{e.target.closest&&e.target.closest('.qd')&&e.preventDefault()});
 document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('tasks',e.dataTransfer.getData('text/plain'));if(t){e.preventDefault();t.q=+c.dataset.q;save();render()}});
