@@ -17,10 +17,7 @@ try {
   });
 
   await page.waitForFunction(
-    () => {
-      const value = document.querySelector('#summary')?.textContent || '';
-      return value.startsWith('Готово:') || value.startsWith('Пройдено:');
-    },
+    () => document.querySelector('#summary')?.dataset.finished === 'true',
     null,
     { timeout: 45000 }
   );
