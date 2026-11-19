@@ -157,6 +157,7 @@ function create(databaseName){
 
  async function deleteDatabase(){
   await close();
+  await new Promise(resolve=>setTimeout(resolve,0));
   return new Promise((resolve,reject)=>{
    let request;
    try{request=global.indexedDB.deleteDatabase(name)}
