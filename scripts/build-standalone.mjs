@@ -29,7 +29,7 @@ assertOneReference(html, xlsxTag, 'SheetJS');
 assertOneReference(html, repositoryTag, 'IndexedDB repository');
 
 let standalone = html.replace(xlsxTag, xlsxSlot).replace(repositoryTag, repositorySlot);
-if (/<script\\s+src=/i.test(standalone)) {
+if (standalone.includes('<script src=')) {
   throw new Error('The standalone template still contains an external script dependency.');
 }
 standalone = standalone.replace(
