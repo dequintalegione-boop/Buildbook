@@ -12,7 +12,7 @@
 (function(){
 'use strict';
 const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
-let w,api,passed=0,failed=0,alerts=[],prompts=[];
+let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
 function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Выполнено тестов: '+(passed+failed)}
@@ -109,6 +109,35 @@ alerts=[];api.action('ccdel',encodeURIComponent(JSON.stringify(['e','Сборк�
 });
 await test('Журнал фиксирует изменения',()=>assert(api.getLogs().length>0,'В журнале нет записей'));
 await test('Дашборд и графики отображаются без ошибки',()=>{api.action('nav','dash');assert(w.document.querySelectorAll('#m .qd').length>0,'На дашборде нет блоков');assert(w.document.querySelector('#m svg'),'Не построился SVG-график')});
+await test('Перевод между кассами создаётся и не попадает в доходы/расходы',()=>{
+api.action('nav','tx');
+const s=state(),sum=k=>s.tx.filter(t=>t.kind===k).reduce((n,t)=>n+t.amount,0);
+transferBaseline={cash:api.balance('cash'),card:api.balance('card'),income:sum('i'),expense:sum('e')};
+api.action('xfer');let f=form();assert(f,'Окно перевода не открылось');
+setv(f,'date','2026-04-01');setv(f,'amount','300');setv(f,'fromAcc','cash');setv(f,'toAcc','cash');setv(f,'desc','Проверка перевода');
+submit(f);assert(alerts.some(x=>x.includes('две разные кассы')),'Не запрещён перевод в ту же кассу');assert(form()===f,'Форма закрылась после ошибки');
+setv(f,'toAcc','card');submit(f);
+const t=state().tx.find(x=>x.kind==='transfer');assert(t,'Перевод не записан');transferId=t.id;
+assert(t.amount===300&&t.fromAcc==='cash'&&t.toAcc==='card','Поля перевода записаны неверно');
+assert(api.balance('cash')===transferBaseline.cash-300,'Сумма не списана с исходной кассы');
+assert(api.balance('card')===transferBaseline.card+300,'Сумма не зачислена в целевую кассу');
+const after=state().tx;assert(after.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)===transferBaseline.income,'Перевод изменил доходы');
+assert(after.filter(x=>x.kind==='e').reduce((n,x)=>n+x.amount,0)===transferBaseline.expense,'Перевод изменил расходы');
+});
+await test('Перевод можно отредактировать с пересчётом обеих касс',()=>{
+assert(transferId,'Предыдущий тест не создал перевод');api.action('te',transferId);const f=form();assert(f,'Не открылось редактирование перевода');
+setv(f,'amount','350');submit(f);const t=state().tx.find(x=>x.id===transferId);
+assert(t&&t.amount===350,'Сумма перевода не обновилась');
+assert(api.balance('cash')===transferBaseline.cash-350,'После редактирования неверный остаток исходной кассы');
+assert(api.balance('card')===transferBaseline.card+350,'После редактирования неверный остаток целевой кассы');
+});
+await test('Удаление перевода возвращает деньги и не затрагивает финансовые итоги',()=>{
+api.action('td',transferId);assert(!state().tx.some(x=>x.id===transferId),'Перевод не удалён');
+assert(api.balance('cash')===transferBaseline.cash,'Сумма не вернулась в исходную кассу');
+assert(api.balance('card')===transferBaseline.card,'Сумма не списалась с целевой кассы');
+const s=state();assert(s.tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)===transferBaseline.income,'Доходы изменились после удаления перевода');
+assert(s.tx.filter(x=>x.kind==='e').reduce((n,x)=>n+x.amount,0)===transferBaseline.expense,'Расходы изменились после удаления перевода');
+});
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
