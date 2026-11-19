@@ -195,7 +195,6 @@ async function load(){
  STARTUP_STAGE='opening-database';
  STARTUP_STAGE='reading-profile';
  const profile=await repository.readProfile();
- const {state:storedState,logs:storedLog,photos:storedPhotos}=profile;
  storageRevision=profile.revision;
  if(remoteStorageRevision>storageRevision){
   const latest=await repository.readProfile();
@@ -206,6 +205,7 @@ async function load(){
  }
  if(remoteStorageRevision>storageRevision)markStorageConflict(remoteStorageRevision);
  else storageConflict=false;
+ const {state:storedState,logs:storedLog,photos:storedPhotos}=profile;
  const previousState=storedState?JSON.stringify(storedState):'';
  STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
