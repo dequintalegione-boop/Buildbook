@@ -55,7 +55,9 @@ let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const repository=window.BuildbookRepository.create(DB_NAME);
 let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='',storageRevision=0,storageConflict=false,remoteStorageRevision=0;
-const storageChannel=typeof BroadcastChannel==='function'?new BroadcastChannel('buildbook-profile:'+DB_NAME):null;
+let storageChannel=null;
+try{if(typeof BroadcastChannel==='function')storageChannel=new BroadcastChannel('buildbook-profile:'+DB_NAME)}
+catch(error){console.warn('Buildbook: уведомления между вкладками недоступны; проверка ревизии IndexedDB продолжит защищать данные.',error)}
 function markStorageConflict(revision){
  if(Number.isSafeInteger(revision)&&revision>=0)remoteStorageRevision=Math.max(remoteStorageRevision,revision);
  if(remoteStorageRevision<=storageRevision)return;
