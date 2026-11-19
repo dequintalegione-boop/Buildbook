@@ -12,11 +12,12 @@
 (function(){
 'use strict';
 const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
+const RUNNER_BROWSER=new URLSearchParams(location.search).get('browser')||'auto';
 let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,tempDatabaseCounter=0;
 const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
-function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Выполнено тестов: '+(passed+failed)}
+function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · выполнено тестов: '+(passed+failed)}
 async function test(name,fn){summary.textContent='Выполняется: '+name;try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
@@ -115,7 +116,7 @@ const name=tempDatabaseName('buildbook-large-profile'),repository=w.BuildbookRep
 await repository.clear();
 summary.textContent='Выполняется: Профиль — подготовка данных';
 try{
-const isWebKit=/AppleWebKit/i.test(w.navigator.userAgent)&&!/(Chrome|Chromium|CriOS|Edg)/i.test(w.navigator.userAgent);
+const isWebKit=RUNNER_BROWSER==='webkit'||(RUNNER_BROWSER==='auto'&&/AppleWebKit/i.test(w.navigator.userAgent)&&!/(Chrome|Chromium|CriOS|Edg)/i.test(w.navigator.userAgent));
 const textRepeat=isWebKit?16:1024*1024,photoSize=isWebKit?0:3*1024*1024;
 const recordCount=isWebKit?1:500;
 const largeText='Buildbook'.repeat(textRepeat),bytes=new Uint8Array(photoSize);bytes.fill(37);

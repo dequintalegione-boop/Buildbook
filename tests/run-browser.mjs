@@ -21,7 +21,7 @@ page.on('console', message => {
 console.log(`Браузер: ${browserName}`);
 
 try {
-  await page.goto('http://127.0.0.1:4173/tests/test-runner.html', {
+  await page.goto(`http://127.0.0.1:4173/tests/test-runner.html?browser=${encodeURIComponent(browserName)}`, {
     waitUntil: 'load',
     timeout: 30000
   });
