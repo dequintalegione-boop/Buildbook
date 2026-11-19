@@ -217,7 +217,7 @@ f.addEventListener('change',e=>{const t=e.target;if(t.dataset.i!=null){const i=+
 f.querySelector('#ph').onclick=e=>{if(e.target.dataset.p!=null){P.splice(+e.target.dataset.p,1);dp()}};f.elements.pf.onchange=async e=>{for(const fl of e.target.files)P.push(await shrink(fl));e.target.value='';dp()};
 f.elements.price.oninput=f.elements.planned.oninput=draw;draw();dp()}
 function builds(){const f=V.b,q=f.q.toLowerCase(),rows=S.builds.filter(b=>(!f.st||b.status==f.st)&&(!q||(b.name+' '+b.builder+' '+b.buyer).toLowerCase().includes(q))).sort((a,b)=>b.num-a.num),done=S.builds.filter(b=>b.status==ST[3]);
-return head('Сборки','<button class="btn" data-a="calc">Расчёт</button> <button class="btn p" data-a="badd">+ Сборка</button>')+`<div class="k">${kpi('Заработок с проданных',R(done.reduce((n,b)=>n+profit(b),0)),'ok')}${kpi('В работе',S.builds.filter(b=>b.status==ST[0]).length)}${kpi('Готовы к продаже',S.builds.filter(b=>b.status==ST[1]||b.status==ST[2]).length)}${kpi('Продано',done.length)}</div><div class="fl"><select data-f="b.st">${opt([['','Все статусы'],...ST],f.st)}</select><input data-f="b.q" placeholder="Поиск по названию, сборщику, покупателю" value="${esc(f.q)}" style="min-width:280px"></div>`+table(['№','Название','Статус','Сборщик','Себестоимость','Цена','Заработок','Маржа',''],rows.map(b=>{const p=profit(b),s=sale(b);return`<tr><td>${b.num}</td><td>${esc(b.name||'Без названия')}</td><td><span class="bd ${b.status==ST[3]?'ok':''}">${b.status}</span></td><td>${esc(b.builder)}</td><td class="r">${R(cost(b))}</td><td class="r">${R(s)}${b.price?'':' <small>план</small>'}</td><td class="r ${b.status==ST[3]?(p>=0?'ok':'bad'):'mu'}">${R(p)}</td><td class="r">${s?Math.round(p/s*100)+'%':''}</td>${btns('b',b.id).replace('<td class="r">','<td class="r"><button class="btn ic" data-a="bdoc" data-id="'+b.id+'" title="Документ с характеристиками">Док</button> ')}</tr>`}),'Сборок нет. Нажмите «+ Сборка», выберите детали со склада, и себестоимость посчитается сама.')}
+return head('Сборки','<button class="btn" data-a="calc">Расчёт</button> <label class="btn" style="display:inline-block;cursor:pointer">Импорт ZIP-карточки<input type="file" accept=".zip,application/zip" data-buildzip hidden></label> <button class="btn p" data-a="badd">+ Сборка</button>')+`<div class="k">${kpi('Заработок с проданных',R(done.reduce((n,b)=>n+profit(b),0)),'ok')}${kpi('В работе',S.builds.filter(b=>b.status==ST[0]).length)}${kpi('Готовы к продаже',S.builds.filter(b=>b.status==ST[1]||b.status==ST[2]).length)}${kpi('Продано',done.length)}</div><div class="fl"><select data-f="b.st">${opt([['','Все статусы'],...ST],f.st)}</select><input data-f="b.q" placeholder="Поиск по названию, сборщику, покупателю" value="${esc(f.q)}" style="min-width:280px"></div>`+table(['№','Название','Статус','Сборщик','Себестоимость','Цена','Заработок','Маржа',''],rows.map(b=>{const p=profit(b),s=sale(b);return`<tr><td>${b.num}</td><td>${esc(b.name||'Без названия')}</td><td><span class="bd ${b.status==ST[3]?'ok':''}">${b.status}</span></td><td>${esc(b.builder)}</td><td class="r">${R(cost(b))}</td><td class="r">${R(s)}${b.price?'':' <small>план</small>'}</td><td class="r ${b.status==ST[3]?(p>=0?'ok':'bad'):'mu'}">${R(p)}</td><td class="r">${s?Math.round(p/s*100)+'%':''}</td>${btns('b',b.id).replace('<td class="r">','<td class="r"><button class="btn ic" data-a="bdoc" data-id="'+b.id+'" title="Экспорт карточки и фото в ZIP">ZIP</button> ')}</tr>`}),'Сборок нет. Нажмите «+ Сборка», выберите детали со склада, и себестоимость посчитается сама.')}
 /* деньги */
 function tform(id,k0){const o=id&&S.tx.find(t=>t.id==id),k=o?o.kind:k0||'e';const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',`<div class="g2">${fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))}${fld('date','Дата','date',o?o.date:today())}</div><div class="g2">${fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')}${fld('qty','Количество','number',o?o.qty:1,'min=1')}</div>${fld('cat','Категория','select','',catOpt(k,o&&o.cat))}${fld('desc','Описание','text',o?o.desc:'')}${fld('acc','Касса','select','',accOpt(o&&o.acc))}${fld('note','Комментарий (для «Проебы» обязателен)','area',o?o.note:'')}`,f=>{const d=fd(f);if(d.cat=='Проебы'&&!d.note.trim()){alert('Для категории «Проебы» напишите комментарий');return false}const v={grp:f.elements.cat.selectedOptions[0].parentNode.label,kind:d.kind,date:d.date,amount:+d.amount,qty:+d.qty||1,cat:d.cat,desc:d.desc,acc:d.acc,note:d.note};o?Object.assign(o,v):S.tx.push({id:uid(),...v});save();render()});f.elements.kind.onchange=e=>f.elements.cat.innerHTML=catOpt(e.target.value)}
 function money(){const f=V.t,q=f.q.toLowerCase(),rows=S.tx.filter(t=>(!f.k||t.kind==f.k)&&(!f.m||t.date.startsWith(f.m))&&(!q||(t.desc+' '+t.cat+' '+t.note).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)),sm=k=>rows.filter(t=>t.kind==k).reduce((n,t)=>n+t.amount,0),an=id=>(S.accounts.find(a=>a.id==id)||{name:'—'}).name,ps=S.tx.filter(t=>t.partSale&&(!f.m||t.date.startsWith(f.m))),psRevenue=ps.reduce((n,t)=>n+t.amount,0),psCost=ps.reduce((n,t)=>n+(t.costAmount||0),0),psProfit=ps.reduce((n,t)=>n+(t.grossProfit||0),0);
@@ -576,6 +576,97 @@ function readZipBackup(buffer){
  delete data._buildbookZip;
  return data;
 }
+
+function createBuildCardZip(buildId){
+ const build=find('builds',buildId);if(!build)throw new Error('Сборка не найдена.');
+ const record=JSON.parse(JSON.stringify(build)),manifest=[],files=[];
+ const lines=(record.lines||[]).map(line=>{
+  const batch=find('batches',line.batchId);
+  return {batchId:line.batchId,type:batch&&batch.type||'',desc:batch&&batch.desc||'',unitPrice:batch&&+batch.price||0,qty:+line.qty||0,problem:!!line.problem};
+ });
+ const photos=Array.isArray(PH[build.id])?PH[build.id]:[];
+ photos.forEach((photo,i)=>{
+  const parsed=dataUrlToBytes(photo),ext=({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'})[parsed.mime]||'bin';
+  const file='photos/'+String(i).padStart(6,'0')+'.'+ext;
+  files.push([file,parsed.bytes]);manifest.push({index:i,file,mime:parsed.mime});
+ });
+ const card={format:'buildbook-build-card',version:1,build:record,parts:lines,photoManifest:manifest};
+ const rows=(record.lines||[]).map(line=>{
+  const batch=find('batches',line.batchId);
+  return batch?'<tr><td>'+esc(batch.type)+'</td><td>'+esc(batch.desc)+'</td><td>'+line.qty+'</td></tr>':'';
+ }).join('');
+ const doc='<html><head><meta charset="utf-8"><title>ПК №'+record.num+'</title></head><body><h1>ПК №'+record.num+' '+esc(record.name||'')+'</h1><p>Статус: '+esc(record.status)+'<br>Дата сборки: '+esc(D(record.date))+'<br>Сборщик: '+esc(record.builder||'')+(record.price?'<br>Цена: '+R(record.price):'')+'</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr>'+rows+'</table><p>'+esc(record.note||'')+'</p></body></html>';
+ const docBytes=new TextEncoder().encode('\ufeff'+doc);
+ files.unshift(['card.json',new TextEncoder().encode(JSON.stringify(card))]);
+ files.splice(1,0,['PC-'+record.num+'.doc',docBytes]);
+ return zip(files);
+}
+function readBuildCardZip(buffer){
+ const files=unzipStore(buffer),json=files.get('card.json');
+ if(!json)throw new Error('В архиве отсутствует card.json. Это не ZIP-карточка Buildbook.');
+ let card;try{card=JSON.parse(new TextDecoder().decode(json))}catch(e){throw new Error('Не удалось прочитать данные карточки из ZIP.')}
+ if(!card||card.format!=='buildbook-build-card'||card.version!==1||!card.build||typeof card.build!=='object'||!Array.isArray(card.build.lines)||!Array.isArray(card.photoManifest)||!Array.isArray(card.parts))throw new Error('Структура ZIP-карточки не поддерживается.');
+ const b=card.build;
+ if(typeof b.id!=='string'||!b.id||!Number.isInteger(+b.num)||+b.num<1||!ST.includes(b.status)||!csvDate(b.date))throw new Error('В карточке некорректны ID, номер, статус или дата сборки.');
+ const parts=new Map(card.parts.map(x=>[String(x.batchId),x]));
+ for(const line of b.lines){
+  const item=parts.get(String(line.batchId));
+  if(!item||!Number.isInteger(+line.qty)||+line.qty<1)throw new Error('В составе карточки некорректная позиция или отсутствуют сведения о детали.');
+ }
+ const photos=[];
+ for(const item of card.photoManifest.slice().sort((a,b)=>a.index-b.index)){
+  if(!Number.isInteger(item.index)||item.index<0||item.index>=1000)throw new Error('Некорректный индекс фотографии в карточке.');
+  const path=String(item.file||'');
+  if(!/^photos\/[0-9]{6}\.(jpg|png|webp|gif|bin)$/.test(path))throw new Error('Недопустимое имя фотографии в карточке.');
+  if(typeof photos[item.index]!=='undefined')throw new Error('В карточке повторяется индекс фотографии.');
+  const data=files.get(path);if(!data)throw new Error('В архиве отсутствует фотография '+path+'.');
+  photos[item.index]=bytesToDataUrl(data,item.mime||'application/octet-stream');
+ }
+ for(let i=0;i<photos.length;i++)if(typeof photos[i]!=='string')throw new Error('В карточке отсутствует одна из фотографий.');
+ return {build:b,parts:card.parts,photos};
+}
+function importBuildCardData(card){
+ const b=card.build;
+ if(S.builds.some(x=>x.id===b.id))throw new Error('Сборка с таким ID уже есть в профиле. Импорт остановлен.');
+ if(S.builds.some(x=>+x.num===+b.num))throw new Error('Номер сборки №'+b.num+' уже используется. Импорт остановлен.');
+ const partInfo=new Map(card.parts.map(x=>[String(x.batchId),x])),pending={normal:{},problem:{}};
+ for(const line of b.lines){
+  const batch=find('batches',line.batchId),info=partInfo.get(String(line.batchId));
+  if(!batch)throw new Error('Не найдена партия «'+(info&&info.desc||line.batchId)+'» (ID '+line.batchId+'). Сначала импортируйте склад с исходными ID.');
+  if(info&&(batch.type!==info.type||batch.desc!==info.desc||Math.abs((+batch.price||0)-(+info.unitPrice||0))>0.000001))throw new Error('Партия '+batch.desc+' имеет другие реквизиты или цену. Нельзя привязать карточку к несоответствующей детали.');
+  const problem=!!line.problem,key=String(line.batchId),bucket=problem?'problem':'normal',qty=+line.qty;
+  pending[bucket][key]=(pending[bucket][key]||0)+qty;
+  const available=problem?problemAvailable(batch):goodAvailable(batch);
+  if(pending[bucket][key]>available)throw new Error('Недостаточно '+(problem?'проблемных':'нормальных')+' деталей «'+batch.desc+'» для восстановления карточки.');
+ }
+ const copy=JSON.parse(JSON.stringify(b));
+ copy.num=+copy.num;copy.txId='';
+ S.builds.push(copy);S.seq=Math.max(+S.seq||0,copy.num);
+ if(card.photos.length)PH[copy.id]=card.photos.slice();
+ save();render();toast('Карточка ПК импортирована');
+ return {added:1,photos:card.photos.length,buildId:copy.id};
+}
+function importBuildCardZip(buffer){return importBuildCardData(readBuildCardZip(buffer))}
+function downloadBuildCardZip(buildId){
+ try{
+  const build=find('builds',buildId),blob=createBuildCardZip(buildId),a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download='PC-'+build.num+'-card.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);toast('ZIP-карточка сформирована');
+ }catch(error){alert('Не удалось сформировать карточку: '+(error.message||'ошибка'))}
+}
+function buildCardImportWizard(buffer){
+ let card;
+ try{card=readBuildCardZip(buffer)}catch(error){alert('Не удалось прочитать ZIP-карточку: '+(error.message||'ошибка'));return}
+ const b=card.build,rows=(b.lines||[]).map(line=>{
+  const part=card.parts.find(x=>x.batchId===line.batchId);
+  return '<tr><td>'+esc(part&&part.type||'')+'</td><td>'+esc(part&&part.desc||line.batchId)+'</td><td class="r">'+line.qty+'</td></tr>';
+ }).join('');
+ const missing=card.parts.filter(part=>!find('batches',part.batchId));
+ const warning=missing.length?'<p class="bad">Не найдены партии: '+missing.map(x=>esc(x.desc)+' ('+esc(x.batchId)+')').join(', ')+'. Сначала импортируйте соответствующие партии склада.</p>':'<p class="mu">Проверка ID и партий будет выполнена перед добавлением.</p>';
+ modal('Импорт ZIP-карточки','<p>ПК №'+b.num+' '+esc(b.name||'')+' · '+esc(b.status)+'</p>'+warning+'<div class="tw"><table><thead><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="mu">Будет добавлена карточка и '+card.photos.length+' фото. Операции и финансовые движения не импортируются: для полного переноса учёта используйте ZIP-бэкап профиля.</p>',()=>{
+  try{importBuildCardData(card);return true}catch(error){alert(error.message||'Не удалось импортировать карточку.');return false}
+ },false,'Импортировать');
+}
+
 function downloadZipBackup(){
  try{
   S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save();render();
@@ -1160,7 +1251,7 @@ if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:f
 version:'2.5-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),importBuildCardZip:buffer=>importBuildCardZip(buffer),
 setState:next=>{S=JSON.parse(JSON.stringify(next));S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),
 render:()=>render(),
@@ -1302,8 +1393,7 @@ exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Ко�
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
-bdoc:()=>{const b=find('builds',id),r=b.lines.map(l=>{const p=find('batches',l.batchId);return p?`<tr><td>${p.type}</td><td>${esc(p.desc)}</td><td>${l.qty}</td></tr>`:''}).join(''),h=`<html><head><meta charset="utf-8"></head><body><h1>ПК №${b.num} ${esc(b.name)}</h1><p>Статус: ${b.status}<br>Дата сборки: ${D(b.date)}<br>Сборщик: ${esc(b.builder)}${b.price?`<br>Цена: ${R(b.price)}`:''}</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr>${r}</table><p>${esc(b.note)}</p></body></html>`,l=document.createElement('a');const ph=PH[b.id]||[],dl=(bl,n)=>{l.href=URL.createObjectURL(bl);l.download=n;l.click()},E=new TextEncoder().encode('\ufeff'+h);ph.length?dl(zip([['PC-'+b.num+'.doc',E],...ph.map((u,i)=>['photos/test-'+(i+1)+'.jpg',Uint8Array.from(atob(u.split(',')[1]),c=>c.charCodeAt(0))])]),'PC-'+b.num+'.zip'):dl(new Blob([E],{type:'application/msword'}),'PC-'+b.num+'.doc')},
-csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
+bdoc:()=>downloadBuildCardZip(id),csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
 dty:()=>{const w=DD()[id],t=Wd[w.id][2];w.type=t[(t.indexOf(w.type)+1)%t.length];save.skip=1;save();render()},dwd:()=>{const w=DD()[id];w.w=w.w?0:1;save.skip=1;save();render()},drm:()=>{DD().splice(id,1);save.skip=1;save();render()},dadd:()=>{DD().push({id,type:Wd[id][2][0],w:0});save.skip=1;save();render()},
@@ -1330,6 +1420,7 @@ document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;co
 document.addEventListener('change',e=>{
  if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}
  if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}
+ if(e.target.matches('[data-buildzip]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(buildCardImportWizard).catch(err=>alert('Не удалось прочитать ZIP-карточку: '+err.message));return}
  if(e.target.matches('[data-zipimp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(importZipWizard).catch(err=>alert('Не удалось прочитать ZIP-бэкап: '+err.message));return}
  if(!e.target.matches('[data-imp]'))return;
  const file=e.target.files[0];e.target.value='';if(!file)return;
