@@ -662,6 +662,16 @@ assert(s.builds[0].txId==='','Импорт карточки создал ссы�
 assert(api.used('gpu-batch')===4,'Не восстановлено резервирование комплектующих');
 assert(api.getPhotos()['build-open'][0]===photo,'Фото не сохранено после импорта');
 });
+await test('ZIP-карточка содержит настоящий DOCX с корректным OOXML',async()=>{
+api.setState(fixture());
+const buffer=await api.createBuildCardZip('build-open').arrayBuffer();
+const docx=api.inspectBuildDocx(buffer);
+assert(docx.filename==='PC-1.docx','Вместо DOCX в архиве находится другой формат');
+['[Content_Types].xml','_rels/.rels','word/document.xml','word/styles.xml','word/_rels/document.xml.rels'].forEach(name=>assert(docx.names.includes(name),'В DOCX отсутствует обязательная часть '+name));
+assert(docx.documentXml.includes('<w:document')&&docx.documentXml.includes('Тестовая видеокарта'),'Документ не содержит структуру или комплектующие сборки');
+const parsed=new w.DOMParser().parseFromString(docx.documentXml,'application/xml');
+assert(!parsed.querySelector('parsererror'),'XML содержимое документа некорректно');
+});
 await test('ZIP-карточка не импортируется без исходной партии',async()=>{
 api.setState(fixture());
 const blob=api.createBuildCardZip('build-open'),buffer=await blob.arrayBuffer();
