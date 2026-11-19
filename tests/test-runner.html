@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buildbook — тесты</title>
+<style>
+:root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:640px;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
+</style></head><body>
+<h1>Buildbook — автоматические браузерные тесты</h1>
+<p class="muted">Проверяется приложение из <code>index.html</code> в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
+<div class="card row"><div><b id="summary">Ожидание запуска…</b><div class="muted" id="details">Тесты выполняются локально в этом браузере.</div></div><button id="rerun">Запустить снова</button></div>
+<div class="card"><ol id="results"></ol></div>
+<div id="app-wrap"><iframe id="app" title="Тестируемое приложение" src="../index.html?test=1"></iframe></div>
+<script>
+(function(){
+'use strict';
+const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
+let w,api,passed=0,failed=0,alerts=[],prompts=[];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
+function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Выполнено тестов: '+(passed+failed)}
+async function test(name,fn){try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
+const fixture=()=>({
+accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
+batches:[
+{id:'gpu-batch',type:'Видеокарты',desc:'Тестовая видеокарта',date:'2026-01-10',price:100,qty:10,problem:0,reason:'',supplier:'Поставщик'},
+{id:'ssd-batch',type:'ССД',desc:'Тестовый SSD',date:'2026-01-11',price:50,qty:2,problem:0,reason:''}
+],
+builds:[{id:'build-open',num:1,name:'Тестовая сборка',status:'Собирается',builder:'Тест',buyer:'',date:'2026-01-12',sold:'',planned:0,price:0,note:'',lines:[{batchId:'gpu-batch',qty:4}]}],
+tx:[],seq:1,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
+categories:{
+e:{'Сборка ПК':['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее','Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},
+i:{'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']}},
+hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
+set:{theme:'light',year:2026,backup:'',dash:null,per:'m'}
+});
+function state(){return api.getState()}
+function form(){return w.document.querySelector('.ov form')}
+function submit(f){assert(f&&typeof f.onsubmit==='function','Форма не найдена');f.onsubmit({preventDefault:function(){}})}
+function click(selector){const el=w.document.querySelector(selector);assert(el,'Не найден элемент '+selector);el.click();return el}
+function setv(f,name,value){assert(f.elements[name],'Поле формы не найдено: '+name);f.elements[name].value=value}
+async function boot(){
+results.innerHTML='';passed=failed=0;alerts=[];prompts=[];
+summary.textContent='Подготовка…';details.textContent='Загружается тестовая версия приложения.';
+if(!frame.contentWindow.__BUILD_BOOK_TEST__){await new Promise((resolve,reject)=>{frame.onload=resolve;setTimeout(()=>reject(new Error('Не удалось загрузить index.html?test=1')),15000)})}
+w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API недоступен. Откройте runner на том же origin, что и приложение.');
+w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
+api.setState(fixture());await sleep(350);
+await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
+await test('Все основные разделы открываются',()=>{
+for(const tab of ['home','dash','stock','builds','tx','tasks','log','set']){api.action('nav',tab);assert(w.document.querySelector('#m h1'), 'Пустой экран в разделе '+tab)}
+});
+await test('Склад считает доступное количество с учётом сборки',()=>{
+assert(api.available('gpu-batch')===6,'Ожидалось 6 свободных GPU');assert(api.used('gpu-batch')===4,'Ожидалось 4 GPU в сборке');
+});
+await test('Модальное окно продажи показывает свободные детали и детали из сборки',()=>{
+api.action('nav','stock');api.openSale();const f=form();assert(f,'Окно продажи не открылось');assert(f.querySelectorAll('tbody tr').length===3,'Должно быть 3 строки продажи');assert(f.textContent.includes('Из сборки №1'),'Не помечена деталь из сборки');
+});
+await test('Продажа не принимает количество больше доступного',()=>{
+const f=form();f.querySelector('[name="pick-0"]').checked=true;setv(f,'qty-0','99');setv(f,'price-0','150');submit(f);assert(alerts.some(x=>x.includes('Проверьте количество')),'Не показана ошибка количества');assert(form()===f,'Форма закрылась после ошибочной продажи');assert(api.getState().batches[0].qty===10,'Склад изменился при ошибке');
+f.closest('.ov').remove();
+});
+await test('Множественная продажа записывает индивидуальные цены и себестоимость',()=>{
+api.openSale();const f=form();[[0,2,150],[1,1,70],[2,2,180]].forEach(([i,q,p])=>{f.querySelector('[name="pick-'+i+'"]').checked=true;setv(f,'qty-'+i,String(q));setv(f,'price-'+i,String(p))});submit(f);
+const s=state(),sales=s.tx.filter(t=>t.partSale);assert(sales.length===3,'Ожидалось 3 отдельные записи, получено '+sales.length);assert(sales.map(x=>x.amount).reduce((a,b)=>a+b,0)===730,'Выручка должна быть 730 ₽');assert(sales.map(x=>x.costAmount).reduce((a,b)=>a+b,0)===450,'Себестоимость должна быть 450 ₽');assert(sales.map(x=>x.grossProfit).reduce((a,b)=>a+b,0)===280,'Валовая прибыль должна быть 280 ₽');assert(sales.some(t=>t.unitPrice===150)&&sales.some(t=>t.unitPrice===70)&&sales.some(t=>t.unitPrice===180),'Не сохранены цены по каждой позиции');
+});
+await test('Продажа уменьшает склад и снимает проданное количество из сборки',()=>{
+const s=state(),b=s.batches.find(x=>x.id==='gpu-batch'),ssd=s.batches.find(x=>x.id==='ssd-batch'),build=s.builds[0];assert(b.qty===6,'GPU партия должна стать 6');assert(build.lines[0].qty===2,'В сборке должно остаться 2 GPU');assert(ssd.qty===1,'SSD партия должна стать 1');assert(api.available('gpu-batch')===4,'Свободный остаток GPU должен быть 4');
+});
+await test('Выручка продажи увеличивает баланс выбранной кассы',()=>assert(api.balance('cash')===1730,'Баланс должен стать 1730 ₽'));
+await test('Удаление продажи из сборки возвращает деталь в сборку и на склад',()=>{
+const sale=state().tx.find(t=>t.partSale&&t.sourceBuildId==='build-open');api.action('td',sale.id);const s=state();assert(s.batches.find(b=>b.id==='gpu-batch').qty===8,'GPU партия должна быть 8 после возврата');assert(s.builds[0].lines[0].qty===4,'В сборке должно восстановиться 4 GPU');assert(api.available('gpu-batch')===4,'Свободный остаток должен остаться 4');
+});
+await test('Удаление продажи со свободного склада возвращает свободный остаток',()=>{
+const sale=state().tx.find(t=>t.partSale&&t.batchId==='gpu-batch'&&!t.sourceBuildId);api.action('td',sale.id);assert(state().batches.find(b=>b.id==='gpu-batch').qty===10,'GPU партия должна вернуться к 10');assert(api.available('gpu-batch')===6,'Свободный остаток должен быть 6');
+});
+await test('Удаление продажи SSD возвращает SSD на склад',()=>{
+const sale=state().tx.find(t=>t.partSale&&t.batchId==='ssd-batch');api.action('td',sale.id);assert(state().batches.find(b=>b.id==='ssd-batch').qty===2,'SSD партия должна вернуться к 2');assert(api.balance('cash')===1000,'Баланс должен вернуться к исходному');
+});
+await test('Продажа завершённого ПК фиксирует себестоимость и создаёт доход',()=>{
+api.action('nav','builds');api.action('be','build-open');const f=form();setv(f,'status','Продана');setv(f,'price','900');setv(f,'sold','2026-02-01');setv(f,'acc','cash');submit(f);const b=state().builds[0];assert(b.status==='Продана','Статус сборки не изменился');assert(b.cost===400,'Зафиксированная себестоимость должна быть 400 ₽');assert(state().tx.some(t=>t.buildId==='build-open'&&t.amount===900),'Не создан доход от продажи ПК');assert(api.balance('cash')===1900,'Баланс должен быть 1900 ₽');
+});
+await test('Проданные детали не предлагаются для повторной продажи из сборки',()=>{
+api.action('nav','stock');api.openSale();const f=form();assert(!f.textContent.includes('Из сборки №1'),'Завершённая сборка попала в список источников продажи');f.closest('.ov').remove();
+});
+await test('Себестоимость проданного ПК не меняется при изменении цены партии',()=>{
+const b=state().batches.find(x=>x.id==='gpu-batch');b.price=250;api.setState(state());assert(state().builds[0].cost===400,'Себестоимость проданной сборки изменилась');assert(w.eval('cost(S.builds[0])')===400,'Функция расчёта использовала текущую цену вместо зафиксированной');
+});
+await test('Закупка создаёт партию и связанный расход',()=>{
+api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','ССД');setv(f,'date','2026-03-01');setv(f,'desc','Новый SSD');setv(f,'price','500');setv(f,'qty','2');setv(f,'acc','cash');submit(f);const s=state(),b=s.batches.find(x=>x.desc==='Новый SSD');assert(b&&b.qty===2,'Партия закупки не создана');assert(s.tx.some(t=>t.batchId===b.id&&t.kind==='e'&&t.amount===1000),'Расход закупки не создан');
+});
+await test('Редактирование партии не позволяет уменьшить количество ниже занятого',()=>{
+const b=state().batches.find(x=>x.id==='gpu-batch');api.action('pe',b.id);const f=form();setv(f,'qty','3');submit(f);assert(alerts.some(x=>x.includes('уже использовано')),'Не выдано предупреждение о занятом количестве');assert(form()===f,'Форма закрылась при недопустимом количестве');f.closest('.ov').remove();
+});
+await test('Категория «Проебы» требует комментарий',()=>{
+api.action('nav','tx');api.action('tadd','e');const f=form();setv(f,'kind','e');setv(f,'date','2026-03-02');setv(f,'amount','50');setv(f,'qty','1');setv(f,'cat','Проебы');setv(f,'desc','Тестовый расход');setv(f,'acc','cash');setv(f,'note','');submit(f);assert(alerts.some(x=>x.includes('Комментарий')),'Не потребован комментарий');assert(form()===f,'Невалидный расход сохранён');setv(f,'note','Проверка тестов');submit(f);assert(state().tx.some(t=>t.desc==='Тестовый расход'&&t.note==='Проверка тестов'),'Расход не сохранился с комментарием');
+});
+await test('Задачи создаются, отмечаются выполненными и удаляются',()=>{
+api.action('nav','tasks');api.action('kadd','0');let f=form();setv(f,'text','Проверить сборку');setv(f,'q','0');submit(f);let t=state().tasks.find(x=>x.text==='Проверить сборку');assert(t,'Задача не создана');api.action('kdone',t.id);assert(state().tasks.find(x=>x.id===t.id).done,'Задача не отмечена выполненной');w.confirm=()=>true;api.action('kd',t.id);assert(!state().tasks.some(x=>x.id===t.id),'Задача не удалена');
+});
+await test('Категории можно добавлять в новую группу',()=>{
+api.action('nav','set');prompts=['Тестовая группа'];api.action('cgroupadd','e');assert(state().categories.e['Тестовая группа'],'Группа не создана');prompts=['Тестовая категория'];api.action('ccadd',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));assert(state().categories.e['Тестовая группа'].includes('Тестовая категория'),'Категория не добавлена');
+});
+await test('Категории можно переименовывать и скрывать/показывать',()=>{
+api.action('ccedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Тестовая категория'])));prompts=['Переименованная категория'];assert(state().categories.e['Тестовая группа'].includes('Переименованная категория'),'Категория не переименована');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не скрыта');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(!state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не восстановлена');
+});
+await test('Группы можно переименовывать и пустые группы удалять',()=>{
+api.action('cgroupedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));prompts=['Новая тестовая группа'];assert(state().categories.e['Новая тестовая группа'],'Группа не переименована');const key=encodeURIComponent(JSON.stringify(['e','Новая тестовая группа','Переименованная категория']));api.action('ccdel',key);assert(!state().categories.e['Новая тестовая группа'].includes('Переименованная категория'),'Категория не удалена');api.action('cgroupdel',encodeURIComponent(JSON.stringify(['e','Новая тестовая группа'])));assert(!state().categories.e['Новая тестовая группа'],'Пустая группа не удалена');
+});
+await test('Системный тип склада защищён от удаления',()=>{
+alerts=[];api.action('ccdel',encodeURIComponent(JSON.stringify(['e','Сборка ПК','Видеокарты'])));assert(alerts.some(x=>x.includes('нельзя удалить')),'Не сработала защита системного типа');
+});
+await test('Журнал фиксирует изменения',()=>assert(api.getLogs().length>0,'В журнале нет записей'));
+await test('Дашборд и графики отображаются без ошибки',()=>{api.action('nav','dash');assert(w.document.querySelectorAll('#m .qd').length>0,'На дашборде нет блоков');assert(w.document.querySelector('#m svg'),'Не построился SVG-график')});
+await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
+await sleep(500);const expected=state().batches.length;const src=frame.getAttribute('src');await new Promise((resolve,reject)=>{frame.onload=resolve;frame.onerror=reject;frame.src=src+'&reload='+Date.now()});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
+});
+summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';
+}
+button.addEventListener('click',()=>boot().catch(e=>report('Запуск тестов',false,e.message)));
+frame.addEventListener('load',()=>{if(frame.contentWindow.__BUILD_BOOK_TEST__)boot().catch(e=>report('Запуск тестов',false,e.message))});
+boot().catch(e=>report('Запуск тестов',false,e.message));
+})();
+</script></body></html>
