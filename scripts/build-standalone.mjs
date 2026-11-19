@@ -21,6 +21,23 @@ function assertOneReference(source, needle, label) {
   }
 }
 
+function inlinePayload(id, source) {
+  const encoded = Buffer.from(source, 'utf8').toString('base64');
+  return `<script type="application/octet-stream" id="${id}">${encoded}</script>
+<script>
+(function () {
+  const payload = document.getElementById('${id}');
+  if (!payload) throw new Error('Missing bundled script payload: ${id}');
+  const binary = atob(payload.textContent.trim());
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const bundled = document.createElement('script');
+  bundled.textContent = new TextDecoder('utf-8').decode(bytes);
+  document.head.appendChild(bundled);
+})();
+</script>`;
+}
+
 const xlsxTag = '<script src="./vendor/xlsx.full.min.js"></script>';
 const repositoryTag = '<script src="./repository.js"></script>';
 const xlsxSlot = '<!-- BUILDBOOK_XLSX_BUNDLE -->';
@@ -32,20 +49,12 @@ let standalone = html.replace(xlsxTag, xlsxSlot).replace(repositoryTag, reposito
 if (standalone.includes('<script src=')) {
   throw new Error('The standalone template still contains an external script dependency.');
 }
-standalone = standalone.replace(
-  xlsxSlot,
-  `<script>
-/* Bundled locally from vendor/xlsx.full.min.js. */
-${xlsx}
-</script>`
-);
-standalone = standalone.replace(
-  repositorySlot,
-  `<script>
-/* Bundled locally from repository.js. */
-${repository}
-</script>`
-);
+standalone = standalone.replace(xlsxSlot, inlinePayload('buildbook-xlsx-payload', xlsx));
+standalone = standalone.replace(repositorySlot, inlinePayload('buildbook-repository-payload', repository));
+
+if (standalone.includes(xlsxSlot) || standalone.includes(repositorySlot)) {
+  throw new Error('A standalone bundle placeholder was not replaced.');
+}
 
 await writeFile(outputPath, standalone, 'utf8');
 console.log(`Built ${outputPath} (${Buffer.byteLength(standalone, 'utf8')} bytes).`);
