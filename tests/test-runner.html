@@ -195,6 +195,36 @@ assert(w.document.querySelector('#m').textContent.includes('Февраль'),'П
 assert(w.document.querySelector('[data-a="rcsv"]'),'Нет экспорта отчёта в CSV');
 });
 
+
+await test('Дашборд показывает статусы, продажи, проблемный склад и оборачиваемость',async()=>{
+const d=fixture(),todayIso=new Date().toISOString().slice(0,10),before=days=>new Date(Date.now()-days*86400000).toISOString().slice(0,10);
+d.batches[0].problem=1;
+d.builds.push(
+{id:'build-sold-1',num:2,name:'Сборка с маржой 20%',status:'Продана',builder:'Тест',buyer:'',date:before(5),sold:todayIso,planned:0,price:1500,cost:1200,note:'',lines:[]},
+{id:'build-sold-2',num:3,name:'Сборка с маржой 50%',status:'Продана',builder:'Тест',buyer:'',date:before(10),sold:todayIso,planned:0,price:1000,cost:500,note:'',lines:[]}
+);
+api.setState(d);await sleep(250);
+api.action('pe','gpu-batch');const f=form();assert(f,'Не открылась форма редактирования партии');
+setv(f,'desc','Видеокарта с обновлённым названием');submit(f);await sleep(250);
+api.action('nav','dash');
+const main=w.document.querySelector('#m'),txt=main.textContent;
+assert(txt.includes('Стоимость склада'),'Нет карточки стоимости склада');
+assert(txt.includes('Продано за месяц')&&txt.includes('2 шт.'),'Не посчитаны продажи текущего месяца');
+assert(txt.includes('Заработок за месяц')&&txt.includes('800'),'Не посчитан заработок текущего месяца');
+assert(txt.includes('Проблемные детали')&&txt.includes('10 шт.'),'Не посчитано количество проблемных деталей');
+assert(txt.includes('Сборки по статусам')&&txt.includes('Собирается')&&txt.includes('Продана'),'Нет разбивки сборок по статусам');
+assert(txt.includes('Баланс по кассам')&&txt.includes('Наличные'),'Не показаны остатки касс');
+assert(txt.includes('Оборачиваемость')&&txt.includes('2 дн.')&&txt.includes('7,5 дн.'),'Средние сроки оборачиваемости рассчитаны неверно');
+assert(txt.includes('Долго не проданные сборки')&&txt.includes('Тестовая сборка'),'Не показан давно не проданный ПК');
+assert(txt.includes('Последние действия')&&txt.includes('Изменение данных'),'Дашборд не показывает последние действия из журнала');
+});
+await test('Топ сборок отсортирован по убыванию маржи',()=>{
+const widget=[...w.document.querySelectorAll('#m .qd')].find(x=>x.textContent.includes('Топ сборок по марже'));
+assert(widget,'График топа маржи отсутствует в стандартном дашборде');
+const labels=[...widget.querySelectorAll('.hb span')].map(x=>x.textContent.trim());
+assert(labels[0]==='№3'&&labels[1]==='№2','Сборки расположены не по убыванию маржи: '+labels.join(', '));
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });

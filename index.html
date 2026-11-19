@@ -292,7 +292,7 @@ s4:['Проблемные партии по типам','Склад',['bars','pi
 b1:['Сборки по статусам','Сборки',['pie','bars'],()=>cat(ST.map(s=>[s,S.builds.filter(b=>b.status==s).length])),N],
 b2:['Продано ПК по месяцам','Сборки',['col','line'],()=>({l:ML(),s:[['Продано',byM(SD(),b=>b.sold,()=>1)]]}),N],
 b3:['Заработок по месяцам','Сборки',['col','line'],()=>({l:ML(),s:[['Заработок',byM(SD(),b=>b.sold,profit)]]}),R],
-b4:['Маржа проданных сборок','Сборки',['bars','col'],()=>cat(SD().filter(b=>inP(b.sold)).sort((a,b)=>b.num-a.num).slice(0,10).map(b=>['№'+b.num,sale(b)?Math.round(profit(b)/sale(b)*100):0])),P],
+b4:['Топ сборок по марже','Сборки',['bars','col'],()=>cat(SD().filter(b=>inP(b.sold)&&sale(b)>0).sort((a,b)=>(profit(b)/sale(b))-(profit(a)/sale(a))||b.num-a.num).slice(0,10).map(b=>['№'+b.num,Math.round(profit(b)/sale(b)*100)])),P],
 k1:['Открытые задачи по квадрантам','Задачи',['pie','bars'],()=>cat(QN.map((n,i)=>[n,S.tasks.filter(t=>t.q==i&&!t.done).length])),N],
 k2:['Задачи: выполнено и открыто','Задачи',['pie','bars'],()=>cat([['Выполнено',S.tasks.filter(t=>t.done).length],['Открыто',S.tasks.filter(t=>!t.done).length]]),N]};
 const hbar=(a,f)=>{const m=Math.max(1,...a.map(x=>x[1]));return a.map(([l,v])=>`<div class="hb"><span title="${esc(l)}">${esc(l)}</span><i style="--w:${Math.max(0,v)/m*100}%"></i><b>${f(v)}</b></div>`).join('')||'<small>Нет данных</small>'};
@@ -301,8 +301,67 @@ const line=(d,f)=>{const n=d.l.length,all=d.s.flatMap(s=>s[1]),mx=Math.max(1,...
 const pie=(d,f)=>{const v=d.s[0][1].map(x=>Math.max(0,x)),t=sum(v,x=>x);if(!t)return'<small>Нет данных</small>';let a=-Math.PI/2;const r=56,c=70,pt=(q)=>[c+r*Math.cos(q),c+r*Math.sin(q)],arcs=v.map((x,i)=>{if(!x)return'';const b=a+x/t*2*Math.PI,[x1,y1]=pt(a),[x2,y2]=pt(b-.0001),big=b-a>Math.PI?1:0;a=b;return`<path d="M${x1} ${y1}A${r} ${r} 0 ${big} 1 ${x2} ${y2}" fill="none" stroke="${PC[i%8]}" stroke-width="26"><title>${esc(d.l[i])}: ${f(x)}</title></path>`}).join('');return`<div class="pw"><svg viewBox="0 0 140 140" width="140" height="140">${arcs}<text x="70" y="75" text-anchor="middle" font-size="12" font-weight="700" fill="var(--t)">${f(t)}</text></svg><div>${d.l.map((x,i)=>v[i]?`<div class="lgd"><i style="background:${PC[i%8]}"></i>${esc(x)} <b>${f(v[i])}</b></div>`:'').join('')}</div></div>`};
 const RT={bars:(d,f)=>hbar(d.l.map((x,i)=>[x,d.s[0][1][i]]),f),col,line,pie};
 const prow=()=>{const p=S.set.per||'m',i=sum(TX('i'),t=>t.amount),e=sum(TX('e'),t=>t.amount),sd=SD().filter(b=>inP(b.sold));return`<div class="k">${kpi('Оборот, '+PL[p].toLowerCase(),R(i))}${kpi('Расходы',R(e))}${kpi('Результат (доходы − расходы)',R(i-e),i-e>=0?'ok':'bad')}${kpi('Продано ПК',sd.length+' шт., заработок '+R(sum(sd,profit)))}</div>`};
-const DD=()=>S.set.dash||(S.set.dash=['m1','m2','s1','b1','b3','s2','k1','m3'].map(id=>({id,type:Wd[id][2][0],w:0})));
-function dash(){const ed=V.dc,dd=DD().filter(w=>Wd[w.id]);return head('Дашборд',perBar()+`<button class="btn${ed?' p':''}" data-a="dcfg">${ed?'Готово':'Настроить'}</button>`)+`<div class="dg">${dd.map((w,i)=>{const[t,top,ty,fn,fm]=Wd[w.id],d=fn();return`<section class="qd${w.w?' wd':''}"><div class="hd" style="margin:0 0 10px"><b>${t}</b>${ed?`<span><button class="btn ic" data-a="dmv" data-id="${i}:-1" title="Левее">←</button> <button class="btn ic" data-a="dmv" data-id="${i}:1" title="Правее">→</button> ${ty.length>1?`<button class="btn ic" data-a="dty" data-id="${i}">Вид</button> `:''}<button class="btn ic" data-a="dwd" data-id="${i}">Шире</button> <button class="btn ic" data-a="drm" data-id="${i}" title="Убрать">✕</button></span>`:`<small>${top}</small>`}</div>${RT[w.type](d,fm)}${d.s.length>1&&w.type!='pie'?`<small>${d.s.map(x=>`<span style="color:${x[2]}">●</span> ${x[0]}`).join(' &nbsp; ')}</small>`:''}</section>`}).join('')}</div>`+(ed?`<h2>Добавить график</h2><div class="fl">${Object.entries(Wd).filter(([id])=>!dd.some(w=>w.id==id)).map(([id,w])=>`<button class="btn" data-a="dadd" data-id="${id}">+ ${w[0]} <small>${w[1]}</small></button>`).join('')||'<span class="mu">Все графики уже на дашборде</span>'}<button class="btn g" data-a="dreset">Сбросить набор</button></div>`:'')}
+const OLD_DASH=['m1','m2','s1','b1','b3','s2','k1','m3'],DEFAULT_DASH=['m1','m2','s1','b1','b3','b4','s2','m3'];const DD=()=>{const make=ids=>ids.map(id=>({id,type:Wd[id][2][0],w:0}));if(!S.set.dash)S.set.dash=make(DEFAULT_DASH);else if(JSON.stringify(S.set.dash.map(x=>x.id))===JSON.stringify(OLD_DASH))S.set.dash=make(DEFAULT_DASH);return S.set.dash};
+function dash(){
+const ed=V.dc,dd=DD().filter(w=>Wd[w.id]),todayDate=today(),thisMonth=todayDate.slice(0,7);
+const sold=SD(),soldThisMonth=sold.filter(b=>(b.sold||'').slice(0,7)==thisMonth);
+const stockValue=S.batches.filter(b=>!b.problem).reduce((n,b)=>n+(+b.price||0)*Math.max(0,avail(b)),0);
+const problemQty=S.batches.reduce((n,b)=>n+(b.problem?Math.max(0,+b.qty||0):0),0);
+const daysBetween=(from,to)=>{
+if(!from||!to)return null;
+const a=Date.parse(from+'T00:00:00Z'),b=Date.parse(to+'T00:00:00Z');
+if(!Number.isFinite(a)||!Number.isFinite(b)||b<a)return null;
+return Math.round((b-a)/86400000);
+};
+let installedDays=0,installedUnits=0;
+S.builds.forEach(build=>{
+(build.lines||[]).forEach(line=>{
+const batch=S.batches.find(b=>b.id==line.batchId);
+const elapsed=batch?daysBetween(batch.date,build.date):null,qty=Math.max(0,+line.qty||0);
+if(elapsed!==null&&qty>0){installedDays+=elapsed*qty;installedUnits+=qty}
+});
+});
+const avgInbound=installedUnits?installedDays/installedUnits:null;
+const buildSaleDays=sold.map(b=>daysBetween(b.date,b.sold)).filter(v=>v!==null);
+const avgBuildSale=buildSaleDays.length?buildSaleDays.reduce((n,v)=>n+v,0)/buildSaleDays.length:null;
+const formatDays=v=>v===null?'—':(Math.round(v*10)/10).toLocaleString('ru-RU')+' дн.';
+const soldProfit=soldThisMonth.reduce((n,b)=>n+profit(b),0);
+const kpis='<div class="k">'+
+kpi('Стоимость склада',R(stockValue))+
+kpi('Продано за месяц',soldThisMonth.length+' шт.')+
+kpi('Заработок за месяц',R(soldProfit),soldProfit>=0?'ok':'bad')+
+kpi('Проблемные детали',problemQty+' шт.',problemQty?'w':'')+
+'</div>';
+const statusCards='<section class="qd"><h2>Сборки по статусам</h2><div class="ac2">'+ST.map(status=>'<div class="kp"><span>'+esc(status)+'</span><b>'+S.builds.filter(b=>b.status==status).length+'</b></div>').join('')+'</div></section>';
+const totalCash=S.accounts.reduce((n,a)=>n+bal(a),0);
+const cashCards='<section class="qd"><h2>Баланс по кассам</h2><div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+'</span><b>'+R(bal(a))+'</b></div>').join('')+'</div><p class="rpt-note">Общий баланс: <b>'+R(totalCash)+'</b></p></section>';
+const operational='<div class="qg">'+statusCards+cashCards+'</div>';
+const widgets='<div class="dg">'+dd.map((w,i)=>{
+const item=Wd[w.id],title=item[0],top=item[1],types=item[2],draw=item[3],format=item[4],data=draw();
+let controls='';
+if(ed){
+controls='<span><button class="btn ic" data-a="dmv" data-id="'+i+':-1" title="Левее">←</button> <button class="btn ic" data-a="dmv" data-id="'+i+':1" title="Правее">→</button> '+(types.length>1?'<button class="btn ic" data-a="dty" data-id="'+i+'">Вид</button> ':'')+'<button class="btn ic" data-a="dwd" data-id="'+i+'">Шире</button> <button class="btn ic" data-a="drm" data-id="'+i+'" title="Убрать">✕</button></span>';
+}else controls='<small>'+esc(top)+'</small>';
+const legend=data.s.length>1&&w.type!='pie'?'<small>'+data.s.map(x=>'<span style="color:'+(x[2]||'var(--a)')+'">●</span> '+esc(x[0])).join(' &nbsp; ')+'</small>':'';
+return '<section class="qd'+(w.w?' wd':'')+'"><div class="hd" style="margin:0 0 10px"><b>'+esc(title)+'</b>'+controls+'</div>'+RT[w.type](data,format)+legend+'</section>';
+}).join('')+'</div>';
+const turnover='<section class="qd"><h2>Оборачиваемость</h2><div class="k">'+
+kpi('Приход детали → установка',formatDays(avgInbound))+
+kpi('Сборка → продажа',formatDays(avgBuildSale))+
+'</div><p class="rpt-note">Первый показатель усреднён по количеству деталей с известными датами закупки и установки. Второй — по проданным ПК с известными датами сборки и продажи.</p></section>';
+const aging=S.builds.map(b=>({build:b,days:daysBetween(b.date,todayDate)}))
+.filter(x=>x.build.status!=ST[3]&&x.days!==null&&x.days>=30)
+.sort((a,b)=>b.days-a.days).slice(0,10);
+const agingRows=aging.map(x=>'<tr><td>№'+x.build.num+'</td><td>'+esc(x.build.name||'Без названия')+'</td><td>'+esc(x.build.status)+'</td><td>'+D(x.build.date)+'</td><td class="r">'+x.days+' дн.</td></tr>');
+const agingBlock='<section class="qd"><h2>Долго не проданные сборки</h2>'+table(['№','Сборка','Статус','Дата сборки','В работе'],agingRows,'Нет сборок, которые находятся в работе более 30 дней.')+'</section>';
+const actionRows=LOG.slice(0,6).map(x=>'<tr><td>'+esc(x.t)+'</td><td>'+esc(x.l)+'</td></tr>');
+const actionsBlock='<section class="qd"><h2>Последние действия</h2>'+table(['Время','Действие'],actionRows,'Журнал пока пуст. Новые действия появятся здесь.')+'</section>';
+const support='<div class="qg">'+turnover+agingBlock+'</div><div class="qg">'+actionsBlock+'</div>';
+const moreCharts=Object.entries(Wd).filter(([id])=>!dd.some(w=>w.id==id)).map(([id,w])=>'<button class="btn" data-a="dadd" data-id="'+id+'">+ '+esc(w[0])+' <small>'+esc(w[1])+'</small></button>').join('');
+const settings=ed?'<h2>Добавить график</h2><div class="fl">'+(moreCharts||'<span class="mu">Все графики уже на дашборде</span>')+'<button class="btn g" data-a="dreset">Сбросить набор</button></div>':'';
+return head('Дашборд',perBar()+'<button class="btn'+(ed?' p':'')+'" data-a="dcfg">'+(ed?'Готово':'Настроить')+'</button>')+kpis+operational+widgets+support+settings;
+}
+
 /* фото, архив, расчёт */
 const shrink=fl=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1100/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);r(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(fl)});
 const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})(),crc=u=>{let c=-1;for(const b of u)c=crcT[(c^b)&255]^(c>>>8);return(c^-1)>>>0};
@@ -331,11 +390,11 @@ cats.forEach(cat=>{const h=hiddenC.includes(g+'::'+cat),protectedType=kind=='e'&
 html+='</section>'});
 return html+'</section>';
 }
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.7<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.8<br>Developed by <b>Quinta Legione</b></div>'}
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'1.7-test',database:DB_NAME,ready:()=>APP_READY,
+version:'1.8-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),
