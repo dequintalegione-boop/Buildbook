@@ -1109,6 +1109,14 @@ assert(api.resolveTheme('auto',false)==='light','Автоматическая т
 assert(api.resolveTheme('dark',false)==='dark','Системная тема перебила ручной выбор тёмной темы');
 assert(api.resolveTheme('light',true)==='light','Системная тема перебила ручной выбор светлой темы');
 });
+await test('Инструкция установки PWA доступна для iOS, HTTPS и file://',async()=>{
+const ios=api.installInstructions('Mozilla/5.0 (iPhone)','https:',true);
+assert(ios.includes('Safari')&&ios.includes('На экран Домой'),'Не показана инструкция установки для iOS');
+const file=api.installInstructions('Chrome','file:',false);
+assert(file.includes('HTTPS')||file.includes('localhost'),'Не объяснено ограничение file://');
+const desktop=api.installInstructions('Chrome','https:',false);
+assert(desktop.includes('меню браузера'),'Не показан запасной путь установки для браузера без prompt API');
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
