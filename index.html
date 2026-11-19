@@ -413,7 +413,7 @@ function dash(){
 const ed=V.dc,dd=DD().filter(w=>Wd[w.id]),todayDate=today(),thisMonth=todayDate.slice(0,7);
 const sold=SD(),soldThisMonth=sold.filter(b=>(b.sold||'').slice(0,7)==thisMonth);
 const stockValue=S.batches.reduce((n,b)=>n+(+b.price||0)*goodAvailable(b),0);
-const problemQty=S.batches.reduce((n,b)=>n+problemAvailable(b),0);
+const problemQty=S.batches.reduce((n,b)=>n+problemMarked(b),0);
 const daysBetween=(from,to)=>{
 if(!from||!to)return null;
 const a=Date.parse(from+'T00:00:00Z'),b=Date.parse(to+'T00:00:00Z');
