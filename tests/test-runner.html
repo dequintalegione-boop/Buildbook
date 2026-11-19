@@ -24,7 +24,7 @@ stockEvents:[],batches:[
 {id:'ssd-batch',type:'ССД',desc:'Тестовый SSD',date:'2026-01-11',price:50,qty:2,problemQty:0,problemReason:'',writtenOffQty:0}
 ],
 builds:[{id:'build-open',num:1,name:'Тестовая сборка',status:'Собирается',builder:'Тест',buyer:'',date:'2026-01-12',sold:'',planned:0,price:0,note:'',lines:[{batchId:'gpu-batch',qty:4,problem:false}]}],
-tx:[],seq:1,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
+tx:[],seq:1,tasks:[],checklist:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
 categories:{
 e:{'Сборка ПК':['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее','Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},
 i:{'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']}},
@@ -49,11 +49,11 @@ await test('Старые данные автоматически мигриру�
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
 assert(result.migrated,'Миграция старой версии не запущена');
-assert(migrated.schemaVersion===api.schemaVersion,'Не записана текущая версия схемы');
+assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===2,'Не записана текущая версия схемы 2');
 assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
 assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
 assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
-assert(Array.isArray(migrated.trash)&&Array.isArray(migrated.stockEvents)&&Array.isArray(migrated.tasks),'Не добавлены новые обязательные списки');
+assert(Array.isArray(migrated.trash)&&Array.isArray(migrated.stockEvents)&&Array.isArray(migrated.tasks)&&Array.isArray(migrated.checklist),'Не добавлены новые обязательные списки');
 assert(Array.isArray(migrated.accounts)&&migrated.accounts.length===2,'Не восстановлены значения касс по умолчанию');
 assert(legacy.schemaVersion===undefined,'Миграция изменила исходный объект');
 });
@@ -615,6 +615,37 @@ await test('Окончательное удаление очищает толь�
 api.setState(fixture());let s=state();s.tasks.push({id:'trash-task',text:'Тестовая задача',q:0,done:0});api.setState(s);
 api.action('kd','trash-task');const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='trash-task');assert(entry,'Задача не перемещена в корзину');
 api.action('trdel',entry.id);assert(!state().trash.some(x=>x.id===entry.id),'Окончательно удалённая запись осталась в корзине');
+});
+await test('Схема 1 мигрирует на схему 2 без потери существующих данных',()=>{
+const source={schemaVersion:1,batches:[{id:'v1-batch',qty:3,price:40}],builds:[],tx:[],tasks:[],trash:[],notes:'Из схемы 1'};
+const result=api.migrateState(source),migrated=result.state;
+assert(result.migrated&&migrated.schemaVersion===2,'Не выполнена миграция на схему 2');
+assert(Array.isArray(migrated.checklist)&&migrated.checklist.length===0,'Не добавлен пустой чек-лист');
+assert(migrated.batches[0].id==='v1-batch'&&migrated.batches[0].qty===3,'Изменились данные схемы 1');
+assert(migrated.notes==='Из схемы 1','Потеряны заметки при миграции');
+const repeated=api.migrateState(migrated);
+assert(!repeated.migrated&&repeated.state.schemaVersion===2,'Повторная миграция не должна запускаться');
+});
+await test('Чек-лист можно добавлять, отмечать и удалять',()=>{
+api.setState(fixture());prompts.push('Проверить комплектующие перед тестом');api.action('ckadd');
+let item=state().checklist[0];assert(item&&item.text==='Проверить комплектующие перед тестом'&&!item.done,'Пункт чек-листа не создан');
+api.action('ckdone',item.id);assert(state().checklist[0].done===1,'Пункт не отмечен выполненным');
+api.action('ckdel',item.id);assert(state().checklist.length===0,'Пункт не удалён');
+});
+await test('Объединение JSON-бэкапа восстанавливает пункты чек-листа без дубликатов',()=>{
+api.setState(fixture());
+const backup={accounts:[],batches:[],builds:[],tx:[],tasks:[],checklist:[{id:'backup-check-1',text:'Пункт из копии',done:1}]};
+const result=api.restoreBackup(backup,'add',false);
+assert(state().checklist.some(x=>x.id==='backup-check-1'&&x.done===1),'Пункт не восстановлен из JSON');
+assert(result.checklist===1,'В отчёте импорта не отражён чек-лист');
+api.restoreBackup(backup,'add',false);
+assert(state().checklist.filter(x=>x.id==='backup-check-1').length===1,'Повторный импорт создал дубликат чек-листа');
+});
+await test('Замена JSON-бэкапа восстанавливает пункты чек-листа',()=>{
+api.setState(fixture());
+const backup={accounts:[],batches:[],builds:[],tx:[],tasks:[],checklist:[{id:'replace-check-1',text:'Список замены',done:0}]};
+api.restoreBackup(backup,'replace',false);
+assert(state().checklist.length===1&&state().checklist[0].id==='replace-check-1','Чек-лист не восстановлен в режиме замены');
 });
 await test('ZIP-карточка переносит сборку, состав и фотографии',async()=>{
 api.setState(fixture());
