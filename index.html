@@ -38,7 +38,8 @@ let T=['Видеокарты','Процессоры','Мат платы','Опе
 const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},DEFAULT_INC={'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']};
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
 let S={accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],batches:[],builds:[],tx:[],seq:0,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},set:{theme:'auto',year:new Date().getFullYear(),backup:''}},V={tab:'home',s:{type:'',q:'',av:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''}},dip;
-const idb=()=>new Promise((r,j)=>{const q=indexedDB.open('buildbook',1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
+const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
+const idb=()=>new Promise((r,j)=>{const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
 let LOG=[],last='',PH={};
 const get=(d,k)=>new Promise(r=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>r(q.result)});
 async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=(await get(d,'p'))||{}}catch(e){}S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');last=JSON.stringify(S)}
@@ -177,6 +178,21 @@ html+='</section>'});
 return html+'</section>';
 }
 function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.5<br>Developed by <b>Quinta Legione</b></div>'}
+/* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
+if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
+version:'1.5-test',database:DB_NAME,
+getState:()=>JSON.parse(JSON.stringify(S)),
+getLogs:()=>JSON.parse(JSON.stringify(LOG)),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),
+setState:next=>{S=JSON.parse(JSON.stringify(next));S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
+action:(name,id)=>act(name,id),
+render:()=>render(),
+openSale:()=>sellParts(),
+available:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?avail(b):null},
+used:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?used(b):null},
+balance:accountId=>{const a=S.accounts.find(x=>x.id==accountId);return a?bal(a):null},
+dbName:()=>DB_NAME
+})})}
 /* ядро */
 function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
 const find=(a,id)=>S[a].find(x=>x.id==id);
