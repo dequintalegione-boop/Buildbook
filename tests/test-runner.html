@@ -647,6 +647,25 @@ const backup={accounts:[],batches:[],builds:[],tx:[],tasks:[],checklist:[{id:'re
 api.restoreBackup(backup,'replace',false);
 assert(state().checklist.length===1&&state().checklist[0].id==='replace-check-1','Чек-лист не восстановлен в режиме замены');
 });
+await test('TXT-карточка содержит реквизиты, состав и себестоимость',()=>{
+api.setState(fixture());
+const s=state();s.builds[0].name='Тестовая карточка';s.builds[0].builder='Проверяющий';s.builds[0].note='Комментарий к сборке';api.setState(s);
+const output=api.buildCardText('build-open');
+assert(output.includes('ПК №1 — Тестовая карточка'),'Не указаны номер или название');
+assert(output.includes('Статус: Собирается')&&output.includes('Проверяющий'),'Не сохранены статус или сборщик');
+assert(output.includes('Видеокарты — Тестовая видеокарта × 4 шт.'),'Не включён состав сборки');
+assert(output.includes('Себестоимость: 400 ₽'),'Неверная себестоимость');
+assert(output.includes('Комментарий к сборке'),'Не включён комментарий');
+});
+await test('Печатная карточка содержит детали и экранирует HTML',()=>{
+api.setState(fixture());
+const s=state();s.builds[0].name='<script>alert(1)</script>';s.builds[0].note='<b>Комментарий</b>';api.setState(s);
+const output=api.buildCardPrintHtml('build-open');
+assert(output.includes('<table>')&&output.includes('Тестовая видеокарта'),'Не сформирована таблица деталей');
+assert(output.includes('&lt;script&gt;alert(1)&lt;/script&gt;'),'Не экранировано название сборки');
+assert(output.includes('&lt;b&gt;Комментарий&lt;/b&gt;'),'Не экранирован комментарий');
+assert(!output.includes('<script>alert(1)</script>'),'Пользовательский HTML может исполниться в окне печати');
+});
 await test('ZIP-карточка переносит сборку, состав и фотографии',async()=>{
 api.setState(fixture());
 const photo='data:image/jpeg;base64,AAECAwQFBgc=';
