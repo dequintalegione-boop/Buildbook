@@ -139,7 +139,7 @@ const s=state();assert(s.tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)=
 assert(s.tx.filter(x=>x.kind==='e').reduce((n,x)=>n+x.amount,0)===transferBaseline.expense,'Расходы изменились после удаления перевода');
 });
 
-await test('Раздел отчётов открывается и годы выбираются из данных',()=>{
+await test('Раздел отчётов открывается и годы выбираются из данных',async()=>{
 const d=fixture();
 d.tx=[
 {id:'e-gpu',kind:'e',date:'2026-01-10',amount:120,cat:'Видеокарты',grp:'Сборка ПК',desc:'Закупка GPU',acc:'cash'},
