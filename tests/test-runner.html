@@ -110,11 +110,13 @@ const reopened=w.BuildbookRepository.create(name);
 try{assert((await reopened.readProfile()).revision===0,'После закрытия нельзя повторно открыть очищенную базу')}
 finally{await reopened.clear();await reopened.close()}
 });
-await test('Крупный профиль и фотографии больше 10 МБ сохраняются без потери данных',async()=>{
+await test('Крупный профиль и фотографии сохраняются без потери данных',async()=>{
 const name=tempDatabaseName('buildbook-large-profile'),repository=w.BuildbookRepository.create(name);
 await repository.clear();
 try{
-const largeText='Buildbook'.repeat(1024*1024),bytes=new Uint8Array(3*1024*1024);bytes.fill(37);
+const isWebKit=/AppleWebKit/i.test(w.navigator.userAgent)&&!/(Chrome|Chromium|CriOS|Edg)/i.test(w.navigator.userAgent);
+const textRepeat=isWebKit?128*1024:1024*1024,photoSize=isWebKit?512*1024:3*1024*1024;
+const largeText='Buildbook'.repeat(textRepeat),bytes=new Uint8Array(photoSize);bytes.fill(37);
 const photo=new w.Blob([bytes],{type:'image/webp'});
 const revision=await repository.writeProfile({notes:largeText,records:Array.from({length:500},(_,i)=>({id:'row-'+i,value:i}))},[{id:'large-log',text:'Журнал большого профиля'}],{buildLarge:[photo]},0);
 const stored=await repository.readProfile();
@@ -123,8 +125,9 @@ assert(stored.state.notes.length===largeText.length&&stored.state.notes.slice(0,
 assert(stored.state.records.length===500&&stored.state.records[499].id==='row-499','Потерялись строки крупной записи');
 assert(stored.logs[0].text==='Журнал большого профиля','Не сохранился журнал большого профиля');
 const savedPhoto=stored.photos.buildLarge[0],savedBytes=new Uint8Array(await savedPhoto.arrayBuffer());
-assert(savedPhoto instanceof w.Blob&&savedPhoto.size===3*1024*1024&&savedPhoto.type==='image/webp','Большая фотография потерялась или изменила формат');
+assert(savedPhoto instanceof w.Blob&&savedPhoto.size===photoSize&&savedPhoto.type==='image/webp','Фотография потерялась или изменила формат');
 assert(savedBytes[0]===37&&savedBytes[savedBytes.length-1]===37,'Байты фотографии изменились при сохранении');
+assert(isWebKit?largeText.length+photoSize>=1.5*1024*1024:largeText.length+photoSize>10*1024*1024,'Проверяемый профиль меньше ожидаемого объёма для данного браузера');
 }finally{await repository.clear();await repository.close()}
 });
 

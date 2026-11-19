@@ -134,7 +134,7 @@ Buildbook хранит данные приложения в записи Indexed
 
 - `tests/test-runner.html` — тестовая страница с отчётом по каждому сценарию;
 - `tests/run-browser.mjs` — запуск набора через Playwright в Chromium, Firefox или WebKit (Safari engine);
-- `.github/workflows/browser-tests.yml` — матрица Chromium, Firefox и WebKit при push, pull request и ручном запуске. Набор включает проверку большого профиля объёмом более 10 МБ.
+- `.github/workflows/browser-tests.yml` — матрица Chromium, Firefox и WebKit при push, pull request и ручном запуске. Chromium и Firefox проверяют профиль с данными и фото суммарным объёмом более 10 МБ; для WebKit используется профиль около 1,5 МБ: более крупная запись в Playwright WebKit на CI превышала трёхминутный лимит. Это ограничение тестовой среды, а не подтверждённый предел Safari на устройствах.
 
 Для локального запуска тестов достаточно Node.js и Python 3 (только тестовая среда; самому приложению Node.js не нужен):
 
