@@ -1097,6 +1097,18 @@ await api.flushStorage();
 assert(api.storageRevision()===revision,'Устаревшая вкладка попыталась изменить ревизию профиля');
 }finally{channel.close()}
 });
+await test('Календарные даты используют локальный день, а не UTC',async()=>{
+const justAfterLocalMidnight=new w.Date(2026,10,20,0,30,0);
+assert(api.localDateISO(justAfterLocalMidnight)==='2026-11-20','Дата после местной полуночи сместилась из-за UTC');
+const previousDay=api.demoDate(1,new w.Date(2026,2,1,0,30,0));
+assert(previousDay==='2026-02-28','Демо-дата рассчитана не по локальному календарю: '+previousDay);
+});
+await test('Автоматическая тема учитывает системную схему и не перебивает ручной выбор',async()=>{
+assert(api.resolveTheme('auto',true)==='dark','Автоматическая тема не выбрала тёмную схему системы');
+assert(api.resolveTheme('auto',false)==='light','Автоматическая тема не выбрала светлую схему системы');
+assert(api.resolveTheme('dark',false)==='dark','Системная тема перебила ручной выбор тёмной темы');
+assert(api.resolveTheme('light',true)==='light','Системная тема перебила ручной выбор светлой темы');
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
