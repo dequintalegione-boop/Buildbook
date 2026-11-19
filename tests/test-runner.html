@@ -719,6 +719,67 @@ assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length,expectedPhoto=api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0];await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');if(expectedPhoto)assert(api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0]===expectedPhoto,'Фото не восстановилось из Blob после перезагрузки');
 });
+await test('Откат одного действия сохраняет более поздние независимые изменения',()=>{
+const data=fixture();
+data.tasks=[{id:'task-undo-a',text:'Первая задача',q:0,done:0},{id:'task-undo-b',text:'Вторая задача',q:0,done:0}];
+api.setState(data);
+api.action('kdone','task-undo-a');
+api.action('kdone','task-undo-b');
+const logs=api.getLogs();
+assert(logs.length===2&&Array.isArray(logs[1].changes),'Журнал не сохранил изменения обоих действий');
+const result=api.undoEntry(1);
+assert(result.ok,'Не удалось отменить независимое действие: '+(result.message||''));
+const s=state();
+assert(s.tasks.find(x=>x.id==='task-undo-a').done===0,'Первое действие не отменено');
+assert(s.tasks.find(x=>x.id==='task-undo-b').done===1,'Более позднее независимое действие было потеряно');
+assert(api.getLogs().length===3,'Отмена не добавлена в журнал как отдельное действие');
+});
+await test('Откат блокируется при конфликте с более поздним изменением того же поля',()=>{
+const data=fixture();
+data.tasks=[{id:'task-conflict',text:'Конфликтная задача',q:0,done:0}];
+api.setState(data);
+api.action('kdone','task-conflict');
+api.action('kdone','task-conflict');
+const before=JSON.stringify(state()),logsBefore=api.getLogs().length;
+const result=api.undoEntry(1);
+assert(!result.ok&&String(result.message).includes('изменились после него'),'Конфликт не был обнаружен');
+assert(JSON.stringify(state())===before,'Данные изменились после заблокированного отката');
+assert(api.getLogs().length===logsBefore,'Заблокированное действие попало в журнал');
+});
+await test('Откат финансовой записи удаляет только выбранный доход и сохраняет последующий расход',()=>{
+api.setState(fixture());
+api.action('tadd','i');
+let f=form();assert(f,'Не открылось создание дохода');
+setv(f,'date','2026-05-01');setv(f,'amount','200');setv(f,'qty','1');setv(f,'cat','Другое');setv(f,'desc','Доход для точечного отката');setv(f,'acc','cash');submit(f);
+api.action('tadd','e');
+f=form();assert(f,'Не открылось создание расхода');
+setv(f,'date','2026-05-02');setv(f,'amount','25');setv(f,'qty','1');setv(f,'cat','Другое');setv(f,'desc','Расход после дохода');setv(f,'acc','cash');setv(f,'note','');submit(f);
+const result=api.undoEntry(1);
+assert(result.ok,'Не удалось отменить доход: '+(result.message||''));
+const s=state();
+assert(!s.tx.some(x=>x.desc==='Доход для точечного отката'),'Выбранный доход остался в журнале денег');
+assert(s.tx.some(x=>x.desc==='Расход после дохода'&&x.amount===25),'Последующий расход был потерян');
+assert(api.balance('cash')===975,'Баланс кассы неверен после точечной отмены дохода');
+});
+await test('Откат складского списания восстанавливает остаток, сохраняя более позднюю задачу',()=>{
+const data=fixture();
+data.batches.find(x=>x.id==='gpu-batch').problemQty=2;
+data.tasks=[{id:'task-after-writeoff',text:'Независимая задача',q:0,done:0}];
+api.setState(data);
+api.action('pwriteoff','gpu-batch');
+let f=form();assert(f,'Не открылось списание проблемной детали');
+setv(f,'date','2026-05-03');setv(f,'qty','1');setv(f,'reason','Проверка точечного отката');submit(f);
+let batch=state().batches.find(x=>x.id==='gpu-batch');
+assert(batch.problemQty===1&&batch.writtenOffQty===1,'Списание не изменило остаток для теста');
+assert(state().stockEvents.length===1,'Не создано событие списания');
+api.action('kdone','task-after-writeoff');
+const result=api.undoEntry(1);
+assert(result.ok,'Не удалось отменить списание: '+(result.message||''));
+batch=state().batches.find(x=>x.id==='gpu-batch');
+assert(batch.problemQty===2&&batch.writtenOffQty===0,'Складской остаток не вернулся к исходному');
+assert(state().stockEvents.length===0,'Событие отменённого списания осталось в истории');
+assert(state().tasks.find(x=>x.id==='task-after-writeoff').done===1,'Более поздняя задача была потеряна');
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
