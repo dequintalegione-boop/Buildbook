@@ -67,6 +67,7 @@ function create(databaseName){
  }
 
  async function encodePhotoPayload(value){
+  if(value&&value.__buildbookBlob===1&&value.bytes instanceof ArrayBuffer)return value;
   if(typeof global.Blob==='function'&&value instanceof global.Blob){
    return {__buildbookBlob:1,type:value.type||'',bytes:await readBlobAsArrayBuffer(value)};
   }
@@ -85,10 +86,7 @@ function create(databaseName){
  async function decodePhotoPayload(value){
   if(Array.isArray(value))return Promise.all(value.map(decodePhotoPayload));
   if(value&&typeof value==='object'){
-   if(value.__buildbookBlob===1&&value.bytes instanceof ArrayBuffer){
-    if(typeof global.Blob!=='function')return value.bytes;
-    return new global.Blob([value.bytes],{type:typeof value.type==='string'?value.type:''});
-   }
+   if(value.__buildbookBlob===1&&value.bytes instanceof ArrayBuffer)return value;
    const prototype=Object.getPrototypeOf(value);
    if(prototype===Object.prototype||prototype===null){
     const result={};
