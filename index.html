@@ -30,7 +30,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 .hb{display:grid;grid-template-columns:minmax(80px,120px) 1fr auto;gap:10px;align-items:center;margin:6px 0}.hb i{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--a) var(--w),var(--s2) var(--w))}.hb span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pw{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.lgd{display:flex;align-items:center;gap:6px;font-size:13px;margin:2px 0}.lgd i{width:10px;height:10px;border-radius:3px}
 </style></head><body>
-<nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="reports">Отчёты</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
+<nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="reports">Отчёты</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="trash">Корзина</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
 <main id="m"></main>
 <script src="./vendor/xlsx.full.min.js"></script>
 <script>
@@ -45,7 +45,7 @@ const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=T
 const idb=()=>new Promise((r,j)=>{const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
 let LOG=[],last='',PH={};
 const get=(d,k)=>new Promise(r=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>r(q.result)});
-async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=(await get(d,'p'))||{}}catch(e){}S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');normalizeStock();last=JSON.stringify(S)}
+async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=(await get(d,'p'))||{}}catch(e){}S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');normalizeStock();last=JSON.stringify(S)}
 const lbl=(a,b)=>{const A=JSON.parse(a),B=JSON.parse(b),N={batches:'партия',builds:'сборка',tx:'операция',tasks:'задача'};for(const k in N){const x=(A[k]||[]).length,y=(B[k]||[]).length;if(y>x)return'Добавлено: '+N[k];if(y<x)return'Удалено: '+N[k]}return'Изменение данных'};
 let tm;const save=()=>{const cur=JSON.stringify(S);if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}last=cur;save.skip=0;clearTimeout(tm);tm=setTimeout(async()=>{try{const d=await idb(),w=d.transaction('kv','readwrite').objectStore('kv');w.put(S,'s');w.put(LOG,'l');w.put(PH,'p')}catch(e){}},150)};
 const toast=m=>{const t=document.createElement('div');t.className='ts';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2200)};
@@ -735,7 +735,7 @@ function downloadBackup(filename,markDate){
 }
 function mergeBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
- const stats={accounts:0,batches:0,builds:0,tx:0,tasks:0,stockEvents:0,skipped:0};
+ const stats={accounts:0,batches:0,builds:0,tx:0,tasks:0,stockEvents:0,trash:0,skipped:0};
  const accountMap={},batchMap={},buildMap={},txMap={};
  const clone=value=>JSON.parse(JSON.stringify(value));
  (Array.isArray(data.accounts)?data.accounts:[]).forEach(source=>{
@@ -819,6 +819,7 @@ function mergeBackupData(data){
   if(item.buildId&&buildMap[String(item.buildId)])item.buildId=buildMap[String(item.buildId)];
   S.tasks.push(item);stats.tasks++;
  });
+ (Array.isArray(data.trash)?data.trash:[]).forEach(source=>{const item=trashClone(source),old=String(item.id||'');if(old&&S.trash.some(x=>x.id===old)){stats.skipped++;return}item.id=old||uid();if(S.trash.some(x=>x.id===item.id))item.id=uid();S.trash.push(item);stats.trash++});
  S.seq=Math.max(+S.seq||0,+data.seq||0);
  normalizeStock();syncCategories();save();render();
  return stats;
@@ -827,7 +828,7 @@ function replaceBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
  const base={
   accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
-  batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],notes:'',
+  batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],notes:'',
   stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
   categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
   hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
@@ -835,6 +836,7 @@ function replaceBackupData(data){
  };
  S=Object.assign(base,JSON.parse(JSON.stringify(data)));delete S.photos;
  S.accounts=Array.isArray(S.accounts)?S.accounts:base.accounts;
+ S.trash=Array.isArray(S.trash)?S.trash:[];
  S.stockEvents=Array.isArray(S.stockEvents)?S.stockEvents:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];
  S.categories=S.categories||base.categories;S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));
  S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||base.set;
@@ -1007,7 +1009,7 @@ version:'2.3-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),
-setState:next=>{S=JSON.parse(JSON.stringify(next));S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
+setState:next=>{S=JSON.parse(JSON.stringify(next));S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),
 render:()=>render(),
 openSale:()=>sellParts(),
@@ -1052,13 +1054,88 @@ update();
 }
 
 /* ядро */
-function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
+function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
 const find=(a,id)=>S[a].find(x=>x.id==id);
+
+const trashClone=value=>JSON.parse(JSON.stringify(value));
+const trashLabel=item=>{
+ const r=item.record||{};
+ if(item.type==='batch')return r.desc||'Партия комплектующих';
+ if(item.type==='build')return 'Сборка №'+(r.num||'?')+(r.name?' — '+r.name:'');
+ if(item.type==='tx')return r.desc||r.cat||'Финансовая операция';
+ if(item.type==='task')return r.text||'Задача';
+ return 'Запись';
+};
+function restoreTrashItem(id){
+ const item=(S.trash||[]).find(x=>x.id==id);
+ if(!item){alert('Запись не найдена в корзине.');return false}
+ const record=item.record||{},related=item.relatedTx||null;
+ const txConflict=()=>related&&S.tx.some(x=>x.id===related.id);
+ const fail=message=>{alert(message);return false};
+ if(item.type==='batch'){
+  if(S.batches.some(x=>x.id===record.id))return fail('Партия с таким ID уже существует. Восстановление остановлено.');
+  if(txConflict())return fail('Связанная операция уже существует. Сначала устраните конфликт ID.');
+  const q=Math.max(0,+record.qty||0),off=Math.max(0,+record.writtenOffQty||0),bad=Math.max(0,+record.problemQty||0);
+  if(usedGood(record)>Math.max(0,q-off-bad)||usedProblem(record)>bad)return fail('Существующие сборки уже ссылаются на эту партию, а количества недостаточно. Запись осталась в корзине.');
+  S.batches.push(trashClone(record));
+  if(related)S.tx.push(trashClone(related));
+ }else if(item.type==='build'){
+  if(S.builds.some(x=>x.id===record.id))return fail('Сборка с таким ID уже существует. Восстановление остановлено.');
+  if(txConflict())return fail('Связанная операция уже существует. Сначала устраните конфликт ID.');
+  const pending={normal:{},problem:{}};
+  for(const line of record.lines||[]){
+   const batch=find('batches',line.batchId),qty=+line.qty,problem=!!line.problem;
+   if(!batch)return fail('Не найдена партия '+line.batchId+'. Сначала восстановите комплектующие.');
+   if(!Number.isInteger(qty)||qty<1)return fail('В составе сборки обнаружено некорректное количество.');
+   const key=String(batch.id),bucket=problem?'problem':'normal';
+   pending[bucket][key]=(pending[bucket][key]||0)+qty;
+   const available=problem?problemAvailable(batch):goodAvailable(batch);
+   if(pending[bucket][key]>available)return fail('Не хватает '+(problem?'проблемных':'нормальных')+' деталей «'+batch.desc+'». Сборка осталась в корзине.');
+  }
+  S.builds.push(trashClone(record));
+  if(related)S.tx.push(trashClone(related));
+  if(Array.isArray(item.photos)&&item.photos.length)PH[record.id]=trashClone(item.photos);
+ }else if(item.type==='task'){
+  if(S.tasks.some(x=>x.id===record.id))return fail('Задача с таким ID уже существует.');
+  S.tasks.push(trashClone(record));
+ }else if(item.type==='tx'){
+  if(S.tx.some(x=>x.id===record.id))return fail('Операция с таким ID уже существует.');
+  if(record.partSale){
+   const state=item.restoreState,batch=state&&state.batch&&find('batches',state.batch.id);
+   if(!state||!batch)return fail('Нельзя восстановить продажу: отсутствуют контрольные данные или исходная партия.');
+   const current={qty:+batch.qty||0,problemQty:+batch.problemQty||0};
+   if(current.qty!==state.batch.after.qty||current.problemQty!==state.batch.after.problemQty)return fail('Остаток партии изменился после удаления продажи. Для защиты учёта восстановление заблокировано.');
+   let build=null;
+   if(state.build){
+    build=find('builds',state.build.id);
+    if(!build||build.status!==state.build.status||JSON.stringify(build.lines||[])!==JSON.stringify(state.build.afterLines))return fail('Состав или статус исходной сборки изменился. Продажу нельзя безопасно восстановить.');
+   }
+   batch.qty=state.batch.before.qty;
+   batch.problemQty=state.batch.before.problemQty;
+   if(build)build.lines=trashClone(state.build.beforeLines);
+  }
+  S.tx.push(trashClone(record));
+ }else return fail('Неизвестный тип записи в корзине.');
+ S.trash=S.trash.filter(x=>x.id!==item.id);
+ save();render();toast('Запись восстановлена');
+ return true;
+}
+function trash(){
+ const labels={batch:'Партия склада',build:'Сборка',tx:'Операция',task:'Задача'};
+ const rows=(S.trash||[]).slice().sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).map(item=>{
+  const related=item.relatedTx?'Связанная операция также сохранена':(item.photos&&item.photos.length?'Сохранено фото: '+item.photos.length:'—');
+  const when=item.at?new Date(item.at).toLocaleString('ru-RU'):'—';
+  return '<tr><td>'+esc(when)+'</td><td>'+esc(labels[item.type]||'Запись')+'</td><td>'+esc(trashLabel(item))+'</td><td>'+esc(related)+'</td><td class="r"><button class="btn p" data-a="trrestore" data-id="'+esc(item.id)+'">Восстановить</button> <button class="btn ic" data-a="trdel" data-id="'+esc(item.id)+'" title="Удалить навсегда">✕</button></td></tr>';
+ });
+ const action=(S.trash||[]).length?'<button class="btn" data-a="emptytrash">Очистить корзину</button>':'';
+ return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
+}
+
 function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
-pd:()=>{const b=find('batches',id);if(used(b)){alert('Деталь стоит в сборках, удалить нельзя');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи, чтобы не потерять возможность возврата товара.');return}if(!confirm('Удалить партию «'+b.desc+'»?'))return;S.batches=S.batches.filter(x=>x!=b);if(b.txId&&confirm('Удалить и связанный расход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
-bd:()=>{const b=find('builds',id);if(!confirm('Удалить сборку №'+b.num+'? Детали вернутся на склад.'))return;S.builds=S.builds.filter(x=>x!=b);delete PH[b.id];if(b.txId&&confirm('Удалить и связанный доход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
-td:()=>{const t=find('tx',id);if(!t)return;if(!confirm(t.partSale?'Удалить продажу и вернуть комплектующее на склад'+(t.sourceBuildId?' (в сборку, если она ещё не продана)':'')+'?':'Удалить операцию?'))return;if(t.partSale){const b=find('batches',t.batchId);if(!b){alert('Не найдена исходная партия. Операция не удалена.');return}b.qty+=(+t.qty||1);if(t.sourceProblem)b.problemQty=problemMarked(b)+(+t.qty||1);const build=t.sourceBuildId&&find('builds',t.sourceBuildId);if(build&&build.status!=ST[3]){const line=build.lines.find(l=>l.batchId==b.id&&!!l.problem==!!t.sourceProblem);if(line)line.qty+=(+t.qty||1);else build.lines.push({batchId:b.id,qty:+t.qty||1,problem:!!t.sourceProblem})}}S.tx=S.tx.filter(x=>x.id!=id);save();render()},
+pd:()=>{const b=find('batches',id);if(!b)return;if(used(b)){alert('Деталь стоит в сборках, сначала удалите сборку.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift({id:uid(),type:'batch',at:new Date().toISOString(),record:trashClone(b),relatedTx});S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
+bd:()=>{const b=find('builds',id);if(!b)return;if(!confirm('Переместить сборку №'+b.num+' в корзину? Детали вернутся в доступный остаток.'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный доход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}const photos=Array.isArray(PH[b.id])?trashClone(PH[b.id]):[];S.trash.unshift({id:uid(),type:'build',at:new Date().toISOString(),record:trashClone(b),relatedTx,photos});S.builds=S.builds.filter(x=>x.id!==b.id);delete PH[b.id];save();render()},
+td:()=>{const t=find('tx',id);if(!t)return;if(!confirm(t.partSale?'Переместить продажу в корзину и вернуть комплектующее на склад?':'Переместить операцию в корзину?'))return;let restoreState=null;if(t.partSale){const b=find('batches',t.batchId);if(!b){alert('Не найдена исходная партия. Операция не перемещена.');return}const qty=+t.qty||1,before={qty:+b.qty||0,problemQty:+b.problemQty||0},build=t.sourceBuildId&&find('builds',t.sourceBuildId),buildState=build?{id:build.id,status:build.status,beforeLines:trashClone(build.lines||[]),afterLines:null}:null;b.qty+=qty;if(t.sourceProblem)b.problemQty=problemMarked(b)+qty;if(build&&build.status!=ST[3]){const line=build.lines.find(l=>l.batchId==b.id&&!!l.problem==!!t.sourceProblem);if(line)line.qty+=qty;else build.lines.push({batchId:b.id,qty,problem:!!t.sourceProblem})}if(buildState)buildState.afterLines=trashClone(build.lines||[]);restoreState={batch:{id:b.id,before,after:{qty:+b.qty||0,problemQty:+b.problemQty||0}},build:buildState}}S.trash.unshift({id:uid(),type:'tx',at:new Date().toISOString(),record:trashClone(t),restoreState});S.tx=S.tx.filter(x=>x.id!==id);save();render()},
 aadd:()=>{const n=prompt('Название кассы');if(!n)return;S.accounts.push({id:uid(),name:n,open:+prompt('Начальный остаток, ₽','0')||0});save();render()},
 aedit:()=>{const c=find('accounts',id),n=prompt('Название кассы',c.name);if(!n)return;c.name=n;c.open=+prompt('Начальный остаток, ₽',c.open)||0;save();render()},
 cgroupadd:()=>{if(id!='e'&&id!='i')return;const n=(prompt('Название новой группы категорий')||'').trim(),o=id=='e'?EXP:INC;if(!n)return;if(Object.prototype.hasOwnProperty.call(o,n)){alert('Такая группа уже существует.');return}o[n]=[];syncCategories();save();render()},
@@ -1070,8 +1147,9 @@ ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
 exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},
-kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{if(confirm('Удалить задачу?')){S.tasks=S.tasks.filter(t=>t.id!=id);save();render()}},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
-undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
+kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
+trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
+undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
 bdoc:()=>{const b=find('builds',id),r=b.lines.map(l=>{const p=find('batches',l.batchId);return p?`<tr><td>${p.type}</td><td>${esc(p.desc)}</td><td>${l.qty}</td></tr>`:''}).join(''),h=`<html><head><meta charset="utf-8"></head><body><h1>ПК №${b.num} ${esc(b.name)}</h1><p>Статус: ${b.status}<br>Дата сборки: ${D(b.date)}<br>Сборщик: ${esc(b.builder)}${b.price?`<br>Цена: ${R(b.price)}`:''}</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr>${r}</table><p>${esc(b.note)}</p></body></html>`,l=document.createElement('a');const ph=PH[b.id]||[],dl=(bl,n)=>{l.href=URL.createObjectURL(bl);l.download=n;l.click()},E=new TextEncoder().encode('\ufeff'+h);ph.length?dl(zip([['PC-'+b.num+'.doc',E],...ph.map((u,i)=>['photos/test-'+(i+1)+'.jpg',Uint8Array.from(atob(u.split(',')[1]),c=>c.charCodeAt(0))])]),'PC-'+b.num+'.zip'):dl(new Blob([E],{type:'application/msword'}),'PC-'+b.num+'.doc')},
 csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
