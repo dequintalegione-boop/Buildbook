@@ -50,6 +50,7 @@ const defaultState=()=>({
 });
 let S=defaultState(),V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''},report:'expenses'},dip;
 const DATA_SCHEMA_VERSION=1;
+let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const idb=()=>new Promise((resolve,reject)=>{
  const request=indexedDB.open(DB_NAME,1);
@@ -147,12 +148,16 @@ async function photosAsBlobs(photos){
 }
 
 async function load(){
+ STARTUP_STAGE='opening-database';
  const db=await idb();
+ STARTUP_STAGE='reading-profile';
  const [storedState,storedLog,storedPhotos]=await Promise.all([get(db,'s'),get(db,'l'),get(db,'p')]);
  const previousState=storedState?JSON.stringify(storedState):'';
+ STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
  S=migrated.state;
  LOG=Array.isArray(storedLog)?storedLog:[];
+ STARTUP_STAGE='loading-photos';
  PH=await restorePhotoBlobs(storedPhotos||{});
  EXP=S.categories.e;INC=S.categories.i;
  T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');
@@ -161,10 +166,12 @@ async function load(){
  last=currentState;
  const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos;
  if(needsWrite){
+  STARTUP_STAGE='saving-migrated-profile';
   const photoBlobs=await photosAsBlobs(PH);
   await writeKV(db,S,LOG,photoBlobs);
  }
  storageDirty=false;
+ STARTUP_STAGE='ready';
 }
 const lbl=(a,b)=>{const A=JSON.parse(a),B=JSON.parse(b),N={batches:'партия',builds:'сборка',tx:'операция',tasks:'задача'};for(const k in N){const x=(A[k]||[]).length,y=(B[k]||[]).length;if(y>x)return'Добавлено: '+N[k];if(y<x)return'Удалено: '+N[k]}return'Изменение данных'};
 function persistCurrent(){
@@ -1399,7 +1406,7 @@ function sets(){return head('Настройки')+'<div class="tw" style="paddin
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.8-test',database:DB_NAME,ready:()=>APP_READY,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const db=await idb(),state=await get(db,'s');return state&&state.schemaVersion||0},
+version:'2.8-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const db=await idb(),state=await get(db,'s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const d=await idb(),stored=(await get(d,'p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),importBuildCardZip:buffer=>importBuildCardZip(buffer),
