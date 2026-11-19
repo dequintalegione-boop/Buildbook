@@ -616,6 +616,20 @@ api.setState(fixture());let s=state();s.tasks.push({id:'trash-task',text:'Тес
 api.action('kd','trash-task');const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='trash-task');assert(entry,'Задача не перемещена в корзину');
 api.action('trdel',entry.id);assert(!state().trash.some(x=>x.id===entry.id),'Окончательно удалённая запись осталась в корзине');
 });
+await test('Форматирование объёма хранилища корректно обрабатывает байты и мегабайты',()=>{
+assert(api.formatStorageSize(512)==='512 Б','Не отформатированы байты');
+assert(api.formatStorageSize(1024)==='1.00 КБ','Не отформатирован килобайт');
+assert(api.formatStorageSize(1024*1024)==='1.00 МБ','Не отформатирован мегабайт');
+assert(api.formatStorageSize(-1)==='—'&&api.formatStorageSize(NaN)==='—','Некорректный объём не отфильтрован');
+});
+await test('Настройки показывают сведения о локальном хранилище',async()=>{
+api.action('nav','set');
+await sleep(500);
+const info=w.document.querySelector('#storage-info');
+assert(info,'Не отображается блок локального хранилища');
+assert(info.textContent.trim()&&!info.textContent.includes('Получаем сведения'),'Сведения о хранилище не загрузились');
+assert(info.textContent.includes('Занято')||info.textContent.includes('не предоставляет'), 'Не показана оценка объёма или пояснение браузера');
+});
 await test('Миграция схемы 2 создаёт метаданные основных сущностей',()=>{
 const source={
  schemaVersion:2,
