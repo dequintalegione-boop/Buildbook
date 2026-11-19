@@ -160,7 +160,7 @@ const photoBytes=await Promise.race([
 ]);
 assert(photoBytes instanceof w.ArrayBuffer&&photoBytes.byteLength===15,'FileReader вернул некорректный размер бинарных данных');
 summary.textContent='Выполняется: Blob repository — запись через ArrayBuffer';
-await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
+await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[{__buildbookBlob:1,type:photo.type,bytes:photoBytes}]},0);
 summary.textContent='Выполняется: Blob repository — чтение';
 const stored=await repository.readProfile();
 summary.textContent='Выполняется: Blob repository — проверка';
