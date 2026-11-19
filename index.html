@@ -191,6 +191,8 @@ openSale:()=>sellParts(),
 available:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?avail(b):null},
 used:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?used(b):null},
 balance:accountId=>{const a=S.accounts.find(x=>x.id==accountId);return a?bal(a):null},
+buildCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?cost(b):null},
+buildLiveCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?live(b):null},
 dbName:()=>DB_NAME
 })})}
 /* ядро */
