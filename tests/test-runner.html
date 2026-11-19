@@ -39,7 +39,7 @@ function setv(f,name,value){assert(f.elements[name],'Поле формы не н
 async function boot(){
 results.innerHTML='';passed=failed=0;alerts=[];prompts=[];
 summary.textContent='Подготовка…';details.textContent='Загружается тестовая версия приложения.';
-if(!frame.contentWindow.__BUILD_BOOK_TEST__){await new Promise((resolve,reject)=>{frame.onload=resolve;setTimeout(()=>reject(new Error('Не удалось загрузить index.html?test=1')),15000)})}
+for(let i=0;i<150&&!frame.contentWindow.__BUILD_BOOK_TEST__;i++)await sleep(100);
 w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API недоступен. Откройте runner на том же origin, что и приложение.');
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
@@ -81,7 +81,7 @@ await test('Проданные детали не предлагаются для
 api.action('nav','stock');api.openSale();const f=form();assert(!f.textContent.includes('Из сборки №1'),'Завершённая сборка попала в список источников продажи');f.closest('.ov').remove();
 });
 await test('Себестоимость проданного ПК не меняется при изменении цены партии',()=>{
-const b=state().batches.find(x=>x.id==='gpu-batch');b.price=250;api.setState(state());assert(state().builds[0].cost===400,'Себестоимость проданной сборки изменилась');assert(w.eval('cost(S.builds[0])')===400,'Функция расчёта использовала текущую цену вместо зафиксированной');
+const b=state().batches.find(x=>x.id==='gpu-batch');b.price=250;api.setState(state());assert(state().builds[0].cost===400,'Себестоимость проданной сборки изменилась');assert(api.buildCost('build-open')===400,'Функция расчёта использовала текущую цену вместо зафиксированной');
 });
 await test('Закупка создаёт партию и связанный расход',()=>{
 api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','ССД');setv(f,'date','2026-03-01');setv(f,'desc','Новый SSD');setv(f,'price','500');setv(f,'qty','2');setv(f,'acc','cash');submit(f);const s=state(),b=s.batches.find(x=>x.desc==='Новый SSD');assert(b&&b.qty===2,'Партия закупки не создана');assert(s.tx.some(t=>t.batchId===b.id&&t.kind==='e'&&t.amount===1000),'Расход закупки не создан');
@@ -115,7 +115,6 @@ await sleep(500);const expected=state().batches.length;const src=frame.getAttrib
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';
 }
 button.addEventListener('click',()=>boot().catch(e=>report('Запуск тестов',false,e.message)));
-frame.addEventListener('load',()=>{if(frame.contentWindow.__BUILD_BOOK_TEST__)boot().catch(e=>report('Запуск тестов',false,e.message))});
 boot().catch(e=>report('Запуск тестов',false,e.message));
 })();
 </script></body></html>
