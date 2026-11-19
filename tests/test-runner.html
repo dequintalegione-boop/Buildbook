@@ -334,6 +334,47 @@ assert(f.textContent.includes('Отметка проблемы')&&f.textContent.
 f.closest('.ov').remove();
 });
 
+await test('CSV-парсер учитывает BOM, разделитель, кавычки и кавычки внутри текста',()=>{
+const rows=api.parseCsv('\uFEFFТип;Описание;Дата;Цена;Кол-во\r\nВидеокарты;"GPU; ""Founders""";2026-05-01;300;2\r\n');
+assert(rows.length===2,'Ожидались заголовок и одна строка');
+assert(rows[1][1]==='GPU; "Founders"','Не обработаны кавычки и точка с запятой внутри поля');
+assert(rows[1][4]==='2','Неверно прочитано количество');
+});
+await test('Импорт CSV склада добавляет корректные партии и пропускает ошибочные строки',()=>{
+api.setState(fixture());
+const raw='ID;Тип;Описание;Дата;Цена;Кол-во;Поставщик\nbatch-imported;Видеокарты;"GPU; Founders";2026-05-01;300;2;Тест\n;ССД;SSD Import;01.05.2026;50;2;Тест\n;ССД;Broken;не-дата;50;2;Тест';
+const map={id:0,type:1,desc:2,date:3,price:4,qty:5,supplier:6};
+const result=api.importCsv(raw,'batches',map);
+assert(result.added===2&&result.skipped===1,'Ожидалось 2 добавленные и 1 пропущенная строка');
+const s=state(),b=s.batches.find(x=>x.id==='batch-imported'),ssd=s.batches.find(x=>x.desc==='SSD Import');
+assert(b&&b.desc==='GPU; Founders'&&b.qty===2,'Не импортирована партия с кавычками');
+assert(ssd&&ssd.date==='2026-05-01'&&ssd.qty===2,'Не разобрана дата в формате ДД.ММ.ГГГГ');
+assert(result.errors[0].row===4,'Не указан номер ошибочной строки');
+assert(!s.batches.some(x=>x.desc==='Broken'),'Ошибочная строка попала в склад');
+});
+await test('Импорт CSV операций корректно обрабатывает доходы, расходы и переводы',()=>{
+api.setState(fixture());
+const raw='Дата;Тип;Сумма;Описание;Категория;Касса;Откуда;Куда\n2026-05-02;Доход;650;Продажа;Другое;Наличные;;\n02.05.2026;Расход;75;Кабель;Другое;Карта;;\n2026-05-03;Перевод;125;Перевод тест;Переводы;;Наличные;Карта\n2026-05-03;Расход;ошибка;Сломано;Другое;Карта;;';
+const map={date:0,kind:1,amount:2,desc:3,cat:4,acc:5,fromAcc:6,toAcc:7};
+const result=api.importCsv(raw,'tx',map,'e');
+assert(result.added===3&&result.skipped===1,'Ожидалось 3 операции и 1 ошибка');
+assert(api.balance('cash')===1525,'Баланс наличных неверен после дохода и перевода');
+assert(api.balance('card')===50,'Баланс карты неверен после расхода и перевода');
+const s=state();assert(s.tx.some(t=>t.kind==='transfer'&&t.amount===125),'Перевод не импортирован отдельным типом');
+assert(!s.tx.some(t=>t.desc==='Сломано'),'Ошибочная операция импортирована');
+});
+await test('Импорт CSV сборок связывает строки состава с партиями по ID',()=>{
+api.setState(fixture());
+const raw='ID;Номер сборки;Название;Статус;Дата сборки;Цена продажи;Комплектующие\nbuild-csv-import;55;Imported PC;Собирается;2026-05-03;0;ssd-batch:1\nbad-build;56;Bad;Собирается;2026-05-03;0;unknown-batch:1';
+const map={id:0,num:1,name:2,status:3,date:4,price:5,lines:6};
+const result=api.importCsv(raw,'builds',map,'e');
+assert(result.added===1&&result.skipped===1,'Ожидалась одна сборка и одна ошибка');
+const b=state().builds.find(x=>x.id==='build-csv-import');
+assert(b&&b.num===55&&b.lines.length===1&&b.lines[0].batchId==='ssd-batch'&&b.lines[0].qty===1,'Не восстановлена связь с партией SSD');
+assert(api.available('ssd-batch')===1,'Остаток партии не учёл импортированную сборку');
+assert(!state().builds.some(x=>x.id==='bad-build'),'Сборка с неизвестной партией была добавлена');
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
