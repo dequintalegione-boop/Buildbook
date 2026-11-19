@@ -32,6 +32,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 </style></head><body>
 <nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="reports">Отчёты</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
 <main id="m"></main>
+<script src="./vendor/xlsx.full.min.js"></script>
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const R=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0)+' ₽',D=s=>s?s.split('-').reverse().join('.'):'',today=()=>new Date().toISOString().slice(0,10);
@@ -861,12 +862,148 @@ function backupRestoreWizard(data){
  },false,'Восстановить');
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.2<br>Developed by <b>Quinta Legione</b></div>'}
+
+function xlsxDataRows(kind){
+ if(kind=='batches')return [['ID','Тип','Описание','Дата','Цена за штуку','Количество','Поставщик','Ссылка','Комментарий','Проблемные единицы','Причина проблемы','Списано'],...S.batches.map(b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,problemMarked(b),b.problemReason,writtenOff(b)])];
+ if(kind=='builds')return [['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Цена продажи','Себестоимость','Комплектующие','Комментарий'],...S.builds.map(b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,b.price,cost(b),(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note])];
+ if(kind=='tx')return [['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],...S.tx.map(t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||''])];
+ if(kind=='accounts')return [['ID','Касса','Начальный остаток','Текущий баланс'],...S.accounts.map(a=>[a.id,a.name,a.open,bal(a)])];
+ if(kind=='tasks')return [['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],...S.tasks.map(t=>[t.id,t.text,t.q,t.done?'Да':'Нет',t.due||'',t.who||t.assignee||'',t.buildId||''])];
+ return [];
+}
+function xlsxAddSheet(wb,name,rows){
+ const X=window.XLSX,ws=X.utils.aoa_to_sheet(rows);
+ if(rows[0])ws['!cols']=rows[0].map(h=>({wch:Math.min(34,Math.max(12,String(h??'').length+2))}));
+ X.utils.book_append_sheet(wb,ws,name);
+}
+function xlsxReportRows(kind,year){
+ if(kind=='summary'){
+  const d=reportSummaryData(year),rows=[['Месяц','Доходы','Расходы','Чистые сбережения']];
+  REPORT_MONTHS.forEach((m,i)=>rows.push([m,d.income[i],d.expense[i],d.net[i]]));
+  rows.push(['ИТОГО за год',d.totals.income,d.totals.expense,d.totals.net],['Среднее / месяц',d.averages.income,d.averages.expense,d.averages.net]);
+  return rows;
+ }
+ if(kind=='builds'){
+  const d=reportBuildData(year),rows=[['Номер сборки','Название','Дата продажи','Себестоимость','Цена продажи','Прибыль','Маржа %']];
+  d.builds.forEach(b=>{const revenue=+sale(b)||0,cogs=+cost(b)||0,p=revenue-cogs;rows.push([b.num,b.name||'',b.sold,cogs,revenue,p,revenue?p/revenue*100:0])});
+  rows.push(['ИТОГО','','',d.totals.cost,d.totals.revenue,d.totals.profit,'']);
+  return rows;
+ }
+ const data=reportMatrixData(kind=='expenses'?'e':'i',year),rows=[['Группа','Категория',...REPORT_MONTHS,'Итого за год','Среднее / месяц']];
+ data.groups.forEach(g=>{
+  rows.push([g.name,'ИТОГО',...g.monthly,g.total,g.average]);
+  g.rows.forEach(r=>rows.push([g.name,r.category,...r.monthly,r.total,r.average]));
+ });
+ rows.push(['ИТОГО','',...data.monthly,data.total,data.average]);
+ return rows;
+}
+function buildXlsxWorkbook(kind){
+ const X=window.XLSX;if(!X)throw new Error('Не загружена локальная библиотека XLSX.');
+ const wb=X.utils.book_new(),year=activeReportYear();
+ const add=(name,rows)=>xlsxAddSheet(wb,name,rows);
+ const addData=k=>({batches:()=>add('Склад',xlsxDataRows('batches')),builds:()=>add('Сборки',xlsxDataRows('builds')),tx:()=>add('Транзакции',xlsxDataRows('tx')),accounts:()=>add('Кассы',xlsxDataRows('accounts')),tasks:()=>add('Задачи',xlsxDataRows('tasks'))})[k]();
+ if(kind=='all'){
+  ['batches','builds','tx','accounts','tasks'].forEach(addData);
+  add('Расходы',xlsxReportRows('expenses',year));add('Доходы',xlsxReportRows('income',year));add('Сводка',xlsxReportRows('summary',year));add('Прибыль сборок',xlsxReportRows('builds',year));
+ }else if(kind=='reports'){
+  add('Расходы',xlsxReportRows('expenses',year));add('Доходы',xlsxReportRows('income',year));add('Сводка',xlsxReportRows('summary',year));add('Прибыль сборок',xlsxReportRows('builds',year));
+ }else if(['batches','builds','tx','accounts','tasks'].includes(kind))addData(kind);
+ else throw new Error('Неизвестный раздел для экспорта XLSX.');
+ return wb;
+}
+function exportXlsx(kind){
+ try{
+  const wb=buildXlsxWorkbook(kind||'all');
+  window.XLSX.writeFile(wb,'buildbook-'+(kind||'all')+'-'+today()+'.xlsx',{compression:true});
+  toast('Книга Excel сформирована');
+ }catch(error){alert('Не удалось сформировать XLSX: '+(error.message||'ошибка'))}
+}
+function guessXlsxKind(sheetName,headers){
+ const name=csvHeaderNorm(sheetName),h=headers.map(csvHeaderNorm);
+ if(name.includes('склад')||name.includes('stock'))return'batches';
+ if(name.includes('сборк')||name.includes('build'))return'builds';
+ if(name.includes('транзакц')||name.includes('операц')||name.includes('доход')||name.includes('расход')||name.includes('transaction'))return'tx';
+ if(h.includes('сумма')||h.includes('amount')||h.includes('типоперации'))return'tx';
+ if(h.includes('номерсборки')||h.includes('статус'))return'builds';
+ if(h.includes('тип')&&h.includes('описание')&&h.includes('колво'))return'batches';
+ return'skip';
+}
+function xlsxDefaultKind(sheetName){
+ const n=csvHeaderNorm(sheetName);
+ if(n.includes('доход')||n.includes('income'))return'i';
+ return'e';
+}
+function xlsxWorkbookPlans(workbook){
+ const X=window.XLSX;
+ return workbook.SheetNames.map(name=>{
+  let matrix=X.utils.sheet_to_json(workbook.Sheets[name],{header:1,raw:false,defval:''});
+  while(matrix.length&&matrix[matrix.length-1].every(v=>String(v??'').trim()===''))matrix.pop();
+  const headers=(matrix[0]||[]).map((v,i)=>String(v??'').trim()||('Столбец '+(i+1)));
+  return {name,matrix,headers,kind:matrix.length>1?guessXlsxKind(name,headers):'skip',defaultKind:xlsxDefaultKind(name)};
+ });
+}
+function xlsxMappingHtml(kind,headers,sheetIndex){
+ return CSV_FIELDS[kind].map(field=>{
+  const key=field[0],aliases=field[2].map(csvHeaderNorm),def=headers.findIndex(h=>aliases.includes(csvHeaderNorm(h)));
+  const options=[['','— Не импортировать —'],...headers.map((h,i)=>[String(i),h||('Столбец '+(i+1))])];
+  return '<label>'+esc(field[1])+'<select name="xlsx_map_'+sheetIndex+'_'+key+'">'+opt(options,def>=0?String(def):'')+'</select></label>';
+ }).join('');
+}
+function applyXlsxSelections(plans,choices){
+ const order={batches:0,builds:1,tx:2},selected=choices.filter(x=>x.include&&x.kind!='skip').sort((a,b)=>(order[a.kind]??9)-(order[b.kind]??9));
+ const total={added:0,skipped:0,errors:[],sheets:[]};
+ selected.forEach(choice=>{
+  const result=applyCsvImport(choice.matrix,choice.kind,choice.mapping,choice.defaultKind||'e');
+  total.added+=result.added;total.skipped+=result.skipped;
+  result.errors.forEach(e=>{if(total.errors.length<50)total.errors.push({sheet:choice.name,row:e.row,reason:e.reason})});
+  total.sheets.push({name:choice.name,kind:choice.kind,added:result.added,skipped:result.skipped});
+ });
+ return total;
+}
+function importXlsxBuffer(buffer){
+ const X=window.XLSX;if(!X)throw new Error('Не загружена локальная библиотека XLSX.');
+ const workbook=X.read(buffer,{type:'array',cellDates:false}),plans=xlsxWorkbookPlans(workbook);
+ const choices=plans.map(p=>({name:p.name,matrix:p.matrix,kind:p.kind,mapping:p.kind=='skip'?{}:Object.fromEntries(CSV_FIELDS[p.kind].map(f=>[f[0],String((f[2].map(csvHeaderNorm).findIndex(a=>p.headers.findIndex(h=>csvHeaderNorm(h)==a)>=0)>=0)?p.headers.findIndex(h=>f[2].map(csvHeaderNorm).includes(csvHeaderNorm(h))):'') ])),defaultKind:p.defaultKind,include:p.kind!='skip'}));
+ return applyXlsxSelections(plans,choices);
+}
+function xlsxImportWizard(buffer){
+ const X=window.XLSX;if(!X){alert('Не найдена локальная библиотека XLSX. Проверьте, что vendor/xlsx.full.min.js загружен.');return}
+ let workbook,plans;
+ try{workbook=X.read(buffer,{type:'array',cellDates:false});plans=xlsxWorkbookPlans(workbook)}catch(error){alert('Не удалось прочитать XLSX: '+(error.message||'повреждённый файл'));return}
+ if(!plans.length){alert('В книге Excel нет листов.');return}
+ const kinds=[['skip','Не импортировать'],['batches','Склад'],['builds','Сборки'],['tx','Операции']];
+ const body=plans.map((p,i)=>{
+  const preview=p.matrix.slice(0,5).map(row=>'<tr>'+p.headers.map((_,j)=>'<td>'+esc(row[j]??'')+'</td>').join('')+'</tr>').join('');
+  return '<section class="cat-group"><label class="ck"><input type="checkbox" name="xlsx_use_'+i+'" '+(p.kind!='skip'?'checked':'')+'> Обработать лист «'+esc(p.name)+'»</label><label>Тип данных<select name="xlsx_kind_'+i+'">'+opt(kinds,p.kind)+'</select></label><div id="xlsx_map_'+i+'" class="g2"></div><div id="xlsx_default_'+i+'"></div><small>Предпросмотр: '+Math.max(0,p.matrix.length-1)+' строк данных</small><div class="sell-scroll"><table><thead><tr>'+p.headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div></section>';
+ }).join('');
+ const f=modal('Импорт книги Excel','<p class="mu">Найдено листов: '+plans.length+'. Для каждого листа выберите назначение и сопоставьте столбцы. Импорт выполняется в порядке: склад → сборки → операции, чтобы сохранить связи по ID.</p>'+body,form=>{
+  const choices=plans.map((p,i)=>{
+   const kind=form.elements['xlsx_kind_'+i].value,mapping={};
+   if(kind!='skip')CSV_FIELDS[kind].forEach(field=>mapping[field[0]]=form.elements['xlsx_map_'+i+'_'+field[0]].value);
+   return {name:p.name,matrix:p.matrix,kind,mapping,defaultKind:form.elements['xlsx_default_'+i]?form.elements['xlsx_default_'+i].value:p.defaultKind,include:form.elements['xlsx_use_'+i].checked};
+  });
+  const result=applyXlsxSelections(plans,choices);
+  const sheetRows=result.sheets.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.kind)+'</td><td class="r">'+x.added+'</td><td class="r">'+x.skipped+'</td></tr>').join('');
+  const errors=result.errors.length?'<h3>Причины пропуска</h3><div class="sell-scroll"><table><thead><tr><th>Лист</th><th>Строка</th><th>Причина</th></tr></thead><tbody>'+result.errors.map(x=>'<tr><td>'+esc(x.sheet)+'</td><td>'+x.row+'</td><td>'+esc(x.reason)+'</td></tr>').join('')+'</tbody></table></div>':'<p class="mu">Ошибочных строк нет.</p>';
+  modal('Результат импорта XLSX','<div class="k">'+kpi('Добавлено',result.added,'ok')+kpi('Пропущено',result.skipped,result.skipped?'w':'')+'</div><div class="tw"><table><thead><tr><th>Лист</th><th>Тип</th><th>Добавлено</th><th>Пропущено</th></tr></thead><tbody>'+sheetRows+'</tbody></table></div>'+errors,()=>true,true,'Закрыть');
+ },true,'Импортировать книгу');
+ const renderMappings=()=>{
+  plans.forEach((p,i)=>{
+   const kind=f.elements['xlsx_kind_'+i].value;
+   f.querySelector('#xlsx_map_'+i).innerHTML=kind=='skip'?'':xlsxMappingHtml(kind,p.headers,i);
+   f.querySelector('#xlsx_default_'+i).innerHTML=kind=='tx'?'<label>Тип по умолчанию<select name="xlsx_default_'+i+'">'+opt([['e','Расход'],['i','Доход']],p.defaultKind)+'</select></label>':'';
+  });
+ };
+ plans.forEach((p,i)=>f.elements['xlsx_kind_'+i].addEventListener('change',renderMappings));
+ renderMappings();
+}
+
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.3<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.2-test',database:DB_NAME,ready:()=>APP_READY,
+version:'2.3-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),
@@ -879,7 +1016,7 @@ used:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?used(b):null},
 balance:accountId=>{const a=S.accounts.find(x=>x.id==accountId);return a?bal(a):null},
 buildCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?cost(b):null},
 buildLiveCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?live(b):null},
-normalAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?goodAvailable(b):null},problemAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?problemAvailable(b):null},writtenOff:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?writtenOff(b):null},stockEvents:()=>JSON.parse(JSON.stringify(S.stockEvents||[])),parseCsv:raw=>parseCsv(raw),importCsv:(raw,kind,mapping,defaultKind)=>applyCsvImport(parseCsv(raw),kind,mapping,defaultKind),restoreBackup:(data,mode,makeSafetyCopy)=>restoreBackupData(data,mode,makeSafetyCopy),dbName:()=>DB_NAME
+normalAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?goodAvailable(b):null},problemAvailable:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?problemAvailable(b):null},writtenOff:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?writtenOff(b):null},stockEvents:()=>JSON.parse(JSON.stringify(S.stockEvents||[])),parseCsv:raw=>parseCsv(raw),importCsv:(raw,kind,mapping,defaultKind)=>applyCsvImport(parseCsv(raw),kind,mapping,defaultKind),restoreBackup:(data,mode,makeSafetyCopy)=>restoreBackupData(data,mode,makeSafetyCopy),xlsxWorkbook:kind=>buildXlsxWorkbook(kind||'all'),importXlsx:buffer=>importXlsxBuffer(buffer),dbName:()=>DB_NAME
 })})}
 function globalSearch(){
 const body='<p class="gsearch-help">Поиск по комплектующим, сборкам, операциям и задачам. Нажмите Ctrl+K, чтобы открыть поиск из любого раздела.</p><input name="query" type="search" autocomplete="off" placeholder="Введите название, категорию, описание или текст задачи"><div id="gsearch-count" class="gsearch-help">Введите минимум 2 символа</div><div id="gsearch-results" class="gsearch-results"></div>';
@@ -917,7 +1054,7 @@ update();
 /* ядро */
 function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
 const find=(a,id)=>S[a].find(x=>x.id==id);
-function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
 pd:()=>{const b=find('batches',id);if(used(b)){alert('Деталь стоит в сборках, удалить нельзя');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи, чтобы не потерять возможность возврата товара.');return}if(!confirm('Удалить партию «'+b.desc+'»?'))return;S.batches=S.batches.filter(x=>x!=b);if(b.txId&&confirm('Удалить и связанный расход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
 bd:()=>{const b=find('builds',id);if(!confirm('Удалить сборку №'+b.num+'? Детали вернутся на склад.'))return;S.builds=S.builds.filter(x=>x!=b);delete PH[b.id];if(b.txId&&confirm('Удалить и связанный доход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
@@ -960,7 +1097,7 @@ else if(key==='e'){V.tab='tx';render();tform(0,'e')}
 
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');a&&act(a.dataset.a,a.dataset.id)});
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
-document.addEventListener('change',e=>{if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];e.target.value='';if(!fl)return;fl.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}})});
+document.addEventListener('change',e=>{if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];e.target.value='';if(!fl)return;fl.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}})});
 document.addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.closest('.tk');t&&e.dataTransfer.setData('text/plain',t.dataset.id)});
 document.addEventListener('dragover',e=>{e.target.closest&&e.target.closest('.qd')&&e.preventDefault()});
 document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('tasks',e.dataTransfer.getData('text/plain'));if(t){e.preventDefault();t.q=+c.dataset.q;save();render()}});
