@@ -16,7 +16,7 @@ let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaselin
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
 function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Выполнено тестов: '+(passed+failed)}
-async function test(name,fn){try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
+async function test(name,fn){summary.textContent='Выполняется: '+name;try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
 stockEvents:[],batches:[
@@ -67,7 +67,7 @@ assert(conflict&&conflict.code==='BUILD_BOOK_STORAGE_CONFLICT','Запись у�
 const actual=await second.readProfile();
 assert(actual.revision===1&&actual.state.marker==='Изменение вкладки A','Старая вкладка перезаписала более свежие данные');
 assert(actual.logs[0].id==='A','Журнал более свежего профиля был потерян');
-}finally{second.close();await first.deleteDatabase()}
+}finally{await second.close();await first.deleteDatabase()}
 });
 await test('Одновременные вкладки не могут сохранить один и тот же номер ревизии',async()=>{
 const name='buildbook-race-'+Math.random().toString(36).slice(2),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
@@ -83,9 +83,15 @@ assert(rejected&&rejected.reason.code==='BUILD_BOOK_STORAGE_CONFLICT','Втор�
 const actual=await first.readProfile();
 assert(actual.revision===1,'Параллельные операции некорректно изменили ревизию');
 assert(['A','B'].includes(actual.state.writer),'В базе нет ни одной из успешно записанных версий');
-}finally{second.close();await first.deleteDatabase()}
+}finally{await second.close();await first.deleteDatabase()}
 });
 
+await test('Закрытие нескольких подключений освобождает базу для удаления',async()=>{
+const name='buildbook-close-connections-'+Math.random().toString(36).slice(2),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+await Promise.all([first.readProfile(),second.readProfile()]);
+await Promise.all([first.close(),second.close()]);
+await first.deleteDatabase();
+});
 await test('Крупный профиль и фотографии больше 10 МБ сохраняются без потери данных',async()=>{
 const name='buildbook-large-profile-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
 try{

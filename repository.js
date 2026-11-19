@@ -149,17 +149,14 @@ function create(databaseName){
  }
 
  function close(){
-  if(!connectionPromise)return;
+  if(!connectionPromise)return Promise.resolve();
   const pending=connectionPromise;
   connectionPromise=null;
-  pending.then(database=>database.close()).catch(()=>{});
+  return pending.then(database=>database.close()).catch(()=>{});
  }
 
  async function deleteDatabase(){
-  if(connectionPromise){
-   try{(await connectionPromise).close()}catch(_){}
-   connectionPromise=null;
-  }
+  await close();
   return new Promise((resolve,reject)=>{
    let request;
    try{request=global.indexedDB.deleteDatabase(name)}
