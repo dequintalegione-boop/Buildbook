@@ -42,14 +42,14 @@ const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
 const defaultState=()=>({
  accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
- batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],notes:'',
+ batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],checklist:[],notes:'',
  stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
  categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
  hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
  set:{theme:'auto',year:new Date().getFullYear(),backup:''}
 });
 let S=defaultState(),V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''},report:'expenses'},dip;
-const DATA_SCHEMA_VERSION=1;
+const DATA_SCHEMA_VERSION=2;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const idb=()=>new Promise((resolve,reject)=>{
@@ -76,7 +76,7 @@ function migrateState(source){
  let version=parsedVersion,migrated=false;
  while(version<DATA_SCHEMA_VERSION){
   if(version===0){
-   ['accounts','batches','builds','tx','stockEvents','tasks','trash'].forEach(key=>{
+   ['accounts','batches','builds','tx','stockEvents','tasks','trash','checklist'].forEach(key=>{
     if(!Array.isArray(state[key]))state[key]=defaults[key];
    });
    state.seq=Number.isFinite(+state.seq)&&+state.seq>=0?Math.floor(+state.seq):0;
@@ -93,11 +93,14 @@ function migrateState(source){
    state.set=Object.assign({},defaults.set,isPlainRecord(state.set)?state.set:{});
    ['stockGroup','partSaleGroup','partSaleCategory'].forEach(key=>{if(typeof state[key]!=='string'||!state[key])state[key]=defaults[key]});
    state.schemaVersion=1;
+  }else if(version===1){
+   if(!Array.isArray(state.checklist))state.checklist=[];
+   state.schemaVersion=2;
   }
   version++;
   migrated=true;
  }
- ['accounts','batches','builds','tx','stockEvents','tasks','trash'].forEach(key=>{
+ ['accounts','batches','builds','tx','stockEvents','tasks','trash','checklist'].forEach(key=>{
   if(!Array.isArray(state[key]))throw new Error('Повреждена структура данных: раздел «'+key+'» не является списком. Данные не изменены.');
  });
  return {state,migrated};
@@ -844,8 +847,32 @@ f.addEventListener('change',e=>{const t=e.target,i=t.dataset.i;if(i!=null){L[i][
 /* задачи и журнал */
 const QN=['Важно и срочно','Важно, но не срочно','Срочно, но не важно','Не важно и не срочно','По желанию'];
 function kform(id,q){const o=id&&find('tasks',id);modal(o?'Задача':'Новая задача',`${fld('text','Что сделать','text',o?o.text:'','required')}<div class="g2">${fld('q','Квадрант','select','',opt(QN.map((n,i)=>[i,n]),o?o.q:q))}${fld('due','Срок','date',o?o.due:'')}</div><div class="g2">${fld('who','Исполнитель','text',o?o.who:'')}${fld('build','Сборка','select','',opt([['','Без привязки'],...S.builds.map(b=>[b.id,'№'+b.num+' '+(b.name||'')])],o&&o.build))}</div>`,f=>{const d=fd(f),v={text:d.text,q:+d.q,due:d.due,who:d.who,build:d.build};o?Object.assign(o,v):S.tasks.push({id:uid(),done:0,...v});save();render()})}
-function tasks(){const card=(n,i)=>`<section class="qd" data-q="${i}"><div class="hd" style="margin:0 0 8px"><b>${n}</b><button class="btn ic" data-a="kadd" data-id="${i}" title="Добавить задачу">+</button></div>${S.tasks.filter(t=>t.q==i).sort((a,b)=>a.done-b.done).map(t=>{const b=t.build&&S.builds.find(b=>b.id==t.build);return`<div class="tk${t.done?' dn':''}" draggable="true" data-id="${t.id}"><input type="checkbox" data-a="kdone" data-id="${t.id}" ${t.done?'checked':''} aria-label="Выполнено"><span>${esc(t.text)}${t.due?` <small class="${!t.done&&t.due<today()?'bad':''}">до ${D(t.due)}</small>`:''}${t.who?` <small>${esc(t.who)}</small>`:''}${b?` <small>ПК №${b.num}</small>`:''}</span><button class="btn ic g" data-a="ke" data-id="${t.id}" title="Изменить">✎</button><button class="btn ic g" data-a="kd" data-id="${t.id}" title="Удалить">✕</button></div>`}).join('')||'<small>Пусто. Перетащите сюда задачу или нажмите +</small>'}</section>`;
-return head('Задачи','<button class="btn p" data-a="kadd" data-id="0">+ Задача</button>')+`<div class="qg">${QN.map(card).join('')}</div><h2>Примечания</h2><textarea data-n rows="5" placeholder="Заметки команды">${esc(S.notes)}</textarea>`}
+function tasks(){
+ const card=(n,i)=>{
+  const items=S.tasks.filter(t=>t.q==i).sort((a,b)=>a.done-b.done).map(t=>{
+   const build=t.build&&S.builds.find(x=>x.id==t.build);
+   return '<div class="tk'+(t.done?' dn':'')+'" draggable="true" data-id="'+esc(t.id)+'">'+
+    '<input type="checkbox" data-a="kdone" data-id="'+esc(t.id)+'" '+(t.done?'checked':'')+' aria-label="Выполнено">'+
+    '<span>'+esc(t.text)+(t.due?' <small class="'+(!t.done&&t.due<today()?'bad':'')+'">до '+D(t.due)+'</small>':'')+
+    (t.who?' <small>'+esc(t.who)+'</small>':'')+(build?' <small>ПК №'+build.num+'</small>':'')+'</span>'+
+    '<button class="btn ic g" data-a="ke" data-id="'+esc(t.id)+'" title="Изменить">✎</button>'+
+    '<button class="btn ic g" data-a="kd" data-id="'+esc(t.id)+'" title="Удалить">✕</button></div>';
+  }).join('');
+  return '<section class="qd" data-q="'+i+'"><div class="hd" style="margin:0 0 8px"><b>'+n+'</b>'+
+   '<button class="btn ic" data-a="kadd" data-id="'+i+'" title="Добавить задачу">+</button></div>'+
+   (items||'<small>Пусто. Перетащите сюда задачу или нажмите +</small>')+'</section>';
+ };
+ const checklistRows=(S.checklist||[]).map(item=>
+  '<div class="tk'+(item.done?' dn':'')+'"><input type="checkbox" data-a="ckdone" data-id="'+esc(item.id)+'" '+(item.done?'checked':'')+' aria-label="Выполнено">'+
+  '<span>'+esc(item.text)+'</span><button class="btn ic g" data-a="ckdel" data-id="'+esc(item.id)+'" title="Удалить пункт">✕</button></div>'
+ ).join('');
+ return head('Задачи','<button class="btn p" data-a="kadd" data-id="0">+ Задача</button>')+
+  '<div class="qg">'+QN.map(card).join('')+'</div>'+
+  '<section class="tw" style="padding:16px;margin-top:16px"><div class="hd"><h2>Чек-лист</h2><button class="btn" data-a="ckadd">+ Пункт</button></div>'+
+  '<p class="mu">Короткие пункты без срока и привязки к сборке.</p>'+
+  (checklistRows||'<p class="mu">Пока нет пунктов. Добавьте первый пункт кнопкой выше.</p>')+'</section>'+
+  '<h2>Примечания</h2><textarea data-n rows="5" placeholder="Заметки команды">'+esc(S.notes)+'</textarea>';
+}
 function logv(){return head('Журнал')+table(['Время','Действие',''],LOG.map((e,i)=>`<tr><td>${e.t}</td><td>${e.l}</td><td class="r"><button class="btn" data-a="undo" data-id="${i}">Откатить</button></td></tr>`),'Журнал пуст. Здесь появятся последние 40 действий.')+'<p class="mu">Откат возвращает данные к состоянию до выбранного действия. Более поздние действия при этом тоже отменятся.</p>'}
 /* настройки */
 const catKey=(...p)=>encodeURIComponent(JSON.stringify(p));
@@ -1124,7 +1151,7 @@ function validBackup(data){
  const version=data.schemaVersion==null?0:Number(data.schemaVersion);
  return Number.isSafeInteger(version)&&version>=0&&version<=DATA_SCHEMA_VERSION;
 }
-function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,tasks:(data.tasks||[]).length}}
+function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,tasks:(data.tasks||[]).length,checklist:(data.checklist||[]).length}}
 function downloadBackup(filename,markDate){
  if(markDate){S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save()}
  const blob=new Blob([JSON.stringify({...S,photos:PH})],{type:'application/json'}),a=document.createElement('a'),url=URL.createObjectURL(blob);
@@ -1132,7 +1159,7 @@ function downloadBackup(filename,markDate){
 }
 function mergeBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
- const stats={accounts:0,batches:0,builds:0,tx:0,tasks:0,stockEvents:0,trash:0,skipped:0};
+ const stats={accounts:0,batches:0,builds:0,tx:0,tasks:0,checklist:0,stockEvents:0,trash:0,skipped:0};
  const accountMap={},batchMap={},buildMap={},txMap={};
  const clone=value=>JSON.parse(JSON.stringify(value));
  (Array.isArray(data.accounts)?data.accounts:[]).forEach(source=>{
@@ -1217,6 +1244,7 @@ function mergeBackupData(data){
   S.tasks.push(item);stats.tasks++;
  });
  (Array.isArray(data.trash)?data.trash:[]).forEach(source=>{const item=trashClone(source),old=String(item.id||'');if(old&&S.trash.some(x=>x.id===old)){stats.skipped++;return}item.id=old||uid();if(S.trash.some(x=>x.id===item.id))item.id=uid();S.trash.push(item);stats.trash++});
+ (Array.isArray(data.checklist)?data.checklist:[]).forEach(source=>{const item=trashClone(source),old=String(item.id||'');if(old&&S.checklist.some(x=>x.id===old)){stats.skipped++;return}item.id=old||uid();if(S.checklist.some(x=>x.id===item.id))item.id=uid();item.text=String(item.text||'').trim();if(!item.text){stats.skipped++;return}item.done=item.done?1:0;S.checklist.push(item);stats.checklist++});
  S.seq=Math.max(+S.seq||0,+data.seq||0);
  normalizeStock();syncCategories();save();render();
  return stats;
@@ -1233,7 +1261,7 @@ function replaceBackupData(data){
  };
  S=Object.assign(base,JSON.parse(JSON.stringify(data)));delete S.photos;
  S.accounts=Array.isArray(S.accounts)?S.accounts:base.accounts;
- S.trash=Array.isArray(S.trash)?S.trash:[];
+ S.trash=Array.isArray(S.trash)?S.trash:[];S.checklist=Array.isArray(S.checklist)?S.checklist:[];
  S.stockEvents=Array.isArray(S.stockEvents)?S.stockEvents:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];
  S.categories=S.categories||base.categories;S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));
  S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||base.set;
@@ -1255,7 +1283,7 @@ function backupRestoreWizard(data){
   const mode=form.elements.mode.value;
   if(mode=='replace'&&!confirm('Заменить все текущие данные? Перед заменой будет скачана резервная копия текущего состояния.'))return false;
   const result=restoreBackupData(data,mode,mode=='replace');
-  const rows=mode=='add'?[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks],['Складские события',result.stockEvents],['Пропущено',result.skipped]]:[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks]];
+  const rows=mode=='add'?[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks],['Чек-лист',result.checklist],['Складские события',result.stockEvents],['Пропущено',result.skipped]]:[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks],['Чек-лист',result.checklist]];
   const report='<div class="tw"><table><tbody>'+rows.map(x=>'<tr><td>'+x[0]+'</td><td class="r">'+x[1]+'</td></tr>').join('')+'</tbody></table></div>';
   modal('Восстановление завершено',report,()=>true,true,'Закрыть');
  },false,'Восстановить');
@@ -1553,9 +1581,9 @@ ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
 exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),
-kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
+kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{if(!confirm('Удалить пункт чек-листа?'))return;S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
-undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
+undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],checklist:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.checklist=Array.isArray(S.checklist)?S.checklist:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
 bdoc:()=>downloadBuildCardZip(id),csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
