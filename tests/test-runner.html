@@ -510,13 +510,11 @@ assert(after&&after.photos[0]===deletedPhoto,'Фото удалённой сбо
 });
 await test('ZIP-бэкап выявляет повреждение файла по CRC',async()=>{
 api.setState(fixture());const blob=api.createZipBackup(),bytes=new Uint8Array(await blob.arrayBuffer());
-const marker=w.XLSX.utils.encode_cell({r:0,c:0});assert(marker==='A1','Проверка тестовой среды не прошла');
-const decoder=new TextDecoder(),signature=decoder.decode(bytes),pos=signature.indexOf('backup.json');
+const signature=new TextDecoder().decode(bytes),pos=signature.indexOf('backup.json');
 assert(pos>0,'В ZIP не найден backup.json');
-const dataStart=pos+'backup.json'.length+0;
-const scan=bytes.findIndex((v,i)=>i>pos+10&&v!==0);
-assert(scan>0&&bytes.length>scan,'Не найден участок архива для проверки CRC');
-bytes[Math.min(bytes.length-24,pos+40)]^=1;
+const payloadByte=pos+'backup.json'.length+12;
+assert(payloadByte<bytes.length,'Не найден участок архива для проверки CRC');
+bytes[payloadByte]^=1;
 let rejected=false;try{api.readZipBackup(bytes.buffer)}catch(e){rejected=String(e.message||e).includes('Контрольная сумма')||String(e.message||e).includes('повреждён')}
 assert(rejected,'Повреждённый ZIP не был отклонён');
 });
