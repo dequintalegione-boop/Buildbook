@@ -40,11 +40,79 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 let T=['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее'],ST=['Собирается','Собрана','Протестирована','Продана'],MN=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},DEFAULT_INC={'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']};
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
-let S={accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},set:{theme:'auto',year:new Date().getFullYear(),backup:''}},V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''},report:'expenses'},dip;
+const defaultState=()=>({
+ accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
+ batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],notes:'',
+ stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
+ categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
+ hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
+ set:{theme:'auto',year:new Date().getFullYear(),backup:''}
+});
+let S=defaultState(),V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,showZero:false},b:{st:'',q:''},t:{k:'',q:'',m:''},report:'expenses'},dip;
+const DATA_SCHEMA_VERSION=1;
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
-const idb=()=>new Promise((r,j)=>{const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
-let LOG=[],last='',PH={};
-const get=(d,k)=>new Promise(r=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>r(q.result)});
+const idb=()=>new Promise((resolve,reject)=>{
+ const request=indexedDB.open(DB_NAME,1);
+ request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('kv'))request.result.createObjectStore('kv')};
+ request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>db.close();resolve(db)};
+ request.onerror=()=>reject(request.error||new Error('Не удалось открыть локальную базу данных.'));
+ request.onblocked=()=>reject(new Error('База данных занята другой вкладкой. Закройте другие вкладки Buildbook и повторите запуск.'));
+});
+let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='';
+const get=(d,k)=>new Promise((resolve,reject)=>{
+ const request=d.transaction('kv','readonly').objectStore('kv').get(k);
+ request.onsuccess=()=>resolve(request.result);
+ request.onerror=()=>reject(request.error||new Error('Не удалось прочитать данные локальной базы.'));
+});
+function isPlainRecord(value){return !!value&&typeof value==='object'&&!Array.isArray(value)}
+function migrateState(source){
+ const raw=isPlainRecord(source)?source:{},defaults=defaultState();
+ const parsedVersion=raw.schemaVersion==null?0:Number(raw.schemaVersion);
+ if(!Number.isSafeInteger(parsedVersion)||parsedVersion<0)throw new Error('В базе данных обнаружен некорректный номер схемы. Данные не изменены.');
+ if(parsedVersion>DATA_SCHEMA_VERSION)throw new Error('Эта база создана более новой версией Buildbook (схема '+parsedVersion+'). Обновите приложение. Данные не изменены.');
+ const state=Object.assign(defaultState(),raw);
+ let version=parsedVersion,migrated=false;
+ while(version<DATA_SCHEMA_VERSION){
+  if(version===0){
+   ['accounts','batches','builds','tx','stockEvents','tasks','trash'].forEach(key=>{
+    if(!Array.isArray(state[key]))state[key]=defaults[key];
+   });
+   state.seq=Number.isFinite(+state.seq)&&+state.seq>=0?Math.floor(+state.seq):0;
+   state.notes=String(state.notes||'');
+   const categories=isPlainRecord(state.categories)?state.categories:{};
+   state.categories={
+    e:isPlainRecord(categories.e)?categories.e:JSON.parse(JSON.stringify(DEFAULT_EXP)),
+    i:isPlainRecord(categories.i)?categories.i:JSON.parse(JSON.stringify(DEFAULT_INC))
+   };
+   const hiddenCategories=isPlainRecord(state.hiddenCategories)?state.hiddenCategories:{};
+   const hiddenGroups=isPlainRecord(state.hiddenGroups)?state.hiddenGroups:{};
+   state.hiddenCategories={e:Array.isArray(hiddenCategories.e)?hiddenCategories.e:[],i:Array.isArray(hiddenCategories.i)?hiddenCategories.i:[]};
+   state.hiddenGroups={e:Array.isArray(hiddenGroups.e)?hiddenGroups.e:[],i:Array.isArray(hiddenGroups.i)?hiddenGroups.i:[]};
+   state.set=Object.assign({},defaults.set,isPlainRecord(state.set)?state.set:{});
+   ['stockGroup','partSaleGroup','partSaleCategory'].forEach(key=>{if(typeof state[key]!=='string'||!state[key])state[key]=defaults[key]});
+   state.schemaVersion=1;
+  }
+  version++;
+  migrated=true;
+ }
+ ['accounts','batches','builds','tx','stockEvents','tasks','trash'].forEach(key=>{
+  if(!Array.isArray(state[key]))throw new Error('Повреждена структура данных: раздел «'+key+'» не является списком. Данные не изменены.');
+ });
+ return {state,migrated};
+}
+function writeKV(db,state,logs,photos){
+ return new Promise((resolve,reject)=>{
+  let transaction;
+  try{
+   transaction=db.transaction('kv','readwrite');
+   const store=transaction.objectStore('kv');
+   store.put(state,'s');store.put(logs,'l');store.put(photos,'p');
+  }catch(error){reject(error);return}
+  transaction.oncomplete=()=>resolve(true);
+  transaction.onerror=()=>reject(transaction.error||new Error('Не удалось сохранить данные в локальную базу.'));
+  transaction.onabort=()=>reject(transaction.error||new Error('Запись в локальную базу была отменена.'));
+ }); 
+}
 
 async function restorePhotoBlobs(stored){
  const restored={};
@@ -77,9 +145,55 @@ async function photosAsBlobs(photos){
  return stored;
 }
 
-async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=await restorePhotoBlobs((await get(d,'p'))||{})}catch(e){}S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');normalizeStock();last=JSON.stringify(S)}
+async function load(){
+ const db=await idb();
+ const [storedState,storedLog,storedPhotos]=await Promise.all([get(db,'s'),get(db,'l'),get(db,'p')]);
+ const previousState=storedState?JSON.stringify(storedState):'';
+ const migrated=migrateState(storedState||defaultState());
+ S=migrated.state;
+ LOG=Array.isArray(storedLog)?storedLog:[];
+ PH=await restorePhotoBlobs(storedPhotos||{});
+ EXP=S.categories.e;INC=S.categories.i;
+ T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');
+ normalizeStock();
+ const currentState=JSON.stringify(S);
+ last=currentState;
+ const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos;
+ if(needsWrite){
+  const photoBlobs=await photosAsBlobs(PH);
+  await writeKV(db,S,LOG,photoBlobs);
+ }
+ storageDirty=false;
+}
 const lbl=(a,b)=>{const A=JSON.parse(a),B=JSON.parse(b),N={batches:'партия',builds:'сборка',tx:'операция',tasks:'задача'};for(const k in N){const x=(A[k]||[]).length,y=(B[k]||[]).length;if(y>x)return'Добавлено: '+N[k];if(y<x)return'Удалено: '+N[k]}return'Изменение данных'};
-let tm;const save=()=>{const cur=JSON.stringify(S);if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}last=cur;save.skip=0;clearTimeout(tm);tm=setTimeout(async()=>{try{const storedPhotos=await photosAsBlobs(PH),d=await idb(),w=d.transaction('kv','readwrite').objectStore('kv');w.put(S,'s');w.put(LOG,'l');w.put(storedPhotos,'p')}catch(e){}},150)};
+function persistCurrent(){
+ const state=JSON.parse(JSON.stringify(S)),logs=JSON.parse(JSON.stringify(LOG)),photos=JSON.parse(JSON.stringify(PH));
+ const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
+ const run=async()=>{
+  const photoBlobs=await photosAsBlobs(photos),db=await idb();
+  await writeKV(db,state,logs,photoBlobs);
+  if(JSON.stringify(S)===stateText&&JSON.stringify(LOG)===logsText&&JSON.stringify(PH)===photosText)storageDirty=false;
+ };
+ storageWrite=storageWrite.then(run,run);
+ return storageWrite;
+}
+function reportStorageError(error){
+ const message=error&&error.message||'Неизвестная ошибка сохранения.';
+ console.error('Buildbook storage:',error);
+ if(storageErrorShown!==message){storageErrorShown=message;toast('Не удалось сохранить данные. Сделайте резервную копию.');}
+}
+function flushSave(){
+ clearTimeout(tm);
+ if(!storageDirty)return storageWrite;
+ return persistCurrent();
+}
+const save=()=>{
+ if(!Number.isSafeInteger(+S.schemaVersion)||+S.schemaVersion<DATA_SCHEMA_VERSION)S.schemaVersion=DATA_SCHEMA_VERSION;
+ const cur=JSON.stringify(S);
+ if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}
+ last=cur;save.skip=0;storageDirty=true;clearTimeout(tm);
+ tm=setTimeout(()=>persistCurrent().catch(reportStorageError),150);
+};
 const toast=m=>{const t=document.createElement('div');t.className='ts';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2200)};
 const theme=()=>{const t=S.set.theme;document.documentElement.dataset.t=t=='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t};
 /* расчёты */
@@ -1275,16 +1389,16 @@ function xlsxImportWizard(buffer){
  renderMappings();
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.7<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.8<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.7-test',database:DB_NAME,ready:()=>APP_READY,
+version:'2.8-test',database:DB_NAME,ready:()=>APP_READY,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const db=await idb(),state=await get(db,'s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const d=await idb(),stored=(await get(d,'p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),importBuildCardZip:buffer=>importBuildCardZip(buffer),
-setState:next=>{S=JSON.parse(JSON.stringify(next));S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
+setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),
 render:()=>render(),
 openSale:()=>sellParts(),
@@ -1329,7 +1443,12 @@ update();
 }
 
 /* ядро */
-function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
+let APP_FATAL_ERROR=null;
+function render(){
+ if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Не удалось открыть Buildbook</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Данные не были заменены пустой базой. Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p></section>';return}
+ $('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))
+}
 const find=(a,id)=>S[a].find(x=>x.id==id);
 
 const trashClone=value=>JSON.parse(JSON.stringify(value));
@@ -1464,5 +1583,12 @@ document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('
 document.addEventListener('change',e=>{if(e.target.matches('[data-n]')){S.notes=e.target.value;save.skip=1;save()}});
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;V.tab=='set'&&render()});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
-APP_READY=load().then(()=>{theme();render();navigator.storage&&navigator.storage.persist&&navigator.storage.persist();return true});
+APP_READY=load().then(()=>{theme();render();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});return true}).catch(error=>{
+ APP_FATAL_ERROR=error;
+ console.error('Buildbook startup:',error);
+ render();
+ return false;
+});
+addEventListener('pagehide',()=>{flushSave().catch(reportStorageError)});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave().catch(reportStorageError)});
 </script></body></html>
