@@ -780,6 +780,23 @@ assert(batch.problemQty===2&&batch.writtenOffQty===0,'Складской ост�
 assert(state().stockEvents.length===0,'Событие отменённого списания осталось в истории');
 assert(state().tasks.find(x=>x.id==='task-after-writeoff').done===1,'Более поздняя задача была потеряна');
 });
+await test('Старый журнал мигрирует в адресные изменения без отката миграции данных',()=>{
+const current=fixture();
+current.tasks=[{id:'legacy-journal-task',text:'Старая задача',q:0,done:1}];
+api.setState(current);
+const before=JSON.parse(JSON.stringify(state()));
+before.schemaVersion=1;delete before.checklist;
+before.tasks[0].done=0;
+const migration=api.migrateLegacyLogs([{t:'19.11.2026',l:'Старая запись',s:JSON.stringify(before)}]);
+assert(migration.changed,'Старый снимок журнала не был преобразован');
+assert(Array.isArray(migration.logs[0].changes)&&migration.logs[0].changes.length>0,'Не создан адресный набор изменений');
+assert(!Object.prototype.hasOwnProperty.call(migration.logs[0],'s'),'Полный старый снимок остался в журнале');
+const result=api.undoEntry(0);
+assert(result.ok,'Не удалось отменить мигрированное старое действие: '+(result.message||''));
+const after=state();
+assert(after.tasks[0].done===0,'Изменение старой задачи не отменено');
+assert(Array.isArray(after.checklist),'Отмена затронула поле чек-листа, добавленное миграцией схемы');
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
