@@ -44,6 +44,35 @@ w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
+await test('Старые данные автоматически мигрируют в текущую схему',()=>{
+const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
+const result=api.migrateState(legacy),migrated=result.state;
+assert(result.migrated,'Миграция старой версии не запущена');
+assert(migrated.schemaVersion===api.schemaVersion,'Не записана текущая версия схемы');
+assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
+assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
+assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
+assert(Array.isArray(migrated.trash)&&Array.isArray(migrated.stockEvents)&&Array.isArray(migrated.tasks),'Не добавлены новые обязательные списки');
+assert(Array.isArray(migrated.accounts)&&migrated.accounts.length===2,'Не восстановлены значения касс по умолчанию');
+assert(legacy.schemaVersion===undefined,'Миграция изменила исходный объект');
+});
+await test('Миграция одной и той же базы идемпотентна',()=>{
+const first=api.migrateState({batches:[],builds:[],tx:[],tasks:[]});
+const second=api.migrateState(first.state);
+assert(first.migrated,'Первичная миграция не выполнена');
+assert(!second.migrated,'Повторная миграция не должна запускаться');
+assert(second.state.schemaVersion===api.schemaVersion,'Версия схемы изменилась при повторном запуске');
+});
+await test('Приложение не открывает данные от более новой схемы',()=>{
+let rejected=false;
+try{api.migrateState({schemaVersion:api.schemaVersion+1,batches:[],builds:[],tx:[],tasks:[]})}
+catch(error){rejected=String(error.message).includes('более новой версией')}
+assert(rejected,'Будущая версия схемы не была заблокирована');
+});
+await test('Мигрированная схема сохраняется в IndexedDB',async()=>{
+await api.flushStorage();
+assert(await api.persistedSchema()===api.schemaVersion,'В IndexedDB не записана актуальная версия схемы');
+});
 await test('Все основные разделы открываются',()=>{
 for(const tab of ['home','dash','stock','builds','tx','tasks','trash','log','set']){api.action('nav',tab);assert(w.document.querySelector('#m h1'), 'Пустой экран в разделе '+tab)}
 });
