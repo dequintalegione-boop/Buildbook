@@ -659,12 +659,12 @@ assert(output.includes('Комментарий к сборке'),'Не вклю�
 });
 await test('Печатная карточка содержит детали и экранирует HTML',()=>{
 api.setState(fixture());
-const s=state();s.builds[0].name='<script>alert(1)</script>';s.builds[0].note='<b>Комментарий</b>';api.setState(s);
+const s=state(),unsafe='<scr'+'ipt>alert(1)</scr'+'ipt>';s.builds[0].name=unsafe;s.builds[0].note='<b>Комментарий</b>';api.setState(s);
 const output=api.buildCardPrintHtml('build-open');
 assert(output.includes('<table>')&&output.includes('Тестовая видеокарта'),'Не сформирована таблица деталей');
 assert(output.includes('&lt;script&gt;alert(1)&lt;/script&gt;'),'Не экранировано название сборки');
 assert(output.includes('&lt;b&gt;Комментарий&lt;/b&gt;'),'Не экранирован комментарий');
-assert(!output.includes('<script>alert(1)</script>'),'Пользовательский HTML может исполниться в окне печати');
+assert(!output.includes(unsafe),'Пользовательский HTML может исполниться в окне печати');
 });
 await test('ZIP-карточка переносит сборку, состав и фотографии',async()=>{
 api.setState(fixture());
