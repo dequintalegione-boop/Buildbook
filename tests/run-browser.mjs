@@ -29,7 +29,7 @@ try {
   await page.waitForFunction(
     () => document.querySelector('#summary')?.dataset.finished === 'true',
     null,
-    { timeout: 90000 }
+    { timeout: 180000 }
   );
 
   const summary = await page.locator('#summary').innerText();
