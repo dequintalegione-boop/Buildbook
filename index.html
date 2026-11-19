@@ -630,7 +630,75 @@ return head('Дашборд',perBar()+'<button class="btn'+(ed?' p':'')+'" data-
 /* фото, архив, расчёт */
 const shrink=fl=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1100/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);r(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(fl)});
 const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})(),crc=u=>{let c=-1;for(const b of u)c=crcT[(c^b)&255]^(c>>>8);return(c^-1)>>>0};
-function zip(files){const E=new TextEncoder(),ch=[],cd=[];let off=0;for(const[n,d]of files){const nm=E.encode(n),c=crc(d),h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,1);h.setUint16(4,20,1);h.setUint16(6,0x800,1);h.setUint32(14,c,1);h.setUint32(18,d.length,1);h.setUint32(22,d.length,1);h.setUint16(26,nm.length,1);ch.push(h,nm,d);const r=new DataView(new ArrayBuffer(46));r.setUint32(0,0x02014b50,1);r.setUint16(4,20,1);r.setUint16(6,20,1);r.setUint16(8,0x800,1);r.setUint32(16,c,1);r.setUint32(20,d.length,1);r.setUint32(24,d.length,1);r.setUint16(28,nm.length,1);r.setUint32(42,off,1);cd.push(r,nm);off+=30+nm.length+d.length}const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,1);e.setUint16(8,files.length,1);e.setUint16(10,files.length,1);e.setUint32(12,cd.reduce((n,x)=>n+x.byteLength,0),1);e.setUint32(16,off,1);return new Blob([...ch,...cd,e],{type:'application/zip'})}
+function zipBytes(files){
+ const E=new TextEncoder(),local=[],central=[];
+ let offset=0;
+ for(const[name,data]of files){
+  const nameBytes=E.encode(name),checksum=crc(data),header=new DataView(new ArrayBuffer(30));
+  header.setUint32(0,0x04034b50,1);header.setUint16(4,20,1);header.setUint16(6,0x800,1);
+  header.setUint32(14,checksum,1);header.setUint32(18,data.length,1);header.setUint32(22,data.length,1);header.setUint16(26,nameBytes.length,1);
+  local.push(header,nameBytes,data);
+  const record=new DataView(new ArrayBuffer(46));
+  record.setUint32(0,0x02014b50,1);record.setUint16(4,20,1);record.setUint16(6,20,1);record.setUint16(8,0x800,1);
+  record.setUint32(16,checksum,1);record.setUint32(20,data.length,1);record.setUint32(24,data.length,1);
+  record.setUint16(28,nameBytes.length,1);record.setUint32(42,offset,1);
+  central.push(record,nameBytes);
+  offset+=30+nameBytes.length+data.length;
+ }
+ const end=new DataView(new ArrayBuffer(22));
+ end.setUint32(0,0x06054b50,1);end.setUint16(8,files.length,1);end.setUint16(10,files.length,1);
+ const centralSize=central.reduce((sum,item)=>sum+item.byteLength,0);
+ end.setUint32(12,centralSize,1);end.setUint32(16,offset,1);
+ const parts=[...local,...central,end],total=parts.reduce((sum,item)=>sum+item.byteLength,0),output=new Uint8Array(total);
+ let cursor=0;
+ parts.forEach(item=>{const bytes=item instanceof DataView?new Uint8Array(item.buffer,item.byteOffset,item.byteLength):item;output.set(bytes,cursor);cursor+=bytes.byteLength});
+ return output;
+}
+function zip(files){return new Blob([zipBytes(files)],{type:'application/zip'})}
+function xmlEscape(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
+function docxParagraph(text,style){
+ const styleXml=style?'<w:pPr><w:pStyle w:val="'+style+'"/></w:pPr>':'';
+ return '<w:p>'+styleXml+'<w:r><w:t xml:space="preserve">'+xmlEscape(text)+'</w:t></w:r></w:p>';
+}
+function docxTable(rows){
+ const borders='<w:tblBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="B7C5C8"/><w:left w:val="single" w:sz="6" w:space="0" w:color="B7C5C8"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="B7C5C8"/><w:right w:val="single" w:sz="6" w:space="0" w:color="B7C5C8"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="D6DFE1"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="D6DFE1"/></w:tblBorders>';
+ const grid='<w:tblGrid><w:gridCol w:w="2200"/><w:gridCol w:w="6400"/><w:gridCol w:w="1200"/></w:tblGrid>';
+ const rowXml=rows.map((row,index)=>'<w:tr>'+row.map(cell=>'<w:tc><w:tcPr><w:tcW w:w="3200" w:type="dxa"/>'+(index===0?'<w:shd w:fill="E8F0F1"/>':'')+'</w:tcPr><w:p><w:r>'+(index===0?'<w:rPr><w:b/></w:rPr>':'')+'<w:t xml:space="preserve">'+xmlEscape(cell)+'</w:t></w:r></w:p></w:tc>').join('')+'</w:tr>').join('');
+ return '<w:tbl><w:tblPr>'+borders+'</w:tblPr>'+grid+rowXml+'</w:tbl>';
+}
+function createBuildDocx(record,lines){
+ const title='ПК №'+record.num+(record.name?' — '+record.name:'');
+ const rows=[['Тип','Комплектующее','Количество']];
+ lines.forEach(line=>rows.push([line.type,line.desc,String(line.qty)+(line.problem?' (проблемная деталь)':'')]));
+ const body=[
+  docxParagraph(title,'Title'),
+  docxParagraph('Карточка сборки ПК','Subtitle'),
+  docxParagraph('Статус: '+(record.status||'—')),
+  docxParagraph('Дата сборки: '+(record.date||'—')),
+  docxParagraph('Дата продажи: '+(record.sold||'—')),
+  docxParagraph('Сборщик: '+(record.builder||'—')),
+  docxParagraph('Покупатель: '+(record.buyer||'—')),
+  docxParagraph('Цена продажи: '+(record.price?R(record.price):'не указана')),
+  docxParagraph('Плановая цена: '+(record.planned?R(record.planned):'не указана')),
+  docxParagraph('Себестоимость: '+R(lines.reduce((sum,line)=>sum+(+line.unitPrice||0)*(+line.qty||0),0))),
+  docxParagraph('Комплектующие','Heading1'),
+  docxTable(rows),
+  docxParagraph('Комментарий','Heading1'),
+  docxParagraph(record.note||'Нет комментария')
+ ].join('');
+ const documentXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
+ const stylesXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="34"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Subtitle"><w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:rPr><w:i/><w:color w:val="557276"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style></w:styles>';
+ const contentTypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>';
+ const rootRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+ const documentRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+ return zipBytes([
+  ['[Content_Types].xml',new TextEncoder().encode(contentTypes)],
+  ['_rels/.rels',new TextEncoder().encode(rootRels)],
+  ['word/document.xml',new TextEncoder().encode(documentXml)],
+  ['word/styles.xml',new TextEncoder().encode(stylesXml)],
+  ['word/_rels/document.xml.rels',new TextEncoder().encode(documentRels)]
+ ]);
+}
 
 function dataUrlToBytes(value){
  const m=/^data:([^;,]+)(;base64)?,([\s\S]*)$/.exec(String(value||''));
@@ -748,14 +816,9 @@ function createBuildCardZip(buildId){
   files.push([file,parsed.bytes]);manifest.push({index:i,file,mime:parsed.mime});
  });
  const card={format:'buildbook-build-card',version:1,build:record,parts:lines,photoManifest:manifest};
- const rows=(record.lines||[]).map(line=>{
-  const batch=find('batches',line.batchId);
-  return batch?'<tr><td>'+esc(batch.type)+'</td><td>'+esc(batch.desc)+'</td><td>'+line.qty+'</td></tr>':'';
- }).join('');
- const doc='<html><head><meta charset="utf-8"><title>ПК №'+record.num+'</title></head><body><h1>ПК №'+record.num+' '+esc(record.name||'')+'</h1><p>Статус: '+esc(record.status)+'<br>Дата сборки: '+esc(D(record.date))+'<br>Сборщик: '+esc(record.builder||'')+(record.price?'<br>Цена: '+R(record.price):'')+'</p><table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Тип</th><th>Комплектующее</th><th>Кол-во</th></tr>'+rows+'</table><p>'+esc(record.note||'')+'</p></body></html>';
- const docBytes=new TextEncoder().encode('\ufeff'+doc);
+ const docxBytes=createBuildDocx(record,lines);
  files.unshift(['card.json',new TextEncoder().encode(JSON.stringify(card))]);
- files.splice(1,0,['PC-'+record.num+'.doc',docBytes]);
+ files.splice(1,0,['PC-'+record.num+'.docx',docxBytes]);
  return zip(files);
 }
 function readBuildCardZip(buffer){
