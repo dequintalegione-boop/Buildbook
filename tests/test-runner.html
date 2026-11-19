@@ -924,7 +924,7 @@ let rejected=false;try{api.importBuildCardZip(buffer)}catch(e){rejected=String(e
 assert(rejected,'Импорт допустил повтор номера');
 assert(state().builds.length===1,'После конфликта появилась лишняя сборка');
 });
-await test('Фотографии сохраняются в IndexedDB как Blob',async()=>{
+await test('Фотографии сохраняются бинарно и восстанавливаются как Blob',async()=>{
 api.setState(fixture());
 const photo='data:image/jpeg;base64,AAECAwQFBgc=';
 summary.textContent='Выполняется: Blob application — подготовка';
@@ -934,7 +934,7 @@ summary.textContent='Выполняется: Blob application — запись';
 await api.flushStorage();
 summary.textContent='Выполняется: Blob application — чтение';
 const stored=await api.photoStorageInfo();
-assert(stored['build-open']&&stored['build-open'][0].isBlob,'Фото записано в IndexedDB как строка, а не Blob');
+assert(stored['build-open']&&stored['build-open'][0].isBlob,'После чтения фото не восстановлено как Blob');
 assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size>0,'У Blob не сохранены MIME-тип или байты изображения');
 });
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
