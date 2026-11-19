@@ -33,6 +33,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 <nav><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home">Обзор</button><button data-a="nav" data-id="dash">Дашборд</button><button data-a="nav" data-id="stock">Склад</button><button data-a="nav" data-id="builds">Сборки</button><button data-a="nav" data-id="tx">Деньги</button><button data-a="nav" data-id="reports">Отчёты</button><button data-a="nav" data-id="tasks">Задачи</button><button data-a="nav" data-id="trash">Корзина</button><button data-a="nav" data-id="log">Журнал</button><button data-a="nav" data-id="set">Настройки</button></nav>
 <main id="m"></main>
 <script src="./vendor/xlsx.full.min.js"></script>
+<script src="./repository.js"></script>
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const R=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0)+' ₽',D=s=>s?s.split('-').reverse().join('.'):'',today=()=>new Date().toISOString().slice(0,10);
@@ -52,19 +53,8 @@ let S=defaultState(),V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,sh
 const DATA_SCHEMA_VERSION=3;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
-const idb=()=>new Promise((resolve,reject)=>{
- const request=indexedDB.open(DB_NAME,1);
- request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('kv'))request.result.createObjectStore('kv')};
- request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>db.close();resolve(db)};
- request.onerror=()=>reject(request.error||new Error('Не удалось открыть локальную базу данных.'));
- request.onblocked=()=>reject(new Error('База данных занята другой вкладкой. Закройте другие вкладки Buildbook и повторите запуск.'));
-});
+const repository=window.BuildbookRepository.create(DB_NAME);
 let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='';
-const get=(d,k)=>new Promise((resolve,reject)=>{
- const request=d.transaction('kv','readonly').objectStore('kv').get(k);
- request.onsuccess=()=>resolve(request.result);
- request.onerror=()=>reject(request.error||new Error('Не удалось прочитать данные локальной базы.'));
-});
 function isPlainRecord(value){return !!value&&typeof value==='object'&&!Array.isArray(value)}
 
 function validMetadataDate(value){return typeof value==='string'&&Number.isFinite(Date.parse(value))}
@@ -156,20 +146,6 @@ function migrateState(source){
  });
  return {state,migrated};
 }
-function writeKV(db,state,logs,photos){
- return new Promise((resolve,reject)=>{
-  let transaction;
-  try{
-   transaction=db.transaction('kv','readwrite');
-   const store=transaction.objectStore('kv');
-   store.put(state,'s');store.put(logs,'l');store.put(photos,'p');
-  }catch(error){reject(error);return}
-  transaction.oncomplete=()=>resolve(true);
-  transaction.onerror=()=>reject(transaction.error||new Error('Не удалось сохранить данные в локальную базу.'));
-  transaction.onabort=()=>reject(transaction.error||new Error('Запись в локальную базу была отменена.'));
- }); 
-}
-
 async function restorePhotoBlobs(stored){
  const restored={};
  for(const [id,items] of Object.entries(stored||{})){
@@ -203,9 +179,8 @@ async function photosAsBlobs(photos){
 
 async function load(){
  STARTUP_STAGE='opening-database';
- const db=await idb();
  STARTUP_STAGE='reading-profile';
- const [storedState,storedLog,storedPhotos]=await Promise.all([get(db,'s'),get(db,'l'),get(db,'p')]);
+ const {state:storedState,logs:storedLog,photos:storedPhotos}=await repository.readProfile();
  const previousState=storedState?JSON.stringify(storedState):'';
  STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
@@ -223,7 +198,7 @@ async function load(){
  if(needsWrite){
   STARTUP_STAGE='saving-migrated-profile';
   const photoBlobs=await photosAsBlobs(PH);
-  await writeKV(db,S,LOG,photoBlobs);
+  await repository.writeProfile(S,LOG,photoBlobs);
  }
  storageDirty=false;
  STARTUP_STAGE='ready';
@@ -233,8 +208,8 @@ function persistCurrent(){
  const state=JSON.parse(JSON.stringify(S)),logs=JSON.parse(JSON.stringify(LOG)),photos=JSON.parse(JSON.stringify(PH));
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
-  const photoBlobs=await photosAsBlobs(photos),db=await idb();
-  await writeKV(db,state,logs,photoBlobs);
+  const photoBlobs=await photosAsBlobs(photos);
+  await repository.writeProfile(state,logs,photoBlobs);
   if(JSON.stringify(S)===stateText&&JSON.stringify(LOG)===logsText&&JSON.stringify(PH)===photosText)storageDirty=false;
  };
  storageWrite=storageWrite.then(run,run);
@@ -1776,15 +1751,15 @@ function xlsxImportWizard(buffer){
  renderMappings();
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.13<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.14<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.13-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const db=await idb(),state=await get(db,'s');return state&&state.schemaVersion||0},
+version:'2.14-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const d=await idb(),stored=(await get(d,'p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
 render:()=>render(),
@@ -1994,7 +1969,7 @@ bdoc:()=>downloadBuildCardZip(id),btxt:()=>downloadBuildCardText(id),bprint:()=>
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
 dty:()=>{const w=DD()[id],t=Wd[w.id][2];w.type=t[(t.indexOf(w.type)+1)%t.length];save.skip=1;save();render()},dwd:()=>{const w=DD()[id];w.w=w.w?0:1;save.skip=1;save();render()},drm:()=>{DD().splice(id,1);save.skip=1;save();render()},dadd:()=>{DD().push({id,type:Wd[id][2][0],w:0});save.skip=1;save();render()},
-calc:()=>cform(),inst:()=>dip&&dip.prompt(),wipe:()=>{if(confirm('Удалить все данные? Это нельзя отменить.')&&confirm('Точно удалить? Сначала скачайте копию.')){indexedDB.deleteDatabase('buildbook');setTimeout(()=>location.reload(),200)}}};A[a]&&A[a]()}
+calc:()=>cform(),inst:()=>dip&&dip.prompt(),wipe:()=>{if(confirm('Удалить все данные? Это нельзя отменить.')&&confirm('Точно удалить? Сначала скачайте копию.')){repository.deleteDatabase().then(()=>location.reload()).catch(error=>alert('Не удалось удалить локальную базу: '+(error.message||'ошибка удаления')))}}};A[a]&&A[a]()}
 document.addEventListener('keydown',e=>{
 const key=String(e.key||'').toLowerCase(),withSearch=(e.ctrlKey||e.metaKey)&&key==='k';
 if(withSearch){e.preventDefault();if(!document.querySelector('.ov'))globalSearch();return}

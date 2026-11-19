@@ -45,6 +45,29 @@ w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
+await test('Слой хранения читает состояние, журнал и фотографии',async()=>{
+const name='buildbook-storage-test-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
+try{
+const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
+await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]});
+const stored=await repository.readProfile();
+assert(stored.state.marker==='Состояние','Не прочитано состояние профиля');
+assert(stored.logs[0].id==='journal-entry','Не прочитан журнал');
+assert(stored.photos.build1[0] instanceof w.Blob&&stored.photos.build1[0].size===photo.size,'Фотография не сохранена как Blob');
+assert((await repository.read('s')).marker==='Состояние','Отдельное чтение записи профиля не работает');
+}finally{await repository.deleteDatabase()}
+});
+await test('Слой хранения откатывает частичную запись при ошибке',async()=>{
+const name='buildbook-storage-atomic-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
+try{
+await repository.writeProfile({marker:'До ошибки'},[{id:'old-log'}],{});
+let rejected=false;
+try{await repository.writeProfile({marker:'После ошибки'},[{invalid:()=>true}],{})}catch(error){rejected=true}
+assert(rejected,'Ошибка клонирования не была обработана');
+const stored=await repository.readProfile();
+assert(stored.state.marker==='До ошибки'&&stored.logs[0].id==='old-log','Часть неудачной записи попала в базу');
+}finally{await repository.deleteDatabase()}
+});
 await test('Старые данные автоматически мигрируют в текущую схему',()=>{
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
