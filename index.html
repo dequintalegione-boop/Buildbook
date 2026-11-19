@@ -162,14 +162,32 @@ function migrateState(source){
  });
  return {state,migrated};
 }
+function readPhotoBlobAsArrayBuffer(blob){
+ return new Promise((resolve,reject)=>{
+  if(typeof FileReader!=='function'){
+   if(typeof blob.arrayBuffer==='function'){blob.arrayBuffer().then(resolve,reject);return}
+   reject(new Error('Браузер не поддерживает чтение старой фотографии.'));
+   return;
+  }
+  let reader;
+  try{reader=new FileReader()}catch(error){reject(error);return}
+  reader.onload=()=>reader.result instanceof ArrayBuffer?resolve(reader.result):reject(new Error('Не удалось прочитать старую фотографию.'));
+  reader.onerror=()=>reject(reader.error||new Error('Ошибка чтения старой фотографии.'));
+  reader.onabort=()=>reject(new Error('Чтение старой фотографии прервано.'));
+  try{reader.readAsArrayBuffer(blob)}catch(error){reject(error)}
+ });
+}
 async function restorePhotoBlobs(stored){
  const restored={};
  for(const [id,items] of Object.entries(stored||{})){
   restored[id]=[];
   for(const item of (Array.isArray(items)?items:[])){
    try{
-    if(typeof Blob!=='undefined'&&item instanceof Blob){
-     restored[id].push(bytesToDataUrl(new Uint8Array(await item.arrayBuffer()),item.type||'image/jpeg'));
+    if(item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer){
+     restored[id].push(bytesToDataUrl(new Uint8Array(item.bytes),item.type||'image/jpeg'));
+    }else if(typeof Blob!=='undefined'&&item instanceof Blob){
+     const bytes=await readPhotoBlobAsArrayBuffer(item);
+     restored[id].push(bytesToDataUrl(new Uint8Array(bytes),item.type||'image/jpeg'));
     }else if(item instanceof ArrayBuffer){
      restored[id].push(bytesToDataUrl(new Uint8Array(item),'image/jpeg'));
     }else restored[id].push(String(item||''));
@@ -178,15 +196,25 @@ async function restorePhotoBlobs(stored){
  }
  return restored;
 }
-async function photosAsBlobs(photos){
+async function photosAsBinary(photos){
  const stored={};
  for(const [id,items] of Object.entries(photos||{})){
   stored[id]=[];
   for(const photo of (Array.isArray(items)?items:[])){
    try{
-    if(typeof Blob!=='undefined'&&photo instanceof Blob){stored[id].push(photo);continue}
+    if(photo&&photo.__buildbookBlob===1&&photo.bytes instanceof ArrayBuffer){stored[id].push(photo);continue}
+    if(typeof Blob!=='undefined'&&photo instanceof Blob){
+     stored[id].push({__buildbookBlob:1,type:photo.type||'image/jpeg',bytes:await readPhotoBlobAsArrayBuffer(photo)});
+     continue;
+    }
+    if(photo instanceof ArrayBuffer){
+     stored[id].push({__buildbookBlob:1,type:'image/jpeg',bytes:photo});
+     continue;
+    }
     const parsed=dataUrlToBytes(photo);
-    stored[id].push(new Blob([parsed.bytes],{type:parsed.mime||'image/jpeg'}));
+    const bytes=parsed.bytes;
+    const buffer=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+    stored[id].push({__buildbookBlob:1,type:parsed.mime||'image/jpeg',bytes:buffer});
    }catch(error){stored[id].push(photo)}
   }
  }
@@ -224,7 +252,7 @@ async function load(){
  const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos||journalMigrated;
  if(needsWrite&&!storageConflict){
   STARTUP_STAGE='saving-migrated-profile';
-  const photoBlobs=await photosAsBlobs(PH);
+  const photoBlobs=await photosAsBinary(PH);
   try{
    storageRevision=await repository.writeProfile(S,LOG,photoBlobs,storageRevision);
    if(storageChannel)storageChannel.postMessage({type:'profile-saved',revision:storageRevision});
@@ -242,7 +270,7 @@ function persistCurrent(){
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
   if(storageConflict)return false;
-  const photoBlobs=await photosAsBlobs(photos);
+  const photoBlobs=await photosAsBinary(photos);
   try{
    storageRevision=await repository.writeProfile(state,logs,photoBlobs,storageRevision);
   }catch(error){
@@ -1844,7 +1872,7 @@ if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:f
 version:'2.16-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
 render:()=>render(),
