@@ -1,6 +1,14 @@
-import { chromium } from 'playwright';
+import { chromium, firefox, webkit } from 'playwright';
 
-const browser = await chromium.launch({ headless: true });
+const browserName = process.env.BROWSER || 'chromium';
+const browserTypes = { chromium, firefox, webkit };
+const browserType = browserTypes[browserName];
+
+if (!browserType) {
+  throw new Error(`Unsupported browser "${browserName}". Choose chromium, firefox or webkit.`);
+}
+
+const browser = await browserType.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const pageErrors = [];
 const consoleErrors = [];
@@ -9,6 +17,8 @@ page.on('pageerror', error => pageErrors.push(error.message));
 page.on('console', message => {
   if (message.type() === 'error') consoleErrors.push(message.text());
 });
+
+console.log(`Браузер: ${browserName}`);
 
 try {
   await page.goto('http://127.0.0.1:4173/tests/test-runner.html', {
@@ -19,7 +29,7 @@ try {
   await page.waitForFunction(
     () => document.querySelector('#summary')?.dataset.finished === 'true',
     null,
-    { timeout: 45000 }
+    { timeout: 90000 }
   );
 
   const summary = await page.locator('#summary').innerText();

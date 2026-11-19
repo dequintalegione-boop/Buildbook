@@ -86,6 +86,23 @@ assert(['A','B'].includes(actual.state.writer),'В базе нет ни одно
 }finally{second.close();await first.deleteDatabase()}
 });
 
+await test('Крупный профиль и фотографии больше 10 МБ сохраняются без потери данных',async()=>{
+const name='buildbook-large-profile-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
+try{
+const largeText='Buildbook'.repeat(1024*1024),bytes=new Uint8Array(3*1024*1024);bytes.fill(37);
+const photo=new w.Blob([bytes],{type:'image/webp'});
+const revision=await repository.writeProfile({notes:largeText,records:Array.from({length:500},(_,i)=>({id:'row-'+i,value:i}))},[{id:'large-log',text:'Журнал большого профиля'}],{buildLarge:[photo]},0);
+const stored=await repository.readProfile();
+assert(revision===1&&stored.revision===1,'Не обновилась ревизия крупного профиля');
+assert(stored.state.notes.length===largeText.length&&stored.state.notes.slice(0,80)===largeText.slice(0,80)&&stored.state.notes.slice(-80)===largeText.slice(-80),'Большое текстовое поле повреждено');
+assert(stored.state.records.length===500&&stored.state.records[499].id==='row-499','Потерялись строки крупной записи');
+assert(stored.logs[0].text==='Журнал большого профиля','Не сохранился журнал большого профиля');
+const savedPhoto=stored.photos.buildLarge[0],savedBytes=new Uint8Array(await savedPhoto.arrayBuffer());
+assert(savedPhoto instanceof w.Blob&&savedPhoto.size===3*1024*1024&&savedPhoto.type==='image/webp','Большая фотография потерялась или изменила формат');
+assert(savedBytes[0]===37&&savedBytes[savedBytes.length-1]===37,'Байты фотографии изменились при сохранении');
+}finally{await repository.deleteDatabase()}
+});
+
 await test('Слой хранения читает состояние, журнал и фотографии',async()=>{
 const name='buildbook-storage-test-'+Math.random().toString(36).slice(2),repository=w.BuildbookRepository.create(name);
 try{

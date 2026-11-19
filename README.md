@@ -133,8 +133,8 @@ Buildbook хранит данные приложения в записи Indexed
 В каталоге `tests/` находится браузерный набор тестов текущего функционала.
 
 - `tests/test-runner.html` — тестовая страница с отчётом по каждому сценарию;
-- `tests/run-browser.mjs` — запуск набора в Chromium через Playwright для CI;
-- `.github/workflows/browser-tests.yml` — автоматический запуск при push, pull request и вручную из GitHub Actions.
+- `tests/run-browser.mjs` — запуск набора через Playwright в Chromium, Firefox или WebKit (Safari engine);
+- `.github/workflows/browser-tests.yml` — матрица Chromium, Firefox и WebKit при push, pull request и ручном запуске. Набор включает проверку большого профиля объёмом более 10 МБ.
 
 Для локального запуска тестов достаточно Node.js и Python 3 (только тестовая среда; самому приложению Node.js не нужен):
 

@@ -10,9 +10,13 @@ permissions:
 
 jobs:
   browser-tests:
-    name: Buildbook browser suite
+    name: Buildbook ${{ matrix.browser }} suite
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
 
     steps:
       - name: Checkout
@@ -26,10 +30,12 @@ jobs:
       - name: Install Playwright
         run: npm install --no-save --no-package-lock playwright
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
 
       - name: Run application and browser suite
+        env:
+          BROWSER: ${{ matrix.browser }}
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/buildbook-http.log 2>&1 &
           for i in $(seq 1 30); do
