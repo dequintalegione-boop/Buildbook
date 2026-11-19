@@ -491,6 +491,35 @@ assert(after.accounts.filter(a=>a.id==='cash-import').length===1,'Повторн
 assert(after.tasks.filter(t=>t.id==='task-import').length===1,'Повторно импортирована та же задача');
 assert(again.added===0&&again.skipped===3,'Повторный импорт не показал пропущенные дубликаты');
 });
+await test('ZIP-бэкап сохраняет данные, фото активных и удалённых сборок',async()=>{
+api.setState(fixture());
+const s=state();s.trash=[{id:'trash-build-entry',type:'build',at:'2026-08-01T10:00:00.000Z',record:{id:'old-build',num:2,name:'Удалённая сборка',status:'Собрана',lines:[]},photos:[]}];api.setState(s);
+const activePhoto='data:image/jpeg;base64,AAECAwQFBgc=';
+const deletedPhoto='data:image/png;base64,CAkKCwwNDg8=';
+api.setPhotos({'build-open':[activePhoto]});
+const current=state();current.trash[0].photos=[deletedPhoto];api.setState(current);api.setPhotos({'build-open':[activePhoto]});
+const blob=api.createZipBackup(),buffer=await blob.arrayBuffer(),restored=api.readZipBackup(buffer);
+assert(restored.batches.length===2&&restored.builds.length===1,'ZIP не сохранил склад или сборки');
+assert(restored.photos['build-open'][0]===activePhoto,'Не восстановлено фото активной сборки');
+const trashBuild=restored.trash.find(x=>x.id==='trash-build-entry');
+assert(trashBuild&&trashBuild.photos[0]===deletedPhoto,'Не восстановлено фото удалённой сборки');
+api.restoreBackup(restored,'replace',false);
+assert(api.getPhotos()['build-open'][0]===activePhoto,'Фото активной сборки не восстановилось в приложении');
+const after=state().trash.find(x=>x.id==='trash-build-entry');
+assert(after&&after.photos[0]===deletedPhoto,'Фото удалённой сборки не восстановилось в корзине');
+});
+await test('ZIP-бэкап выявляет повреждение файла по CRC',async()=>{
+api.setState(fixture());const blob=api.createZipBackup(),bytes=new Uint8Array(await blob.arrayBuffer());
+const marker=w.XLSX.utils.encode_cell({r:0,c:0});assert(marker==='A1','Проверка тестовой среды не прошла');
+const decoder=new TextDecoder(),signature=decoder.decode(bytes),pos=signature.indexOf('backup.json');
+assert(pos>0,'В ZIP не найден backup.json');
+const dataStart=pos+'backup.json'.length+0;
+const scan=bytes.findIndex((v,i)=>i>pos+10&&v!==0);
+assert(scan>0&&bytes.length>scan,'Не найден участок архива для проверки CRC');
+bytes[Math.min(bytes.length-24,pos+40)]^=1;
+let rejected=false;try{api.readZipBackup(bytes.buffer)}catch(e){rejected=String(e.message||e).includes('Контрольная сумма')||String(e.message||e).includes('повреждён')}
+assert(rejected,'Повреждённый ZIP не был отклонён');
+});
 await test('Экспорт XLSX содержит листы всех разделов и финансовых отчётов',()=>{
 api.setState(fixture());
 const wb=api.xlsxWorkbook('all'),names=wb.SheetNames;
