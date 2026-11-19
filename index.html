@@ -167,7 +167,8 @@ async function load(){
  normalizeStock();
  const currentState=JSON.stringify(S);
  last=currentState;
- const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos;
+ const journalMigrated=migrateLegacyJournalEntries(currentState);
+ const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos||journalMigrated;
  if(needsWrite){
   STARTUP_STAGE='saving-migrated-profile';
   const photoBlobs=await photosAsBlobs(PH);
@@ -198,10 +199,172 @@ function flushSave(){
  if(!storageDirty)return storageWrite;
  return persistCurrent();
 }
+function journalEqual(a,b){
+ if(a===b)return true;
+ if(a===undefined||b===undefined||a===null||b===null)return false;
+ if(Array.isArray(a)||Array.isArray(b)){
+  if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;
+  return a.every((value,index)=>journalEqual(value,b[index]));
+ }
+ if(isPlainRecord(a)||isPlainRecord(b)){
+  if(!isPlainRecord(a)||!isPlainRecord(b))return false;
+  const ak=Object.keys(a).sort(),bk=Object.keys(b).sort();
+  return ak.length===bk.length&&ak.every((key,index)=>key===bk[index]&&journalEqual(a[key],b[key]));
+ }
+ return false;
+}
+function journalSelector(item){
+ if(!isPlainRecord(item))return null;
+ if(item.id!==undefined&&item.id!==null&&String(item.id)!=='')return {__journalSelector:true,type:'id',value:String(item.id)};
+ if(item.batchId!==undefined&&item.batchId!==null)return {__journalSelector:true,type:'batch',value:String(item.batchId),problem:!!item.problem};
+ return null;
+}
+function journalSelectorToken(selector){
+ return selector.type==='id'?'id:'+selector.value:'batch:'+selector.value+':'+(selector.problem?'1':'0');
+}
+function journalArraySelectors(list){
+ const selectors=list.map(journalSelector);
+ if(selectors.some(x=>!x))return null;
+ const tokens=selectors.map(journalSelectorToken);
+ return new Set(tokens).size===tokens.length?selectors:null;
+}
+function journalFindIndex(list,selector){
+ return list.findIndex(item=>{
+  const current=journalSelector(item);
+  return current&&journalSelectorToken(current)===journalSelectorToken(selector);
+ });
+}
+function journalAddChange(out,path,beforeExists,beforeValue,afterExists,afterValue){
+ out.push({
+  path:path.slice(),
+  beforeExists, beforeValue:beforeExists?JSON.parse(JSON.stringify(beforeValue)):null,
+  afterExists, afterValue:afterExists?JSON.parse(JSON.stringify(afterValue)):null
+ });
+}
+function journalDiff(before,after,path=[],out=[]){
+ if(journalEqual(before,after))return out;
+ if(isPlainRecord(before)&&isPlainRecord(after)){
+  const keys=new Set([...Object.keys(before),...Object.keys(after)]);
+  for(const key of keys){
+   if(path.length===0&&(key==='set'||key==='schemaVersion'))continue;
+   const beforeExists=Object.prototype.hasOwnProperty.call(before,key);
+   const afterExists=Object.prototype.hasOwnProperty.call(after,key);
+   if(!beforeExists||!afterExists)journalAddChange(out,path.concat(key),beforeExists,before[key],afterExists,after[key]);
+   else journalDiff(before[key],after[key],path.concat(key),out);
+  }
+  return out;
+ }
+ if(Array.isArray(before)&&Array.isArray(after)){
+  const beforeKeys=journalArraySelectors(before),afterKeys=journalArraySelectors(after);
+  if(beforeKeys&&afterKeys){
+   const beforeMap=new Map(beforeKeys.map((selector,index)=>[journalSelectorToken(selector),{selector,value:before[index]}]));
+   const afterMap=new Map(afterKeys.map((selector,index)=>[journalSelectorToken(selector),{selector,value:after[index]}]));
+   const tokens=new Set([...beforeMap.keys(),...afterMap.keys()]);
+   for(const token of tokens){
+    const left=beforeMap.get(token),right=afterMap.get(token),selector=(left||right).selector,nextPath=path.concat(selector);
+    if(!left||!right)journalAddChange(out,nextPath,!!left,left&&left.value,!!right,right&&right.value);
+    else journalDiff(left.value,right.value,nextPath,out);
+   }
+  }else journalAddChange(out,path,true,before,true,after);
+  return out;
+ }
+ journalAddChange(out,path,true,before,true,after);
+ return out;
+}
+function journalRead(root,path){
+ let value=root;
+ for(const segment of path){
+  if(segment&&segment.__journalSelector){
+   if(!Array.isArray(value))return {exists:false};
+   const index=journalFindIndex(value,segment);
+   if(index<0)return {exists:false};
+   value=value[index];
+  }else{
+   if(value===null||value===undefined||!Object.prototype.hasOwnProperty.call(Object(value),segment))return {exists:false};
+   value=value[segment];
+  }
+ }
+ return {exists:true,value};
+}
+function journalWrite(root,path,exists,value){
+ if(!path.length)return false;
+ let parent=root;
+ for(const segment of path.slice(0,-1)){
+  if(segment&&segment.__journalSelector){
+   if(!Array.isArray(parent))return false;
+   const index=journalFindIndex(parent,segment);
+   if(index<0)return false;
+   parent=parent[index];
+  }else{
+   if(parent===null||parent===undefined||!Object.prototype.hasOwnProperty.call(Object(parent),segment))return false;
+   parent=parent[segment];
+  }
+ }
+ const lastSegment=path[path.length-1];
+ if(lastSegment&&lastSegment.__journalSelector){
+  if(!Array.isArray(parent))return false;
+  const index=journalFindIndex(parent,lastSegment);
+  if(!exists){if(index>=0)parent.splice(index,1);return true}
+  if(index>=0)parent[index]=JSON.parse(JSON.stringify(value));
+  else parent.push(JSON.parse(JSON.stringify(value)));
+  return true;
+ }
+ if(parent===null||parent===undefined)return false;
+ if(exists)parent[lastSegment]=JSON.parse(JSON.stringify(value));
+ else delete parent[lastSegment];
+ return true;
+}
+function migrateLegacyJournalEntries(currentStateText){
+ const snapshots=LOG.map(entry=>entry&&typeof entry.s==='string'?entry.s:null);
+ let changed=false;
+ LOG.forEach((entry,index)=>{
+  if(!entry||typeof entry!=='object')return;
+  if(Array.isArray(entry.changes)){if(Object.prototype.hasOwnProperty.call(entry,'s')){delete entry.s;changed=true}return}
+  const beforeText=snapshots[index],afterText=index===0?currentStateText:snapshots[index-1];
+  try{
+   if(!beforeText||!afterText)throw new Error('Недостаточно данных старого журнала.');
+   const before=JSON.parse(beforeText),after=JSON.parse(afterText);
+   entry.changes=journalDiff(before,after);
+  }catch(error){
+   entry.changes=[];
+   entry.undoUnavailable=true;
+  }
+  if(Object.prototype.hasOwnProperty.call(entry,'s'))delete entry.s;
+  changed=true;
+ });
+ return changed;
+}
+function undoJournalEntry(index){
+ const entry=LOG[index];
+ if(!entry)return {ok:false,message:'Запись журнала не найдена.'};
+ if(!Array.isArray(entry.changes)||!entry.changes.length)return {ok:false,message:'Для этой записи нет сохранённых изменений, которые можно безопасно отменить.'};
+ const conflicts=[];
+ entry.changes.forEach(change=>{
+  const current=journalRead(S,change.path);
+  if(current.exists!==change.afterExists||(current.exists&&!journalEqual(current.value,change.afterValue)))conflicts.push(change);
+ });
+ if(conflicts.length)return {ok:false,message:'Нельзя отменить действие: '+conflicts.length+' затронутых полей изменились после него. Ничего не изменено. Сначала разберите более поздние операции.'};
+ const restored=JSON.parse(JSON.stringify(S));
+ for(const change of entry.changes){
+  if(!journalWrite(restored,change.path,change.beforeExists,change.beforeValue))return {ok:false,message:'Не удалось безопасно восстановить одно из затронутых полей. Данные не изменены.'};
+ }
+ restored.schemaVersion=DATA_SCHEMA_VERSION;
+ S=restored;
+ EXP=S.categories.e;INC=S.categories.i;
+ syncCategories();normalizeStock();
+ save();
+ render();
+ return {ok:true,restored:entry.changes.length};
+}
 const save=()=>{
  if(!Number.isSafeInteger(+S.schemaVersion)||+S.schemaVersion<DATA_SCHEMA_VERSION)S.schemaVersion=DATA_SCHEMA_VERSION;
  const cur=JSON.stringify(S);
- if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}
+ if(cur!=last&&!save.skip){
+  migrateLegacyJournalEntries(cur);
+  const changes=journalDiff(JSON.parse(last),JSON.parse(cur));
+  LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),changes});
+  LOG=LOG.slice(0,40);
+ }
  last=cur;save.skip=0;storageDirty=true;clearTimeout(tm);
  tm=setTimeout(()=>persistCurrent().catch(reportStorageError),150);
 };
@@ -991,7 +1154,7 @@ function tasks(){
   (checklistRows||'<p class="mu">Пока нет пунктов. Добавьте первый пункт кнопкой выше.</p>')+'</section>'+
   '<h2>Примечания</h2><textarea data-n rows="5" placeholder="Заметки команды">'+esc(S.notes)+'</textarea>';
 }
-function logv(){return head('Журнал')+table(['Время','Действие',''],LOG.map((e,i)=>`<tr><td>${e.t}</td><td>${e.l}</td><td class="r"><button class="btn" data-a="undo" data-id="${i}">Откатить</button></td></tr>`),'Журнал пуст. Здесь появятся последние 40 действий.')+'<p class="mu">Откат возвращает данные к состоянию до выбранного действия. Более поздние действия при этом тоже отменятся.</p>'}
+function logv(){return head('Журнал')+table(['Время','Действие',''],LOG.map((e,i)=>{const canUndo=Array.isArray(e.changes)&&e.changes.length>0;return `<tr><td>${esc(e.t)}</td><td>${esc(e.l)}</td><td class="r"><button class="btn" data-a="undo" data-id="${i}" ${canUndo?'':'disabled title="Для старой записи нет надёжного набора изменений"'}>Отменить действие</button></td></tr>`}), 'Журнал пуст. Здесь появятся последние 40 действий.')+'<p class="mu">Отмена затрагивает только изменённые поля выбранного действия. Более поздние независимые действия сохраняются. Если затронутые поля успели измениться позже, приложение заблокирует отмену и ничего не изменит.</p>'}
 /* настройки */
 const catKey=(...p)=>encodeURIComponent(JSON.stringify(p));
 function categoryPanel(kind,title){
@@ -1557,7 +1720,7 @@ getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const d=await idb(),stored=(await get(d,'p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
-action:(name,id)=>act(name,id),
+action:(name,id)=>act(name,id),undoEntry:index=>undoJournalEntry(+index),
 render:()=>render(),
 openSale:()=>sellParts(),
 available:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?avail(b):null},
@@ -1701,7 +1864,7 @@ ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(
 exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{if(!confirm('Удалить пункт чек-листа?'))return;S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
-undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],checklist:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.checklist=Array.isArray(S.checklist)?S.checklist:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
+undo:()=>{const e=LOG[+id];if(!e)return;if(!Array.isArray(e.changes)||!e.changes.length){alert('Для этой записи нет безопасного набора изменений.');return}if(!confirm('Отменить только действие «'+e.l+'»? Более поздние независимые действия сохранятся. Если изменённые поля уже затронуты последующими операциями, отмена будет заблокирована.'))return;const result=undoJournalEntry(+id);if(!result.ok){alert(result.message);return}toast('Действие отменено. Более поздние операции сохранены.')},
 bdoc:()=>downloadBuildCardZip(id),btxt:()=>downloadBuildCardText(id),bprint:()=>printBuildCard(id),csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
 per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()},dreset:()=>{S.set.dash=null;save.skip=1;save();render()},
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
