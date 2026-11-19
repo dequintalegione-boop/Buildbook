@@ -42,7 +42,7 @@ const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
 const defaultState=()=>({
  accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
- batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],notes:'',
+ batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],notes:'',
  stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
  categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
  hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
