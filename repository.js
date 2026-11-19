@@ -155,9 +155,23 @@ function create(databaseName){
   return pending.then(database=>database.close()).catch(()=>{});
  }
 
+ function clear(){
+  return open().then(database=>new Promise((resolve,reject)=>{
+   let transaction,settled=false;
+   const fail=error=>{if(settled)return;settled=true;reject(error)};
+   try{
+    transaction=database.transaction('kv','readwrite');
+    transaction.oncomplete=()=>{if(settled)return;settled=true;resolve(true)};
+    transaction.onerror=()=>fail(transaction.error||new Error('Не удалось очистить локальное хранилище.'));
+    transaction.onabort=()=>fail(transaction.error||new Error('Очистка локального хранилища была отменена.'));
+    transaction.objectStore('kv').clear();
+   }catch(error){if(transaction){try{transaction.abort()}catch(_){}}fail(error)}
+  }));
+ }
+
  async function deleteDatabase(){
   await close();
-  await new Promise(resolve=>setTimeout(resolve,0));
+  await new Promise(resolve=>setTimeout(resolve,50));
   return new Promise((resolve,reject)=>{
    let request;
    try{request=global.indexedDB.deleteDatabase(name)}
@@ -168,7 +182,7 @@ function create(databaseName){
   });
  }
 
- return Object.freeze({name,open,read,readProfile,writeProfile,close,deleteDatabase});
+ return Object.freeze({name,open,read,readProfile,writeProfile,clear,close,deleteDatabase});
 }
 
 if(!Object.prototype.hasOwnProperty.call(global,'BuildbookRepository')){

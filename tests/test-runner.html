@@ -13,7 +13,7 @@
 'use strict';
 const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
 let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,tempDatabaseCounter=0;
-const tempDatabaseName=prefix=>prefix+'-'+Date.now().toString(36)+'-'+(++tempDatabaseCounter);
+const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
 function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Выполнено тестов: '+(passed+failed)}
@@ -46,8 +46,20 @@ w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
+await test('Очистка хранилища удаляет профиль и сбрасывает техническую ревизию',async()=>{
+const repository=w.BuildbookRepository.create(tempDatabaseName('buildbook-clear'));
+await repository.clear();
+try{
+await repository.writeProfile({marker:'Временные данные'},[{id:'temporary'}],{},0);
+await repository.clear();
+const empty=await repository.readProfile();
+assert(empty.state===undefined&&empty.logs===undefined&&empty.photos===undefined,'Очистка оставила записи профиля');
+assert(empty.revision===0,'Очистка не сбросила техническую ревизию');
+}finally{await repository.clear();await repository.close()}
+});
 await test('Сохранение повышает ревизию профиля атомарно',async()=>{
 const name=tempDatabaseName('buildbook-revision'),repository=w.BuildbookRepository.create(name);
+await repository.clear();
 try{
 const initial=await repository.readProfile();
 assert(initial.revision===0,'Пустой профиль должен начинать с ревизии 0');
@@ -55,10 +67,11 @@ const revision=await repository.writeProfile({marker:'Версия 1'},[],{},ini
 assert(revision===1,'Первая запись должна увеличить ревизию до 1');
 const loaded=await repository.readProfile();
 assert(loaded.revision===1&&loaded.state.marker==='Версия 1','Ревизия или состояние не сохранились');
-}finally{await repository.deleteDatabase()}
+}finally{await repository.clear();await repository.close()}
 });
 await test('Устаревшая вкладка не перезаписывает более свежий профиль',async()=>{
 const name=tempDatabaseName('buildbook-stale-tab'),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+await first.clear();
 try{
 const a=await first.readProfile(),b=await second.readProfile();
 await first.writeProfile({marker:'Изменение вкладки A'},[{id:'A'}],{},a.revision);
@@ -68,10 +81,11 @@ assert(conflict&&conflict.code==='BUILD_BOOK_STORAGE_CONFLICT','Запись у�
 const actual=await second.readProfile();
 assert(actual.revision===1&&actual.state.marker==='Изменение вкладки A','Старая вкладка перезаписала более свежие данные');
 assert(actual.logs[0].id==='A','Журнал более свежего профиля был потерян');
-}finally{await second.close();await first.deleteDatabase()}
+}finally{await first.clear();await Promise.all([first.close(),second.close()])}
 });
 await test('Одновременные вкладки не могут сохранить один и тот же номер ревизии',async()=>{
 const name=tempDatabaseName('buildbook-race'),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+await first.clear();
 try{
 const [a,b]=await Promise.all([first.readProfile(),second.readProfile()]);
 const results=await Promise.allSettled([
@@ -84,17 +98,21 @@ assert(rejected&&rejected.reason.code==='BUILD_BOOK_STORAGE_CONFLICT','Втор�
 const actual=await first.readProfile();
 assert(actual.revision===1,'Параллельные операции некорректно изменили ревизию');
 assert(['A','B'].includes(actual.state.writer),'В базе нет ни одной из успешно записанных версий');
-}finally{await second.close();await first.deleteDatabase()}
+}finally{await first.clear();await Promise.all([first.close(),second.close()])}
 });
 
-await test('Закрытие нескольких подключений освобождает базу для удаления',async()=>{
+await test('Закрытие нескольких подключений освобождает соединения для повторного открытия',async()=>{
 const name=tempDatabaseName('buildbook-close-connections'),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
+await first.clear();
 await Promise.all([first.readProfile(),second.readProfile()]);
 await Promise.all([first.close(),second.close()]);
-await first.deleteDatabase();
+const reopened=w.BuildbookRepository.create(name);
+try{assert((await reopened.readProfile()).revision===0,'После закрытия нельзя повторно открыть очищенную базу')}
+finally{await reopened.clear();await reopened.close()}
 });
 await test('Крупный профиль и фотографии больше 10 МБ сохраняются без потери данных',async()=>{
 const name=tempDatabaseName('buildbook-large-profile'),repository=w.BuildbookRepository.create(name);
+await repository.clear();
 try{
 const largeText='Buildbook'.repeat(1024*1024),bytes=new Uint8Array(3*1024*1024);bytes.fill(37);
 const photo=new w.Blob([bytes],{type:'image/webp'});
@@ -107,11 +125,12 @@ assert(stored.logs[0].text==='Журнал большого профиля','Н�
 const savedPhoto=stored.photos.buildLarge[0],savedBytes=new Uint8Array(await savedPhoto.arrayBuffer());
 assert(savedPhoto instanceof w.Blob&&savedPhoto.size===3*1024*1024&&savedPhoto.type==='image/webp','Большая фотография потерялась или изменила формат');
 assert(savedBytes[0]===37&&savedBytes[savedBytes.length-1]===37,'Байты фотографии изменились при сохранении');
-}finally{await repository.deleteDatabase()}
+}finally{await repository.clear();await repository.close()}
 });
 
 await test('Слой хранения читает состояние, журнал и фотографии',async()=>{
 const name=tempDatabaseName('buildbook-storage-test'),repository=w.BuildbookRepository.create(name);
+await repository.clear();
 try{
 const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
 await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
@@ -120,10 +139,11 @@ assert(stored.state.marker==='Состояние','Не прочитано со�
 assert(stored.logs[0].id==='journal-entry','Не прочитан журнал');
 assert(stored.photos.build1[0] instanceof w.Blob&&stored.photos.build1[0].size===photo.size,'Фотография не сохранена как Blob');
 assert((await repository.read('s')).marker==='Состояние','Отдельное чтение записи профиля не работает');
-}finally{await repository.deleteDatabase()}
+}finally{await repository.clear();await repository.close()}
 });
 await test('Слой хранения откатывает частичную запись при ошибке',async()=>{
 const name=tempDatabaseName('buildbook-storage-atomic'),repository=w.BuildbookRepository.create(name);
+await repository.clear();
 try{
 await repository.writeProfile({marker:'До ошибки'},[{id:'old-log'}],{},0);
 let rejected=false;
@@ -131,7 +151,7 @@ try{await repository.writeProfile({marker:'После ошибки'},[{invalid:(
 assert(rejected,'Ошибка клонирования не была обработана');
 const stored=await repository.readProfile();
 assert(stored.state.marker==='До ошибки'&&stored.logs[0].id==='old-log','Часть неудачной записи попала в базу');
-}finally{await repository.deleteDatabase()}
+}finally{await repository.clear();await repository.close()}
 });
 await test('Старые данные автоматически мигрируют в текущую схему',()=>{
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
