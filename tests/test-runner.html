@@ -462,6 +462,35 @@ assert(s.tx.some(t=>t.id==='xlsx-income'&&t.buildId==='xlsx-build'),'Не имп
 assert(api.available('xlsx-batch')===2,'Импортированная сборка не уменьшила доступный остаток');
 assert(api.balance('cash')===1450,'Импортированный доход не повлиял на кассу');
 });
+await test('Импорт XLSX восстанавливает кассы и задачи со связями по ID',()=>{
+api.setState(fixture());
+const X=w.XLSX,wb=X.utils.book_new();
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Касса','Начальный остаток','Текущий баланс'],
+['cash-import','Отдельная касса','500','620']
+]),'Кассы');
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],
+['task-import','Проверить импорт XLSX','1','Да','2026-08-20','Тестировщик','build-open']
+]),'Задачи');
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Дата','Тип','Сумма','Описание','Категория','Касса'],
+['tx-import','2026-08-21','Доход','120','Проверка кассы','Другое','Отдельная касса']
+]),'Транзакции');
+const buffer=X.write(wb,{bookType:'xlsx',type:'array'}),result=api.importXlsx(buffer),s=state();
+assert(result.added===3&&result.skipped===0,'Ожидалось 3 добавленные записи: касса, задача, операция');
+const account=s.accounts.find(a=>a.id==='cash-import');
+assert(account&&account.name==='Отдельная касса'&&account.open===500,'Не импортированы ID, название или начальный остаток кассы');
+assert(api.balance('cash-import')===620,'Операция не связалась с импортированной кассой');
+const task=s.tasks.find(t=>t.id==='task-import');
+assert(task&&task.text==='Проверить импорт XLSX'&&task.q===1&&task.done===1,'Не восстановлены поля задачи');
+assert(task.due==='2026-08-20'&&task.who==='Тестировщик','Не восстановлены срок или исполнитель задачи');
+assert(task.build==='build-open','Задача не связалась со сборкой по ID');
+const again=api.importXlsx(buffer),after=state();
+assert(after.accounts.filter(a=>a.id==='cash-import').length===1,'Повторно импортирована та же касса');
+assert(after.tasks.filter(t=>t.id==='task-import').length===1,'Повторно импортирована та же задача');
+assert(again.added===0&&again.skipped===3,'Повторный импорт не показал пропущенные дубликаты');
+});
 await test('Экспорт XLSX содержит листы всех разделов и финансовых отчётов',()=>{
 api.setState(fixture());
 const wb=api.xlsxWorkbook('all'),names=wb.SheetNames;
