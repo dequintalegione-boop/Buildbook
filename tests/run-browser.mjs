@@ -1,11 +1,15 @@
 import { chromium, firefox, webkit } from 'playwright';
 
 const browserName = process.env.BROWSER || 'chromium';
+const appVariant = process.env.APP_VARIANT || 'index';
 const browserTypes = { chromium, firefox, webkit };
 const browserType = browserTypes[browserName];
 
 if (!browserType) {
   throw new Error(`Unsupported browser "${browserName}". Choose chromium, firefox or webkit.`);
+}
+if (!['index', 'standalone'].includes(appVariant)) {
+  throw new Error(`Unsupported app variant "${appVariant}". Choose index or standalone.`);
 }
 
 const browser = await browserType.launch({ headless: true });
@@ -19,9 +23,10 @@ page.on('console', message => {
 });
 
 console.log(`Браузер: ${browserName}`);
+console.log(`Приложение: ${appVariant}`);
 
 try {
-  await page.goto(`http://127.0.0.1:4173/tests/test-runner.html?browser=${encodeURIComponent(browserName)}`, {
+  await page.goto(`http://127.0.0.1:4173/tests/test-runner.html?browser=${encodeURIComponent(browserName)}&app=${encodeURIComponent(appVariant)}`, {
     waitUntil: 'load',
     timeout: 30000
   });
