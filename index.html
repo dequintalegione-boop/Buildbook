@@ -474,6 +474,122 @@ return head('Дашборд',perBar()+'<button class="btn'+(ed?' p':'')+'" data-
 const shrink=fl=>new Promise(r=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1100/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(i.src);r(c.toDataURL('image/jpeg',.75))};i.src=URL.createObjectURL(fl)});
 const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})(),crc=u=>{let c=-1;for(const b of u)c=crcT[(c^b)&255]^(c>>>8);return(c^-1)>>>0};
 function zip(files){const E=new TextEncoder(),ch=[],cd=[];let off=0;for(const[n,d]of files){const nm=E.encode(n),c=crc(d),h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,1);h.setUint16(4,20,1);h.setUint16(6,0x800,1);h.setUint32(14,c,1);h.setUint32(18,d.length,1);h.setUint32(22,d.length,1);h.setUint16(26,nm.length,1);ch.push(h,nm,d);const r=new DataView(new ArrayBuffer(46));r.setUint32(0,0x02014b50,1);r.setUint16(4,20,1);r.setUint16(6,20,1);r.setUint16(8,0x800,1);r.setUint32(16,c,1);r.setUint32(20,d.length,1);r.setUint32(24,d.length,1);r.setUint16(28,nm.length,1);r.setUint32(42,off,1);cd.push(r,nm);off+=30+nm.length+d.length}const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,1);e.setUint16(8,files.length,1);e.setUint16(10,files.length,1);e.setUint32(12,cd.reduce((n,x)=>n+x.byteLength,0),1);e.setUint32(16,off,1);return new Blob([...ch,...cd,e],{type:'application/zip'})}
+
+function dataUrlToBytes(value){
+ const m=/^data:([^;,]+)(;base64)?,([\s\S]*)$/.exec(String(value||''));
+ if(!m)throw new Error('Не удалось прочитать локальное фото для ZIP-бэкапа.');
+ if(m[2]){
+  const bin=atob(m[3]),bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return {mime:m[1],bytes};
+ }
+ return {mime:m[1],bytes:new TextEncoder().encode(decodeURIComponent(m[3]))};
+}
+function bytesToDataUrl(bytes,mime){
+ let binary='';
+ for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
+ return 'data:'+(mime||'application/octet-stream')+';base64,'+btoa(binary);
+}
+function createZipBackupBlob(){
+ const snapshot=JSON.parse(JSON.stringify(S)),manifest=[],files=[];
+ let index=0;
+ const addPhoto=(owner,id,photo)=>{
+  const parsed=dataUrlToBytes(photo),ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif' })[parsed.mime]||'bin';
+  const file='photos/'+String(index++).padStart(6,'0')+'.'+ext;
+  files.push([file,parsed.bytes]);
+  manifest.push({owner,id,index:manifest.filter(x=>x.owner===owner&&x.id===id).length,file,mime:parsed.mime});
+ };
+ Object.entries(PH||{}).forEach(([buildId,photos])=>{
+  if(Array.isArray(photos))photos.forEach(photo=>addPhoto('build',buildId,photo));
+ });
+ (snapshot.trash||[]).forEach(item=>{
+  if(item&&item.type==='build'&&Array.isArray(item.photos)){
+   item.photos.forEach(photo=>addPhoto('trash',item.id,photo));
+   item.photos=[];
+  }
+ });
+ delete snapshot.photos;
+ snapshot._buildbookZip={version:1,photoManifest:manifest};
+ files.unshift(['backup.json',new TextEncoder().encode(JSON.stringify(snapshot))]);
+ return zip(files);
+}
+function unzipStore(buffer){
+ const bytes=buffer instanceof Uint8Array?buffer:new Uint8Array(buffer);
+ if(bytes.length<22)throw new Error('ZIP-файл слишком маленький или повреждён.');
+ const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),u16=o=>view.getUint16(o,true),u32=o=>view.getUint32(o,true);
+ let end=-1;
+ for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--){
+  if(u32(p)===0x06054b50){end=p;break}
+ }
+ if(end<0)throw new Error('Не найден каталог ZIP-архива.');
+ if(u16(end+4)!==0||u16(end+6)!==0)throw new Error('Многотомные ZIP-архивы не поддерживаются.');
+ const count=u16(end+10),centralSize=u32(end+12),centralOffset=u32(end+16);
+ if(count>10000||centralOffset+centralSize>end||centralOffset>end)throw new Error('Повреждён каталог ZIP-архива.');
+ const files=new Map();let p=centralOffset,total=0;
+ for(let i=0;i<count;i++){
+  if(p+46>bytes.length||u32(p)!==0x02014b50)throw new Error('Повреждена запись файла в ZIP-архиве.');
+  const flags=u16(p+8),method=u16(p+10),checksum=u32(p+16),compressed=u32(p+20),size=u32(p+24),nameLen=u16(p+28),extraLen=u16(p+30),commentLen=u16(p+32),localOffset=u32(p+42);
+  if(flags&1)throw new Error('Зашифрованные ZIP-архивы не поддерживаются.');
+  if(flags&8)throw new Error('ZIP-архив с потоковыми дескрипторами не поддерживается.');
+  if(method!==0)throw new Error('Этот архив использует сжатие. Поддерживаются ZIP-резервные копии Buildbook без сжатия.');
+  if(compressed!==size)throw new Error('Размер файла в ZIP-архиве не совпадает.');
+  total+=size;if(total>536870912)throw new Error('ZIP-бэкап превышает допустимый размер 512 МБ.');
+  const name=new TextDecoder().decode(bytes.subarray(p+46,p+46+nameLen));
+  if(!name||files.has(name))throw new Error('В ZIP-архиве найдено пустое или повторяющееся имя файла.');
+  if(localOffset+30>bytes.length||u32(localOffset)!==0x04034b50)throw new Error('Повреждён заголовок файла в ZIP-архиве.');
+  const localName=u16(localOffset+26),localExtra=u16(localOffset+28),dataStart=localOffset+30+localName+localExtra,dataEnd=dataStart+compressed;
+  if(dataEnd>bytes.length)throw new Error('Файл выходит за границы ZIP-архива.');
+  const data=bytes.slice(dataStart,dataEnd);
+  if(crc(data)!==checksum)throw new Error('Контрольная сумма файла «'+name+'» не совпадает. Архив повреждён.');
+  files.set(name,data);
+  p+=46+nameLen+extraLen+commentLen;
+ }
+ if(p!==centralOffset+centralSize)throw new Error('Размер каталога ZIP-архива не совпадает.');
+ return files;
+}
+function readZipBackup(buffer){
+ const files=unzipStore(buffer),json=files.get('backup.json');
+ if(!json)throw new Error('В ZIP-архиве отсутствует backup.json.');
+ let data;
+ try{data=JSON.parse(new TextDecoder().decode(json))}catch(e){throw new Error('Не удалось прочитать данные резервной копии внутри ZIP.')}
+ if(!validBackup(data))throw new Error('В архиве нет полной резервной копии Buildbook.');
+ const info=data._buildbookZip;
+ if(!info||info.version!==1||!Array.isArray(info.photoManifest))throw new Error('Неподдерживаемая версия ZIP-бэкапа Buildbook.');
+ data.photos={};
+ const ordered=info.photoManifest.slice().sort((a,b)=>(a.owner===b.owner?a.id.localeCompare(b.id):a.owner.localeCompare(b.owner))||a.index-b.index);
+ ordered.forEach(item=>{
+  if(!item||!['build','trash'].includes(item.owner)||typeof item.id!=='string'||!Number.isInteger(item.index)||item.index<0)throw new Error('Некорректное описание фотографии в ZIP-бэкапе.');
+  const path=String(item.file||'');
+  if(!/^photos\/[0-9]{6}\.(jpg|png|webp|gif|bin)$/.test(path))throw new Error('Недопустимое имя файла фотографии в ZIP-бэкапе.');
+  const file=files.get(path);if(!file)throw new Error('В ZIP-бэкапе отсутствует фотография '+path+'.');
+  const url=bytesToDataUrl(file,item.mime||'application/octet-stream');
+  if(item.owner==='build'){
+   (data.photos[item.id]||(data.photos[item.id]=[]))[item.index]=url;
+  }else{
+   const entry=(data.trash||[]).find(x=>x.id===item.id&&x.type==='build');
+   if(!entry)throw new Error('Не найдена удалённая сборка для фотографии из ZIP-бэкапа.');
+   (entry.photos||(entry.photos=[]))[item.index]=url;
+  }
+ });
+ Object.values(data.photos).forEach(list=>list.forEach((photo,i)=>{if(typeof photo!=='string')throw new Error('В ZIP-бэкапе пропущена фотография сборки.')} ));
+ (data.trash||[]).forEach(item=>{if(item.type==='build'&&Array.isArray(item.photos))item.photos.forEach(photo=>{if(typeof photo!=='string')throw new Error('В ZIP-бэкапе пропущена фотография удалённой сборки.')})});
+ delete data._buildbookZip;
+ return data;
+}
+function downloadZipBackup(){
+ try{
+  S.set.backup=new Date().toLocaleString('ru-RU');save.skip=1;save();
+  const blob=createZipBackupBlob(),a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download='buildbook-backup-'+today()+'.zip';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);toast('ZIP-бэкап сформирован');
+ }catch(error){alert('Не удалось создать ZIP-бэкап: '+(error.message||'ошибка'))}
+}
+function importZipWizard(buffer){
+ let data;
+ try{data=readZipBackup(buffer)}catch(error){alert('Не удалось прочитать ZIP-бэкап: '+(error.message||'ошибка архива'));return}
+ backupRestoreWizard(data);
+}
+
 function cform(){let L=[{b:'',q:1,n:'',p:''}];const bx=()=>S.batches.filter(b=>goodAvailable(b)>0);
 const f=modal('Расчёт до сборки',`<p class="mu">Прикиньте себестоимость и заработок. Если детали нет на складе, впишите название и цену вручную.</p><div id="cl"></div><button type="button" class="btn" data-add>+ Деталь</button>${fld('plan','Цена продажи, ₽','number','','min=0 step=any')}<div class="sm" id="cs"></div>`,f=>{const sum={};for(const l of L)if(l.b)sum[l.b]=(sum[l.b]||0)+l.q;for(const k in sum){const b=find('batches',k);if(sum[k]>goodAvailable(b)){alert('На складе не хватает нормальных комплектующих: '+b.desc);return false}}
 S.builds.push({id:uid(),num:++S.seq,name:'Из расчёта',status:ST[0],builder:'',buyer:'',date:today(),sold:'',planned:+f.elements.plan.value||0,price:0,note:L.filter(l=>!l.b&&l.n).map(l=>'Докупить: '+l.n+', '+R(+l.p||0)).join('; '),lines:L.filter(l=>l.b).map(l=>({batchId:l.b,qty:l.q}))});save();V.tab='builds';render()},1,'Создать сборку');
@@ -1036,7 +1152,7 @@ function xlsxImportWizard(buffer){
  renderMappings();
 }
 
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.4<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 2.4<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
@@ -1044,7 +1160,7 @@ if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:f
 version:'2.4-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),
 setState:next=>{S=JSON.parse(JSON.stringify(next));S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),
 render:()=>render(),
@@ -1182,7 +1298,7 @@ ccadd:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o
 ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(old))return;const n=(prompt('Новое название категории',old)||'').trim();if(!n||n==old)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g][o[g].indexOf(old)]=n;S.tx.forEach(t=>{if(t.cat==old&&(t.grp==g||!t.grp))t.cat=n});const hk=g+'::'+old,hk2=g+'::'+n;S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).map(x=>x==hk?hk2:x);if(k=='e'&&g==S.stockGroup)S.batches.forEach(b=>{if(b.type==old)b.type=n});if(k=='i'&&g==S.partSaleGroup&&S.partSaleCategory==old)S.partSaleCategory=n;syncCategories();save();render()},
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
-exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},
+exp:()=>{downloadBackup('buildbook-'+today()+'.json',true);render();toast('Копия скачана')},expzip:()=>downloadZipBackup(),
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift({id:uid(),type:'task',at:new Date().toISOString(),record:trashClone(task)});S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e||!confirm('Откатить к состоянию до: «'+e.l+'»? Более поздние действия тоже отменятся.'))return;const st=S.set;S=Object.assign({tasks:[],notes:''},JSON.parse(e.s));S.trash=Array.isArray(S.trash)?S.trash:[];S.set=st;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=LOG.slice(+id+1);last=JSON.stringify(S);save.skip=1;save();toast('Откат выполнен');render()},
@@ -1211,7 +1327,7 @@ else if(key==='e'){V.tab='tx';render();tform(0,'e')}
 
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');a&&act(a.dataset.a,a.dataset.id)});
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
-document.addEventListener('change',e=>{if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];e.target.value='';if(!fl)return;fl.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}})});
+document.addEventListener('change',e=>{if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];e.target.value='';if(!fl)return;fl.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}});if(e.target.matches('[data-zipimp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(importZipWizard).catch(err=>alert('Не удалось прочитать ZIP-бэкап: '+err.message));return}
 document.addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.closest('.tk');t&&e.dataTransfer.setData('text/plain',t.dataset.id)});
 document.addEventListener('dragover',e=>{e.target.closest&&e.target.closest('.qd')&&e.preventDefault()});
 document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('tasks',e.dataTransfer.getData('text/plain'));if(t){e.preventDefault();t.q=+c.dataset.q;save();render()}});
