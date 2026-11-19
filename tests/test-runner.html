@@ -79,7 +79,7 @@ api.setState(fixture());
 const before=state();
 let rejected=false;
 try{api.restoreBackup({...fixture(),schemaVersion:api.schemaVersion+1},'replace',false)}
-catch(error){rejected=String(error.message).includes('резервной копии')}
+catch(error){rejected=String(error.message).includes('резервную копию')}
 assert(rejected,'Бэкап будущей схемы был принят старой версией');
 assert(JSON.stringify(state())===JSON.stringify(before),'Состояние изменилось после отклонённого бэкапа');
 });
