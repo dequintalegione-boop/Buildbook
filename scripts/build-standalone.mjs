@@ -26,17 +26,23 @@ let standalone = html;
 standalone = replaceExactlyOnce(
   standalone,
   '<script src="./vendor/xlsx.full.min.js"></script>',
-  `<script>\\n/* Bundled locally from vendor/xlsx.full.min.js. */\\n${xlsx}\\n</script>`,
+  `<script>
+/* Bundled locally from vendor/xlsx.full.min.js. */
+${xlsx}
+</script>`,
   'SheetJS'
 );
 standalone = replaceExactlyOnce(
   standalone,
   '<script src="./repository.js"></script>',
-  `<script>\\n/* Bundled locally from repository.js. */\\n${repository}\\n</script>`,
+  `<script>
+/* Bundled locally from repository.js. */
+${repository}
+</script>`,
   'IndexedDB repository'
 );
 
-if (/src=["'][^"']*(?:repository\\.js|xlsx\\.full\\.min\\.js)/i.test(standalone)) {
+if (standalone.includes('src="./repository.js"') || standalone.includes('src="./vendor/xlsx.full.min.js"')) {
   throw new Error('The standalone bundle still references an external repository or SheetJS file.');
 }
 
