@@ -163,8 +163,8 @@ function create(databaseName){
 
  function writeProfile(state,logs,photos,expectedRevision){
   if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)return Promise.reject(new Error('Не задана корректная версия профиля для сохранения.'));
-  // WebKit may stall when a Blob is written directly into IndexedDB. Store photo bytes
-  // as ArrayBuffer and rehydrate them to Blob after the read transaction has completed.
+  // WebKit may stall when a Blob is written directly into IndexedDB. Persist photo bytes
+  // as ArrayBuffer descriptors; the app converts them to displayable data URLs after reading.
   return encodePhotoPayload(photos).then(encodedPhotos=>open().then(database=>new Promise((resolve,reject)=>{
    let transaction,settled=false,nextRevision=0;
    const fail=error=>{
