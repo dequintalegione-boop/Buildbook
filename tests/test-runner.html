@@ -572,6 +572,37 @@ api.setState(fixture());let s=state();s.tasks.push({id:'trash-task',text:'Тес
 api.action('kd','trash-task');const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='trash-task');assert(entry,'Задача не перемещена в корзину');
 api.action('trdel',entry.id);assert(!state().trash.some(x=>x.id===entry.id),'Окончательно удалённая запись осталась в корзине');
 });
+await test('ZIP-карточка переносит сборку, состав и фотографии',async()=>{
+api.setState(fixture());
+const photo='data:image/jpeg;base64,AAECAwQFBgc=';
+api.setPhotos({'build-open':[photo]});
+const blob=api.createBuildCardZip('build-open'),buffer=await blob.arrayBuffer(),parsed=api.readBuildCardZip(buffer);
+assert(parsed.build.id==='build-open'&&parsed.parts[0].batchId==='gpu-batch','В ZIP-карточке потерялись данные сборки или связь по ID партии');
+assert(parsed.photos.length===1&&parsed.photos[0]===photo,'Не прочитано фото ZIP-карточки');
+const target=fixture();target.builds=[];target.seq=0;api.setState(target);
+const result=api.importBuildCardZip(buffer),s=state();
+assert(result.added===1&&result.photos===1,'Импорт не вернул ожидаемое число записей и фото');
+assert(s.builds.length===1&&s.builds[0].id==='build-open','Карточка не добавлена');
+assert(s.builds[0].txId==='','Импорт карточки создал ссылку на неимпортированную финансовую операцию');
+assert(api.used('gpu-batch')===4,'Не восстановлено резервирование комплектующих');
+assert(api.getPhotos()['build-open'][0]===photo,'Фото не сохранено после импорта');
+});
+await test('ZIP-карточка не импортируется без исходной партии',async()=>{
+api.setState(fixture());
+const blob=api.createBuildCardZip('build-open'),buffer=await blob.arrayBuffer();
+const target=fixture();target.builds=[];target.batches=target.batches.filter(b=>b.id!=='gpu-batch');api.setState(target);
+let rejected=false;try{api.importBuildCardZip(buffer)}catch(e){rejected=String(e.message).includes('Не найдена партия')}
+assert(rejected,'Импорт не заблокирован при отсутствующей партии');
+assert(state().builds.length===0,'Была создана сборка с потерянной связью');
+});
+await test('ZIP-карточка блокирует повторный ID или номер сборки',async()=>{
+api.setState(fixture());
+const blob=api.createBuildCardZip('build-open'),buffer=await blob.arrayBuffer();
+const target=fixture();target.builds=[];target.builds.push({id:'other-build',num:1,name:'Другая сборка',status:'Собирается',lines:[]});api.setState(target);
+let rejected=false;try{api.importBuildCardZip(buffer)}catch(e){rejected=String(e.message).includes('Номер сборки')}
+assert(rejected,'Импорт допустил повтор номера');
+assert(state().builds.length===1,'После конфликта появилась лишняя сборка');
+});
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
