@@ -314,6 +314,17 @@ function journalWrite(root,path,exists,value){
  else delete parent[lastSegment];
  return true;
 }
+function normalizeJournalSnapshot(snapshotText){
+ const migrated=migrateState(JSON.parse(snapshotText));
+ const liveState=S,liveExp=EXP,liveInc=INC,liveTypes=T;
+ try{
+  S=migrated.state;
+  normalizeStock();
+  return JSON.parse(JSON.stringify(S));
+ }finally{
+  S=liveState;EXP=liveExp;INC=liveInc;T=liveTypes;
+ }
+}
 function migrateLegacyJournalEntries(currentStateText){
  const snapshots=LOG.map(entry=>entry&&typeof entry.s==='string'?entry.s:null);
  let changed=false;
@@ -323,7 +334,7 @@ function migrateLegacyJournalEntries(currentStateText){
   const beforeText=snapshots[index],afterText=index===0?currentStateText:snapshots[index-1];
   try{
    if(!beforeText||!afterText)throw new Error('Недостаточно данных старого журнала.');
-   const before=JSON.parse(beforeText),after=JSON.parse(afterText);
+   const before=normalizeJournalSnapshot(beforeText),after=normalizeJournalSnapshot(afterText);
    entry.changes=journalDiff(before,after);
   }catch(error){
    entry.changes=[];
