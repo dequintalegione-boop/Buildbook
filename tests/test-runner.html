@@ -45,7 +45,7 @@ w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.len
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
 await test('Все основные разделы открываются',()=>{
-for(const tab of ['home','dash','stock','builds','tx','tasks','log','set']){api.action('nav',tab);assert(w.document.querySelector('#m h1'), 'Пустой экран в разделе '+tab)}
+for(const tab of ['home','dash','stock','builds','tx','tasks','trash','log','set']){api.action('nav',tab);assert(w.document.querySelector('#m h1'), 'Пустой экран в разделе '+tab)}
 });
 await test('Склад считает доступное количество с учётом сборки',()=>{
 assert(api.available('gpu-batch')===6,'Ожидалось 6 свободных GPU');assert(api.used('gpu-batch')===4,'Ожидалось 4 GPU в сборке');
@@ -472,6 +472,50 @@ const buildRows=w.XLSX.utils.sheet_to_json(wb.Sheets['Сборки'],{header:1,r
 assert(buildRows.some(r=>r[0]==='build-open'&&String(r[11]).includes('gpu-batch')),'В XLSX не сохранена ссылка сборки на партию');
 });
 
+await test('Удаление партии отправляет её и связанный расход в корзину',()=>{
+api.setState(fixture());
+const s=state(),batch={id:'trash-batch',type:'ССД',desc:'Партия для корзины',date:'2026-08-01',price:100,qty:3,problemQty:0,problemReason:'',writtenOffQty:0,txId:'trash-expense'};
+s.batches.push(batch);s.tx.push({id:'trash-expense',kind:'e',date:'2026-08-01',amount:300,desc:'Закупка SSD',cat:'ССД',grp:'Сборка ПК',qty:3,acc:'cash',batchId:'trash-batch'});api.setState(s);
+api.action('pd','trash-batch');const after=state(),entry=after.trash.find(x=>x.type==='batch'&&x.record.id==='trash-batch');
+assert(entry&&entry.relatedTx&&entry.relatedTx.id==='trash-expense','Не сохранена связанная операция');
+assert(!after.batches.some(x=>x.id==='trash-batch')&&!after.tx.some(x=>x.id==='trash-expense'),'Записи не удалены из рабочего учёта');
+api.action('trrestore',entry.id);const restored=state();
+assert(restored.batches.some(x=>x.id==='trash-batch'),'Партия не восстановлена');
+assert(restored.tx.some(x=>x.id==='trash-expense'),'Связанный расход не восстановлен');
+assert(!restored.trash.some(x=>x.id===entry.id),'Запись осталась в корзине после возврата');
+});
+await test('Удаление сборки сохраняет её и возвращает детали только до восстановления',()=>{
+api.setState(fixture());api.action('bd','build-open');let s=state();
+assert(!s.builds.some(x=>x.id==='build-open'),'Сборка осталась в рабочем списке');
+assert(api.used('gpu-batch')===0,'После удаления сборки детали продолжают считаться занятыми');
+const entry=s.trash.find(x=>x.type==='build'&&x.record.id==='build-open');assert(entry,'Сборка не попала в корзину');
+api.action('trrestore',entry.id);s=state();
+assert(s.builds.some(x=>x.id==='build-open'),'Сборка не восстановлена');
+assert(api.used('gpu-batch')===4,'После восстановления не восстановлено потребление деталей');
+});
+await test('Продажу комплектующего можно вернуть из корзины без изменения учёта',()=>{
+api.setState(fixture());let s=state();s.batches[0].qty=9;s.builds[0].lines[0].qty=3;s.tx.push({id:'trash-sale',kind:'i',date:'2026-08-02',amount:150,desc:'Продажа видеокарты',cat:'Комплектующие',grp:'Продажи',acc:'cash',qty:1,partSale:true,batchId:'gpu-batch',sourceBuildId:'build-open',sourceProblem:false});api.setState(s);
+api.action('td','trash-sale');s=state();const entry=s.trash.find(x=>x.type==='tx'&&x.record.id==='trash-sale');
+assert(entry&&entry.restoreState,'Не сохранено контрольное состояние продажи');
+assert(s.batches[0].qty===10&&s.builds[0].lines[0].qty===4,'Удаление продажи не вернуло комплектующее в исходную сборку');
+api.action('trrestore',entry.id);s=state();
+assert(s.tx.some(x=>x.id==='trash-sale'),'Продажа не восстановлена');
+assert(s.batches[0].qty===9&&s.builds[0].lines[0].qty===3,'После восстановления не вернулось исходное состояние остатков');
+});
+await test('Корзина блокирует восстановление продажи после изменения складского остатка',()=>{
+api.setState(fixture());let s=state();s.batches[0].qty=9;s.tx.push({id:'trash-sale-conflict',kind:'i',date:'2026-08-03',amount:100,desc:'Продажа',cat:'Комплектующие',grp:'Продажи',acc:'cash',qty:1,partSale:true,batchId:'gpu-batch',sourceProblem:false});api.setState(s);
+api.action('td','trash-sale-conflict');const entry=state().trash.find(x=>x.type==='tx'&&x.record.id==='trash-sale-conflict');
+const current=state();current.batches[0].qty+=1;api.setState(current);
+api.action('trrestore',entry.id);const after=state();
+assert(after.trash.some(x=>x.id===entry.id),'Конфликтная запись исчезла из корзины');
+assert(!after.tx.some(x=>x.id==='trash-sale-conflict'),'Продажа восстановилась поверх изменённого склада');
+assert(alerts.some(x=>x.includes('изменился')),'Не показано объяснение конфликта');
+});
+await test('Окончательное удаление очищает только выбранную запись корзины',()=>{
+api.setState(fixture());let s=state();s.tasks.push({id:'trash-task',text:'Тестовая задача',q:0,done:0});api.setState(s);
+api.action('kd','trash-task');const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='trash-task');assert(entry,'Задача не перемещена в корзину');
+api.action('trdel',entry.id);assert(!state().trash.some(x=>x.id===entry.id),'Окончательно удалённая запись осталась в корзине');
+});
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
