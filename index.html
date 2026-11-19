@@ -45,9 +45,41 @@ const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=T
 const idb=()=>new Promise((r,j)=>{const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>r(q.result);q.onerror=j});
 let LOG=[],last='',PH={};
 const get=(d,k)=>new Promise(r=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>r(q.result)});
-async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=(await get(d,'p'))||{}}catch(e){}S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');normalizeStock();last=JSON.stringify(S)}
+
+async function restorePhotoBlobs(stored){
+ const restored={};
+ for(const [id,items] of Object.entries(stored||{})){
+  restored[id]=[];
+  for(const item of (Array.isArray(items)?items:[])){
+   try{
+    if(typeof Blob!=='undefined'&&item instanceof Blob){
+     restored[id].push(bytesToDataUrl(new Uint8Array(await item.arrayBuffer()),item.type||'image/jpeg'));
+    }else if(item instanceof ArrayBuffer){
+     restored[id].push(bytesToDataUrl(new Uint8Array(item),'image/jpeg'));
+    }else restored[id].push(String(item||''));
+   }catch(error){restored[id].push('')}
+  }
+ }
+ return restored;
+}
+async function photosAsBlobs(photos){
+ const stored={};
+ for(const [id,items] of Object.entries(photos||{})){
+  stored[id]=[];
+  for(const photo of (Array.isArray(items)?items:[])){
+   try{
+    if(typeof Blob!=='undefined'&&photo instanceof Blob){stored[id].push(photo);continue}
+    const parsed=dataUrlToBytes(photo);
+    stored[id].push(new Blob([parsed.bytes],{type:parsed.mime||'image/jpeg'}));
+   }catch(error){stored[id].push(photo)}
+  }
+ }
+ return stored;
+}
+
+async function load(){try{const d=await idb(),v=await get(d,'s'),l=await get(d,'l');if(v)S=Object.assign(S,v);if(l)LOG=l;PH=await restorePhotoBlobs((await get(d,'p'))||{})}catch(e){}S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое');normalizeStock();last=JSON.stringify(S)}
 const lbl=(a,b)=>{const A=JSON.parse(a),B=JSON.parse(b),N={batches:'партия',builds:'сборка',tx:'операция',tasks:'задача'};for(const k in N){const x=(A[k]||[]).length,y=(B[k]||[]).length;if(y>x)return'Добавлено: '+N[k];if(y<x)return'Удалено: '+N[k]}return'Изменение данных'};
-let tm;const save=()=>{const cur=JSON.stringify(S);if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}last=cur;save.skip=0;clearTimeout(tm);tm=setTimeout(async()=>{try{const d=await idb(),w=d.transaction('kv','readwrite').objectStore('kv');w.put(S,'s');w.put(LOG,'l');w.put(PH,'p')}catch(e){}},150)};
+let tm;const save=()=>{const cur=JSON.stringify(S);if(cur!=last&&!save.skip){LOG.unshift({t:new Date().toLocaleString('ru-RU'),l:lbl(last,cur),s:last});LOG=LOG.slice(0,40)}last=cur;save.skip=0;clearTimeout(tm);tm=setTimeout(async()=>{try{const storedPhotos=await photosAsBlobs(PH),d=await idb(),w=d.transaction('kv','readwrite').objectStore('kv');w.put(S,'s');w.put(LOG,'l');w.put(storedPhotos,'p')}catch(e){}},150)};
 const toast=m=>{const t=document.createElement('div');t.className='ts';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),2200)};
 const theme=()=>{const t=S.set.theme;document.documentElement.dataset.t=t=='auto'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):t};
 /* расчёты */
@@ -1251,7 +1283,7 @@ if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:f
 version:'2.6-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),importBuildCardZip:buffer=>importBuildCardZip(buffer),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),photoStorageInfo:async()=>{const d=await idb(),stored=(await get(d,'p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBlob:typeof Blob!=='undefined'&&item instanceof Blob,type:item&&item.type||'',size:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),importBuildCardZip:buffer=>importBuildCardZip(buffer),
 setState:next=>{S=JSON.parse(JSON.stringify(next));S.trash=Array.isArray(S.trash)?S.trash:[];S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),
 render:()=>render(),
