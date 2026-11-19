@@ -49,7 +49,7 @@ await test('Старые данные автоматически мигриру�
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
 assert(result.migrated,'Миграция старой версии не запущена');
-assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===2,'Не записана текущая версия схемы 2');
+assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===3,'Не записана текущая версия схемы 2');
 assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
 assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
 assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
@@ -616,15 +616,63 @@ api.setState(fixture());let s=state();s.tasks.push({id:'trash-task',text:'Тес
 api.action('kd','trash-task');const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='trash-task');assert(entry,'Задача не перемещена в корзину');
 api.action('trdel',entry.id);assert(!state().trash.some(x=>x.id===entry.id),'Окончательно удалённая запись осталась в корзине');
 });
-await test('Схема 1 мигрирует на схему 2 без потери существующих данных',()=>{
+await test('Миграция схемы 2 создаёт метаданные основных сущностей',()=>{
+const source={
+ schemaVersion:2,
+ accounts:[{id:'meta-cash',name:'Касса',open:0}],
+ batches:[{id:'meta-batch',qty:2,price:100}],
+ builds:[{id:'meta-build',num:1,lines:[]}],
+ tx:[{id:'meta-tx',kind:'e',amount:20}],
+ stockEvents:[{id:'meta-event',kind:'writeoff',batchId:'meta-batch'}],
+ tasks:[{id:'meta-task',text:'Сохранить метаданные'}],
+ checklist:[{id:'meta-check',text:'Проверка'}],
+ trash:[{id:'meta-trash-entry',type:'task',at:'2026-08-10T10:00:00.000Z',record:{id:'meta-deleted-task',text:'Удалена'}}]
+};
+const migrated=api.migrateState(source).state;
+for(const key of ['accounts','batches','builds','tx','stockEvents','tasks','checklist']){
+ assert(api.metadataValid(migrated[key][0]),'Метаданные не созданы для '+key);
+ assert(migrated[key][0].deletedAt===null,'Активная запись отмечена удалённой: '+key);
+}
+const archived=migrated.trash[0];
+assert(api.metadataValid(archived.record),'Не созданы метаданные удалённой записи');
+assert(archived.record.deletedAt===archived.at&&archived.deletedAt===archived.at,'Не сохранена дата удаления в корзине');
+});
+await test('Новые и изменённые записи получают createdAt и updatedAt',async()=>{
+api.setState(fixture());let s=state();s.tasks.push({id:'metadata-task',text:'Проверить даты',q:0,done:0});api.setState(s);
+let task=state().tasks.find(x=>x.id==='metadata-task');
+assert(api.metadataValid(task)&&task.deletedAt===null,'Новая задача не получила полный набор метаданных');
+const created=task.createdAt,updated=task.updatedAt;
+await sleep(8);api.action('kdone','metadata-task');task=state().tasks.find(x=>x.id==='metadata-task');
+assert(task.createdAt===created,'Дата создания изменилась при редактировании');
+assert(task.updatedAt!==updated,'Дата изменения не обновилась');
+});
+await test('Корзина выставляет deletedAt и очищает его при восстановлении',()=>{
+api.setState(fixture());let s=state();s.tasks.push({id:'metadata-trash-task',text:'Удаляемая задача',q:0,done:0});api.setState(s);
+api.action('kd','metadata-trash-task');
+const entry=state().trash.find(x=>x.type==='task'&&x.record.id==='metadata-trash-task');
+assert(entry&&entry.record.deletedAt===entry.at&&entry.deletedAt===entry.at,'Удаление не установило deletedAt');
+const created=entry.record.createdAt;api.action('trrestore',entry.id);
+const restored=state().tasks.find(x=>x.id==='metadata-trash-task');
+assert(restored&&restored.createdAt===created,'При восстановлении изменилась дата создания');
+assert(restored.deletedAt===null&&api.metadataValid(restored),'Восстановленная запись осталась удалённой');
+});
+await test('Удаление пункта чек-листа можно отменить через корзину',()=>{
+api.setState(fixture());let s=state();s.checklist.push({id:'metadata-check',text:'Пункт',done:0});api.setState(s);
+api.action('ckdel','metadata-check');
+const entry=state().trash.find(x=>x.type==='checklist'&&x.record.id==='metadata-check');
+assert(entry&&entry.record.deletedAt===entry.at,'Пункт не попал в корзину');
+api.action('trrestore',entry.id);
+assert(state().checklist.some(x=>x.id==='metadata-check'&&x.deletedAt===null),'Пункт не восстановлен');
+});
+await test('Схема 1 мигрирует на схему 3 без потери существующих данных',()=>{
 const source={schemaVersion:1,batches:[{id:'v1-batch',qty:3,price:40}],builds:[],tx:[],tasks:[],trash:[],notes:'Из схемы 1'};
 const result=api.migrateState(source),migrated=result.state;
-assert(result.migrated&&migrated.schemaVersion===2,'Не выполнена миграция на схему 2');
+assert(result.migrated&&migrated.schemaVersion===3,'Не выполнена миграция на схему 3');
 assert(Array.isArray(migrated.checklist)&&migrated.checklist.length===0,'Не добавлен пустой чек-лист');
 assert(migrated.batches[0].id==='v1-batch'&&migrated.batches[0].qty===3,'Изменились данные схемы 1');
 assert(migrated.notes==='Из схемы 1','Потеряны заметки при миграции');
 const repeated=api.migrateState(migrated);
-assert(!repeated.migrated&&repeated.state.schemaVersion===2,'Повторная миграция не должна запускаться');
+assert(!repeated.migrated&&repeated.state.schemaVersion===3,'Повторная миграция не должна запускаться');
 });
 await test('Чек-лист можно добавлять, отмечать и удалять',()=>{
 api.setState(fixture());prompts.push('Проверить комплектующие перед тестом');api.action('ckadd');
