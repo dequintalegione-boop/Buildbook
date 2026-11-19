@@ -32,7 +32,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const R=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0)+' ₽',D=s=>s?s.split('-').reverse().join('.'):'',today=()=>new Date().toISOString().slice(0,10);
-const esc=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'})),safe=u=>/^https?:\\/\\//i.test(u||'');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),safe=u=>/^https?:\/\//i.test(u||'');
 const T=['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее'],ST=['Собирается','Собрана','Протестирована','Продана'],MN=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 const EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},INC={'Заработок':['Заработная плата','Сборка ПК','Другое']};
 let S={accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],batches:[],builds:[],tx:[],seq:0,tasks:[],notes:'',set:{theme:'auto',year:new Date().getFullYear(),backup:''}},V={tab:'home',s:{type:'',q:'',av:false},b:{st:'',q:''},t:{k:'',q:'',m:''}},dip;
