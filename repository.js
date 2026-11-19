@@ -44,9 +44,31 @@ function create(databaseName){
   return promise;
  }
 
+ function readBlobAsArrayBuffer(blob){
+  return new Promise((resolve,reject)=>{
+   if(typeof global.FileReader!=='function'){
+    if(typeof blob.arrayBuffer==='function'){
+     blob.arrayBuffer().then(resolve,reject);
+     return;
+    }
+    reject(new Error('Браузер не поддерживает чтение содержимого фотографии.'));
+    return;
+   }
+   let reader;
+   try{reader=new global.FileReader()}
+   catch(error){reject(error);return}
+   reader.onload=()=>reader.result instanceof ArrayBuffer
+    ?resolve(reader.result)
+    :reject(new Error('Не удалось прочитать бинарные данные фотографии.'));
+   reader.onerror=()=>reject(reader.error||new Error('Ошибка чтения фотографии.'));
+   reader.onabort=()=>reject(new Error('Чтение фотографии было прервано.'));
+   try{reader.readAsArrayBuffer(blob)}catch(error){reject(error)}
+  });
+ }
+
  async function encodePhotoPayload(value){
   if(typeof global.Blob==='function'&&value instanceof global.Blob){
-   return {__buildbookBlob:1,type:value.type||'',bytes:await value.arrayBuffer()};
+   return {__buildbookBlob:1,type:value.type||'',bytes:await readBlobAsArrayBuffer(value)};
   }
   if(Array.isArray(value))return Promise.all(value.map(encodePhotoPayload));
   if(value&&typeof value==='object'){
