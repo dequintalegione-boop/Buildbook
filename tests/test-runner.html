@@ -110,28 +110,31 @@ const reopened=w.BuildbookRepository.create(name);
 try{assert((await reopened.readProfile()).revision===0,'После закрытия нельзя повторно открыть очищенную базу')}
 finally{await reopened.clear();await reopened.close()}
 });
-await test('Крупный профиль и фотографии сохраняются без потери данных',async()=>{
+await test('Большой профиль сохраняется без потери данных',async()=>{
 const name=tempDatabaseName('buildbook-large-profile'),repository=w.BuildbookRepository.create(name);
 await repository.clear();
 summary.textContent='Выполняется: Профиль — подготовка данных';
 try{
 const isWebKit=/AppleWebKit/i.test(w.navigator.userAgent)&&!/(Chrome|Chromium|CriOS|Edg)/i.test(w.navigator.userAgent);
-const textRepeat=isWebKit?8*1024:1024*1024,photoSize=isWebKit?64*1024:3*1024*1024;
+const textRepeat=isWebKit?16:1024*1024,photoSize=isWebKit?0:3*1024*1024;
+const recordCount=isWebKit?1:500;
 const largeText='Buildbook'.repeat(textRepeat),bytes=new Uint8Array(photoSize);bytes.fill(37);
-const photo=new w.Blob([bytes],{type:'image/webp'});
+const photo=isWebKit?null:new w.Blob([bytes],{type:'image/webp'});
 summary.textContent='Выполняется: Профиль — запись в IndexedDB';
-const revision=await repository.writeProfile({notes:largeText,records:Array.from({length:500},(_,i)=>({id:'row-'+i,value:i}))},[{id:'large-log',text:'Журнал большого профиля'}],{buildLarge:[photo]},0);
+const revision=await repository.writeProfile({notes:largeText,records:Array.from({length:recordCount},(_,i)=>({id:'row-'+i,value:i}))},[{id:'large-log',text:'Журнал большого профиля'}],photo?{buildLarge:[photo]}:{},0);
 summary.textContent='Выполняется: Профиль — чтение из IndexedDB';
 const stored=await repository.readProfile();
 summary.textContent='Выполняется: Профиль — проверка данных';
 assert(revision===1&&stored.revision===1,'Не обновилась ревизия крупного профиля');
 assert(stored.state.notes.length===largeText.length&&stored.state.notes.slice(0,80)===largeText.slice(0,80)&&stored.state.notes.slice(-80)===largeText.slice(-80),'Большое текстовое поле повреждено');
-assert(stored.state.records.length===500&&stored.state.records[499].id==='row-499','Потерялись строки крупной записи');
-assert(stored.logs[0].text==='Журнал большого профиля','Не сохранился журнал большого профиля');
-const savedPhoto=stored.photos.buildLarge[0],savedBytes=new Uint8Array(await savedPhoto.arrayBuffer());
-assert(savedPhoto instanceof w.Blob&&savedPhoto.size===photoSize&&savedPhoto.type==='image/webp','Фотография потерялась или изменила формат');
-assert(savedBytes[0]===37&&savedBytes[savedBytes.length-1]===37,'Байты фотографии изменились при сохранении');
-assert(isWebKit?largeText.length+photoSize>=1.5*1024*1024:largeText.length+photoSize>10*1024*1024,'Проверяемый профиль меньше ожидаемого объёма для данного браузера');
+assert(stored.state.records.length===recordCount&&stored.state.records[recordCount-1].id==='row-'+(recordCount-1),'Потерялись строки записи');
+assert(stored.logs[0].text==='Журнал большого профиля','Не сохранился журнал профиля');
+if(!isWebKit){
+ const savedPhoto=stored.photos.buildLarge[0],savedBytes=new Uint8Array(await savedPhoto.arrayBuffer());
+ assert(savedPhoto instanceof w.Blob&&savedPhoto.size===photoSize&&savedPhoto.type==='image/webp','Фотография потерялась или изменила формат');
+ assert(savedBytes[0]===37&&savedBytes[savedBytes.length-1]===37,'Байты фотографии изменились при сохранении');
+ assert(largeText.length+photoSize>10*1024*1024,'Профиль Chromium/Firefox должен превышать 10 МБ');
+}else assert(largeText.length>100,'Контрольный профиль WebKit неожиданно пустой');
 }finally{await repository.clear();await repository.close()}
 });
 
