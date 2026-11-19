@@ -147,7 +147,19 @@ await repository.clear();
 try{
 summary.textContent='Выполняется: Blob repository — подготовка';
 const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
-summary.textContent='Выполняется: Blob repository — запись';
+summary.textContent='Выполняется: Blob repository — чтение байтов FileReader';
+const photoBytes=await Promise.race([
+ new Promise((resolve,reject)=>{
+  const reader=new w.FileReader();
+  reader.onload=()=>resolve(reader.result);
+  reader.onerror=()=>reject(reader.error||new Error('FileReader не смог прочитать Blob'));
+  reader.onabort=()=>reject(new Error('Чтение Blob через FileReader отменено'));
+  reader.readAsArrayBuffer(photo);
+ }),
+ sleep(10000).then(()=>{throw new Error('FileReader не завершил чтение Blob за 10 секунд')})
+]);
+assert(photoBytes instanceof w.ArrayBuffer&&photoBytes.byteLength===15,'FileReader вернул некорректный размер бинарных данных');
+summary.textContent='Выполняется: Blob repository — запись через ArrayBuffer';
 await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
 summary.textContent='Выполняется: Blob repository — чтение';
 const stored=await repository.readProfile();
