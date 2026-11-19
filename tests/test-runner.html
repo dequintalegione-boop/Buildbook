@@ -40,7 +40,7 @@ async function boot(){
 results.innerHTML='';passed=failed=0;alerts=[];prompts=[];
 summary.textContent='Подготовка…';details.textContent='Загружается тестовая версия приложения.';
 for(let i=0;i<150&&!frame.contentWindow.__BUILD_BOOK_TEST__;i++)await sleep(100);
-w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API недоступен. Откройте runner на том же origin, что и приложение.');
+w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API недоступен. Откройте runner на том же origin, что и приложение.');await api.ready();
 w.alert=m=>alerts.push(String(m));w.confirm=()=>true;w.prompt=(m,d)=>prompts.length?prompts.shift():d||'';
 api.setState(fixture());await sleep(350);
 await test('Тестовый режим использует отдельную IndexedDB',()=>assert(api.database==='buildbook-test','Используется не изолированная база'));
