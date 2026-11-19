@@ -240,6 +240,7 @@ check('Тестовая видеокарта','batch');
 check('Тестовая сборка','build');
 check('Отчётная операция','tx');
 check('Проверить блок питания','task');
+f.closest('.ov').remove();
 });
 await test('Результат глобального поиска открывает нужную запись',()=>{
 api.action('search');let f=form();const input=f.elements.query;
