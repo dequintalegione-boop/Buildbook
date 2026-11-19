@@ -67,7 +67,7 @@ assert(conflict&&conflict.code==='BUILD_BOOK_STORAGE_CONFLICT','Запись у�
 const actual=await second.readProfile();
 assert(actual.revision===1&&actual.state.marker==='Изменение вкладки A','Старая вкладка перезаписала более свежие данные');
 assert(actual.logs[0].id==='A','Журнал более свежего профиля был потерян');
-}finally{await first.deleteDatabase()}
+}finally{second.close();await first.deleteDatabase()}
 });
 await test('Одновременные вкладки не могут сохранить один и тот же номер ревизии',async()=>{
 const name='buildbook-race-'+Math.random().toString(36).slice(2),first=w.BuildbookRepository.create(name),second=w.BuildbookRepository.create(name);
@@ -83,7 +83,7 @@ assert(rejected&&rejected.reason.code==='BUILD_BOOK_STORAGE_CONFLICT','Втор�
 const actual=await first.readProfile();
 assert(actual.revision===1,'Параллельные операции некорректно изменили ревизию');
 assert(['A','B'].includes(actual.state.writer),'В базе нет ни одной из успешно записанных версий');
-}finally{await first.deleteDatabase()}
+}finally{second.close();await first.deleteDatabase()}
 });
 
 await test('Слой хранения читает состояние, журнал и фотографии',async()=>{
@@ -922,6 +922,20 @@ assert(result.ok,'Не удалось отменить мигрированно�
 const after=state();
 assert(after.tasks[0].done===0,'Изменение старой задачи не отменено');
 assert(Array.isArray(after.checklist),'Отмена затронула поле чек-листа, добавленное миграцией схемы');
+});
+await test('Уведомление другой вкладки показывает предупреждение и блокирует сохранение',async()=>{
+await api.flushStorage();
+const channel=new BroadcastChannel('buildbook-profile:'+api.database);
+try{
+channel.postMessage({type:'profile-saved',revision:api.storageRevision()+1});
+await sleep(120);
+assert(api.storageConflict(),'Приложение не распознало изменение в другой вкладке');
+assert(w.document.querySelector('#m').textContent.includes('Данные изменены в другой вкладке'),'Не показано предупреждение о конфликте');
+const revision=api.storageRevision();
+api.setState({...state(),notes:'Изменение без сохранения после конфликта'});
+await api.flushStorage();
+assert(api.storageRevision()===revision,'Устаревшая вкладка попыталась изменить ревизию профиля');
+}finally{channel.close()}
 });
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }

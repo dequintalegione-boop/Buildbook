@@ -197,7 +197,15 @@ async function load(){
  const profile=await repository.readProfile();
  const {state:storedState,logs:storedLog,photos:storedPhotos}=profile;
  storageRevision=profile.revision;
+ if(remoteStorageRevision>storageRevision){
+  const latest=await repository.readProfile();
+  if(latest.revision>storageRevision){
+   profile.state=latest.state;profile.logs=latest.logs;profile.photos=latest.photos;profile.revision=latest.revision;
+   storageRevision=latest.revision;
+  }
+ }
  if(remoteStorageRevision>storageRevision)markStorageConflict(remoteStorageRevision);
+ else storageConflict=false;
  const previousState=storedState?JSON.stringify(storedState):'';
  STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
