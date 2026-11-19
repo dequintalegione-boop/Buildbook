@@ -1327,7 +1327,14 @@ else if(key==='e'){V.tab='tx';render();tform(0,'e')}
 
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');a&&act(a.dataset.a,a.dataset.id)});
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
-document.addEventListener('change',e=>{if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];e.target.value='';if(!fl)return;fl.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}});if(e.target.matches('[data-zipimp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(importZipWizard).catch(err=>alert('Не удалось прочитать ZIP-бэкап: '+err.message));return}
+document.addEventListener('change',e=>{
+ if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}
+ if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}
+ if(e.target.matches('[data-zipimp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(importZipWizard).catch(err=>alert('Не удалось прочитать ZIP-бэкап: '+err.message));return}
+ if(!e.target.matches('[data-imp]'))return;
+ const file=e.target.files[0];e.target.value='';if(!file)return;
+ file.text().then(t=>{try{backupRestoreWizard(JSON.parse(t))}catch(error){alert('Не удалось прочитать резервную копию: '+(error.message||'ошибка файла'))}});
+});
 document.addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.closest('.tk');t&&e.dataTransfer.setData('text/plain',t.dataset.id)});
 document.addEventListener('dragover',e=>{e.target.closest&&e.target.closest('.qd')&&e.preventDefault()});
 document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('tasks',e.dataTransfer.getData('text/plain'));if(t){e.preventDefault();t.q=+c.dataset.q;save();render()}});
