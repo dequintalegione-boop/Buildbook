@@ -1531,7 +1531,7 @@ function importCsvWizard(raw){
  const guess=guessCsvKind(headers);
  const preview=matrix.slice(1,5).map(row=>'<tr>'+headers.map((h,i)=>'<td>'+esc(row[i]??'')+'</td>').join('')+'</tr>').join('');
  const previewHtml='<div class="sell-scroll"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div>';
- const body='<p class="mu">Строк в файле: '+(matrix.length-1)+'. Сначала проверьте тип таблицы и сопоставление столбцов. Обязательные поля отмечены в описаниях.</p><label>Что импортируем<select name="importKind">'+opt([['batches','Склад'],['builds','Сборки'],['tx','Операции']],guess)+'</select></label><div id="csv-mapping" class="g2"></div><div id="csv-default-kind"></div><h3 style="margin-top:8px">Предпросмотр (первые строки)</h3>'+previewHtml;
+ const body='<p class="mu">Строк в файле: '+(matrix.length-1)+'. Сначала проверьте тип таблицы и сопоставление столбцов. Обязательные поля отмечены в описаниях.</p><label>Что импортируем<select name="importKind">'+opt([['batches','Склад'],['builds','Сборки'],['tx','Операции'],['accounts','Кассы'],['tasks','Задачи']],guess)+'</select></label><div id="csv-mapping" class="g2"></div><div id="csv-default-kind"></div><h3 style="margin-top:8px">Предпросмотр (первые строки)</h3>'+previewHtml;
  const f=modal('Импорт CSV',body,form=>{
   const kind=form.elements.importKind.value,mapping={};
   CSV_FIELDS[kind].forEach(field=>mapping[field[0]]=form.elements['map_'+field[0]].value);
