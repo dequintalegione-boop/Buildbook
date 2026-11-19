@@ -598,7 +598,7 @@ const image=await new Promise((resolve,reject)=>{
  const img=new w.Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Не удалось открыть сжатое изображение'));img.src=result;
 });
 assert(image.naturalWidth<=1100&&image.naturalHeight<=1100,'После сжатия одна из сторон превышает 1100 пикселей');
-assert(image.naturalWidth===825&&image.naturalHeight===550,'При сжатии нарушены пропорции изображения');
+assert(image.naturalWidth===1100&&image.naturalHeight===733,'При сжатии нарушены пропорции изображения');
 });
 await test('Повреждённое фото отклоняется и не оставляет Promise зависшим',async()=>{
 const file=new w.File(['это не изображение'],'broken.png',{type:'image/png'});
