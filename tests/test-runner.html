@@ -37,6 +37,7 @@ function submit(f){assert(f&&typeof f.onsubmit==='function','Форма не н�
 function click(selector){const el=w.document.querySelector(selector);assert(el,'Не найден элемент '+selector);el.click();return el}
 function setv(f,name,value){assert(f.elements[name],'Поле формы не найдено: '+name);f.elements[name].value=value}
 async function boot(){
+summary.dataset.finished='false';
 results.innerHTML='';passed=failed=0;alerts=[];prompts=[];
 summary.textContent='Подготовка…';details.textContent='Загружается тестовая версия приложения.';
 for(let i=0;i<150&&!frame.contentWindow.__BUILD_BOOK_TEST__;i++)await sleep(100);
@@ -658,9 +659,10 @@ assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length,expectedPhoto=api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0];await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');if(expectedPhoto)assert(api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0]===expectedPhoto,'Фото не восстановилось из Blob после перезагрузки');
 });
-summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';
+summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
-button.addEventListener('click',()=>boot().catch(e=>report('Запуск тестов',false,e.message)));
-boot().catch(e=>report('Запуск тестов',false,e.message));
+const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
+button.addEventListener('click',()=>boot().catch(failBoot));
+boot().catch(failBoot);
 })();
 </script></body></html>
