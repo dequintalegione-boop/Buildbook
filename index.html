@@ -2238,6 +2238,7 @@ document.addEventListener('dragover',e=>{e.target.closest&&e.target.closest('.qd
 document.addEventListener('drop',e=>{const c=e.target.closest('.qd'),t=c&&find('tasks',e.dataTransfer.getData('text/plain'));if(t){e.preventDefault();t.q=+c.dataset.q;save();render()}});
 document.addEventListener('change',e=>{if(e.target.matches('[data-n]')){S.notes=e.target.value;save.skip=1;save()}});
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;V.tab=='set'&&render()});
+addEventListener('appinstalled',()=>{dip=null;toast('Buildbook установлено как приложение.');if(V.tab==='set')render()});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
 APP_READY=load().then(()=>{theme();render();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});return true}).catch(error=>{
  APP_FATAL_ERROR=error;
