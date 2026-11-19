@@ -198,7 +198,7 @@ assert(w.document.querySelector('[data-a="rcsv"]'),'Нет экспорта от
 
 await test('Дашборд показывает статусы, продажи, проблемный склад и оборачиваемость',async()=>{
 const d=fixture(),todayIso=new Date().toISOString().slice(0,10),before=days=>new Date(Date.now()-days*86400000).toISOString().slice(0,10);
-d.batches[0].problem=1;
+d.batches[0].problemQty=d.batches[0].qty;d.batches[0].problemReason='Проверка дашборда';d.builds[0].lines[0].problem=true;
 d.builds.push(
 {id:'build-sold-1',num:2,name:'Сборка с маржой 20%',status:'Продана',builder:'Тест',buyer:'',date:before(5),sold:todayIso,planned:0,price:1500,cost:1200,note:'',lines:[]},
 {id:'build-sold-2',num:3,name:'Сборка с маржой 50%',status:'Продана',builder:'Тест',buyer:'',date:before(10),sold:todayIso,planned:0,price:1000,cost:500,note:'',lines:[]}
@@ -263,6 +263,17 @@ assert(form()&&form().querySelector('h3')?.textContent==='Новая сборк�
 form().closest('.ov').remove();
 });
 
+await test('Старые партии с булевым признаком проблемы корректно мигрируют',()=>{
+const legacy=fixture();delete legacy.batches[0].problemQty;delete legacy.batches[0].problemReason;delete legacy.batches[0].writtenOffQty;
+legacy.batches[0].problem=1;legacy.batches[0].reason='Старое описание проблемы';
+api.setState(legacy);
+const b=state().batches.find(x=>x.id==='gpu-batch');
+assert(b.problemQty===10,'Старый флаг не преобразован в количество проблемных деталей');
+assert(b.problemReason==='Старое описание проблемы','Не перенесена старая причина проблемы');
+assert(state().builds[0].lines[0].problem===true,'Существующая деталь сборки не помечена проблемной');
+assert(api.normalAvailable('gpu-batch')===0,'Проблемный склад попал в нормальный остаток');
+api.setState(fixture());
+});
 await test('Проблемным можно отметить только часть свободного нормального остатка',()=>{
 api.setState(fixture());api.action('nav','stock');api.action('pprob','gpu-batch');let f=form();assert(f,'Форма отметки проблемы не открылась');
 setv(f,'qty','3');setv(f,'reason','Не проходит проверку');submit(f);
