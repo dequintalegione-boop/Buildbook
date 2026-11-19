@@ -1058,8 +1058,8 @@ function createZipBackupBlob(stateSource=S,photoSource=PH){
   files.push([file,parsed.bytes]);
   manifest.push({owner,id,index:manifest.filter(x=>x.owner===owner&&x.id===id).length,file,mime:parsed.mime});
  };
- Object.entries(PH||{}).forEach(([buildId,photos])=>{
-  if(Array.isArray(photos))photos.forEach(photo=>addPhoto('build',buildId,photo));
+ Object.entries(photos||{}).forEach(([buildId,items])=>{
+  if(Array.isArray(items))items.forEach(photo=>addPhoto('build',buildId,photo));
  });
  (snapshot.trash||[]).forEach(item=>{
   if(item&&item.type==='build'&&Array.isArray(item.photos)){
@@ -1282,8 +1282,7 @@ function downloadZipBackup(){
   const snapshot=createBackupSnapshot(backupAt),photos=snapshot.photos;
   delete snapshot.photos;
   const blob=createZipBackupBlob(snapshot,photos);
-  triggerFileDownload(blob,'buildbook-backup-'+today()+'.zip');
-  markBackupCreated(backupAt);
+  completeBackupExport(blob,'buildbook-backup-'+today()+'.zip',backupAt);
   render();
   toast('ZIP-бэкап сформирован');
  }catch(error){alert('Не удалось создать ZIP-бэкап: '+(error&&error.message||'ошибка'))}
@@ -1653,6 +1652,10 @@ function markBackupCreated(backupAt){
  S.set.backup=backupAt||new Date().toLocaleString('ru-RU');
  save.skip=1;save();
 }
+function completeBackupExport(blob,filename,backupAt,download=triggerFileDownload){
+ download(blob,filename);
+ if(backupAt)markBackupCreated(backupAt);
+}
 function triggerFileDownload(blob,filename){
  const url=URL.createObjectURL(blob),link=document.createElement('a');
  try{
@@ -1668,8 +1671,7 @@ function downloadBackup(filename,markDate){
   const backupAt=markDate?new Date().toLocaleString('ru-RU'):null;
   const snapshot=createBackupSnapshot(backupAt);
   const blob=new Blob([JSON.stringify(snapshot)],{type:'application/json'});
-  triggerFileDownload(blob,filename);
-  if(backupAt)markBackupCreated(backupAt);
+  completeBackupExport(blob,filename,backupAt);
  }catch(error){
   alert('Не удалось создать резервную копию: '+(error&&error.message||'ошибка'));
   throw error;
@@ -1957,7 +1959,7 @@ if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:f
 version:'2.16-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
-getPhotos:()=>JSON.parse(JSON.stringify(PH)),shrinkPhoto:file=>shrink(file),createBackupSnapshot:date=>createBackupSnapshot(date),backupTimestamp:()=>S.set.backup||'',photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},createZipBackup:()=>createZipBackupBlob(),readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
+getPhotos:()=>JSON.parse(JSON.stringify(PH)),shrinkPhoto:file=>shrink(file),createBackupSnapshot:date=>createBackupSnapshot(date),createZipBackup:date=>{const snapshot=createBackupSnapshot(date),photos=snapshot.photos;delete snapshot.photos;return createZipBackupBlob(snapshot,photos)},completeBackupExport:(blob,name,date,download)=>completeBackupExport(blob,name,date,download),backupTimestamp:()=>S.set.backup||'',photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
 action:(name,id)=>act(name,id),undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
 render:()=>render(),
