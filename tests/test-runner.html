@@ -580,6 +580,59 @@ await test('Автоопределение CSV распознаёт выгруз
 assert(api.guessCsvKind(['ID','Название кассы','Начальный остаток','Текущий баланс'])==='accounts','CSV касс распознан как другой тип');
 assert(api.guessCsvKind(['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'])==='tasks','CSV задач распознан как другой тип');
 });
+await test('Сжатие фото уменьшает большие изображения и возвращает JPEG',async()=>{
+const canvas=w.document.createElement('canvas');
+canvas.width=2400;canvas.height=1600;
+const context=canvas.getContext('2d');
+assert(context,'Canvas недоступен в браузере');
+context.fillStyle='#d44';context.fillRect(0,0,canvas.width,canvas.height);
+const sourceBlob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+assert(sourceBlob&&sourceBlob.size>0,'Не удалось создать исходное тестовое изображение');
+const file=new w.File([sourceBlob],'large-photo.png',{type:'image/png'});
+const result=await Promise.race([
+ api.shrinkPhoto(file),
+ sleep(10000).then(()=>{throw new Error('Сжатие фото не завершилось за 10 секунд')})
+]);
+assert(result.startsWith('data:image/jpeg;base64,'),'Результат сжатия не является JPEG data URL');
+const image=await new Promise((resolve,reject)=>{
+ const img=new w.Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Не удалось открыть сжатое изображение'));img.src=result;
+});
+assert(image.naturalWidth<=1100&&image.naturalHeight<=1100,'После сжатия одна из сторон превышает 1100 пикселей');
+assert(image.naturalWidth===825&&image.naturalHeight===550,'При сжатии нарушены пропорции изображения');
+});
+await test('Повреждённое фото отклоняется и не оставляет Promise зависшим',async()=>{
+const file=new w.File(['это не изображение'],'broken.png',{type:'image/png'});
+let rejected=false;
+try{
+ await Promise.race([
+  api.shrinkPhoto(file),
+  sleep(3000).then(()=>{throw new Error('Обработка повреждённого фото зависла')})
+ ]);
+}catch(error){rejected=true;assert(/изображ|файл|открыть|размер/i.test(error.message),'Вернулась непонятная ошибка повреждённого фото: '+error.message)}
+assert(rejected,'Повреждённое изображение не было отклонено');
+});
+await test('JSON и ZIP-бэкапы включают дату создаваемой копии без преждевременного изменения профиля',async()=>{
+api.setState(fixture());
+const before=api.backupTimestamp(),backupAt='20.11.2026 23:15:00';
+const jsonSnapshot=api.createBackupSnapshot(backupAt);
+assert(jsonSnapshot.set.backup===backupAt,'Дата не попала в JSON-снимок');
+assert(api.backupTimestamp()===before,'Создание JSON-снимка преждевременно изменило профиль');
+const zip=api.createZipBackup(backupAt);
+const restored=api.readZipBackup(await zip.arrayBuffer());
+assert(restored.set.backup===backupAt,'Дата не попала в ZIP-бэкап');
+assert(api.backupTimestamp()===before,'Создание ZIP-бэкапа преждевременно изменило профиль');
+});
+await test('Дата последней резервной копии фиксируется только после запуска скачивания',()=>{
+api.setState(fixture());
+const before=api.backupTimestamp(),backupAt='20.11.2026 23:20:00',blob=new w.Blob(['backup']);
+let failed=false;
+try{api.completeBackupExport(blob,'backup.json',backupAt,()=>{throw new Error('Тестовый отказ скачивания')})}catch(error){failed=true}
+assert(failed,'Тестовый отказ скачивания не был передан вызывающему коду');
+assert(api.backupTimestamp()===before,'Дата бэкапа изменилась после неудачного скачивания');
+let triggered=false;
+api.completeBackupExport(blob,'backup.json',backupAt,()=>{triggered=true});
+assert(triggered&&api.backupTimestamp()===backupAt,'Дата не обновилась после успешного запуска скачивания');
+});
 await test('Автономный HTML-бандл самодостаточен',()=>{
 if(APP_VARIANT!=='standalone')return;
 const external=Array.from(w.document.scripts).map(x=>x.getAttribute('src')).filter(Boolean);
