@@ -225,6 +225,43 @@ const labels=[...widget.querySelectorAll('.hb span')].map(x=>x.textContent.trim(
 assert(labels[0]==='№3'&&labels[1]==='№2','Сборки расположены не по убыванию маржи: '+labels.join(', '));
 });
 
+
+await test('Глобальный поиск находит комплектующие, сборки, операции и задачи',()=>{
+const d=fixture();
+d.tx=[{id:'find-tx',kind:'e',date:'2026-04-01',amount:100,cat:'Другое',grp:'ЧП',desc:'Отчётная операция для поиска',acc:'cash'}];
+d.tasks=[{id:'find-task',text:'Проверить блок питания',q:0,due:'',who:'Тест',build:'',done:0}];
+api.setState(d);api.action('search');
+const f=form();assert(f&&f.elements.query,'Поиск не открылся');
+const check=(query,type)=>{
+const input=f.elements.query;input.value=query;input.dispatchEvent(new w.Event('input',{bubbles:true}));
+assert(f.querySelector('[data-search-type="'+type+'"]'),'Не найден результат типа '+type+' для запроса '+query);
+};
+check('Тестовая видеокарта','batch');
+check('Тестовая сборка','build');
+check('Отчётная операция','tx');
+check('Проверить блок питания','task');
+});
+await test('Результат глобального поиска открывает нужную запись',()=>{
+api.action('search');let f=form();const input=f.elements.query;
+input.value='Тестовая видеокарта';input.dispatchEvent(new w.Event('input',{bubbles:true}));
+const result=f.querySelector('[data-search-type="batch"][data-search-id="gpu-batch"]');assert(result,'Не найден результат партии');
+result.click();
+const edit=form();assert(edit&&edit.querySelector('h3')?.textContent.includes('Партия'),'Выбор результата не открыл редактирование партии');
+assert(edit.elements.desc.value==='Тестовая видеокарта','Открыта не та партия');
+edit.closest('.ov').remove();
+});
+await test('Горячие клавиши открывают поиск и быстрые действия',()=>{
+w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true}));
+assert(form()&&form().elements.query,'Ctrl+K не открыл глобальный поиск');
+w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+assert(!w.document.querySelector('.ov'),'Escape не закрыл окно поиска');
+w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'3',ctrlKey:true,altKey:true,bubbles:true}));
+assert(w.document.querySelector('#m h1').textContent==='Склад','Ctrl+Alt+3 не открыл склад');
+w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',ctrlKey:true,altKey:true,bubbles:true}));
+assert(form()&&form().querySelector('h3')?.textContent==='Новая сборка','Ctrl+Alt+N не открыл новую сборку');
+form().closest('.ov').remove();
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });

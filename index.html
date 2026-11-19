@@ -19,7 +19,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 .ac2{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:14px}.ts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--t);color:var(--bg);padding:9px 18px;border-radius:99px;z-index:20}
 .ft{margin-top:36px;padding:14px 16px;border:1px solid var(--b);border-radius:12px;color:var(--m);text-align:center}.ft b{color:var(--t);letter-spacing:.02em}
 .from-build td{background:color-mix(in srgb,var(--w) 11%,var(--s))}.cat-group{border:1px solid var(--b);border-radius:10px;padding:12px;margin:10px 0;background:var(--s)}.cat-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--b)}.cat-item:first-child{border-top:0}.cat-actions{display:flex;gap:4px;flex-wrap:wrap}.muted-item{opacity:.55}.sell-scroll{max-height:52vh;overflow:auto;border:1px solid var(--b);border-radius:10px}.sell-scroll table{min-width:700px}.sell-scroll input[type=number]{min-width:85px}.sell-scroll tr:has(input[type=checkbox]:checked){background:color-mix(in srgb,var(--a) 8%,transparent)}
-.rpt-toolbar{align-items:center}.rpt-tabs{display:flex;gap:6px;flex-wrap:wrap}.rpt-scroll{overflow:auto;background:var(--s);border:1px solid var(--b);border-radius:12px}.rpt-scroll table{min-width:1180px}.rpt-scroll th{position:sticky;top:0;z-index:2}.rpt-scroll th:first-child,.rpt-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--s)}.rpt-scroll th:first-child{z-index:3;background:var(--s2)}.rpt-group td,.rpt-group th{font-weight:700;background:var(--s2)!important}.rpt-total td,.rpt-total th{font-weight:800;background:color-mix(in srgb,var(--a) 9%,var(--s))!important;border-top:2px solid var(--a)}.rpt-cat th{font-weight:500;padding-left:26px}.rpt-note{margin:10px 0;color:var(--m);font-size:13px}.rpt-summary{min-width:0!important}.rpt-summary td:first-child{min-width:150px}.rpt-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}.rpt-detail{min-width:850px!important}.rpt-chart{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px;margin:12px 0;overflow:hidden}
+.rpt-toolbar{align-items:center}.rpt-tabs{display:flex;gap:6px;flex-wrap:wrap}.rpt-scroll{overflow:auto;background:var(--s);border:1px solid var(--b);border-radius:12px}.rpt-scroll table{min-width:1180px}.rpt-scroll th{position:sticky;top:0;z-index:2}.rpt-scroll th:first-child,.rpt-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--s)}.rpt-scroll th:first-child{z-index:3;background:var(--s2)}.rpt-group td,.rpt-group th{font-weight:700;background:var(--s2)!important}.rpt-total td,.rpt-total th{font-weight:800;background:color-mix(in srgb,var(--a) 9%,var(--s))!important;border-top:2px solid var(--a)}.rpt-cat th{font-weight:500;padding-left:26px}.rpt-note{margin:10px 0;color:var(--m);font-size:13px}.rpt-summary{min-width:0!important}.rpt-summary td:first-child{min-width:150px}.rpt-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}.rpt-detail{min-width:850px!important}.rpt-chart{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px;margin:12px 0;overflow:hidden}.gsearch-results{display:grid;gap:6px;max-height:52vh;overflow:auto}.gsearch-result{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;width:100%;white-space:normal}.gsearch-result span{font-weight:600}.gsearch-result small{color:var(--m);text-align:right}.gsearch-help{color:var(--m);font-size:12px}
 @media(max-width:760px){.rpt-kpi{grid-template-columns:1fr 1fr}.rpt-scroll table{min-width:1060px}}
 @media(max-width:860px){.k{grid-template-columns:1fr 1fr}.kp:first-child{grid-column:1/-1}}
 @media(max-width:760px){body{grid-template-columns:1fr;padding-bottom:64px}nav{position:fixed;inset:auto 0 0 0;height:auto;flex-direction:row;justify-content:space-around;border:0;border-top:1px solid var(--b);padding:6px;z-index:5}.lg{display:none}nav button{padding:8px 10px;font-size:13px}main{padding:18px 14px}.g2{grid-template-columns:1fr}}
@@ -390,11 +390,11 @@ cats.forEach(cat=>{const h=hiddenC.includes(g+'::'+cat),protectedType=kind=='e'&
 html+='</section>'});
 return html+'</section>';
 }
-function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.8<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){return head('Настройки')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button></div>'+(dip?'<div><button class="btn" data-a="inst">Установить как приложение</button></div>':'')+'<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div></div><div class="ft">Buildbook, версия 1.9<br>Developed by <b>Quinta Legione</b></div>'}
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'1.8-test',database:DB_NAME,ready:()=>APP_READY,
+version:'1.9-test',database:DB_NAME,ready:()=>APP_READY,
 getState:()=>JSON.parse(JSON.stringify(S)),
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),
@@ -409,10 +409,43 @@ buildCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?cost(b):nul
 buildLiveCost:buildId=>{const b=S.builds.find(x=>x.id==buildId);return b?live(b):null},
 dbName:()=>DB_NAME
 })})}
+function globalSearch(){
+const body='<p class="gsearch-help">Поиск по комплектующим, сборкам, операциям и задачам. Нажмите Ctrl+K, чтобы открыть поиск из любого раздела.</p><input name="query" type="search" autocomplete="off" placeholder="Введите название, категорию, описание или текст задачи"><div id="gsearch-count" class="gsearch-help">Введите минимум 2 символа</div><div id="gsearch-results" class="gsearch-results"></div>';
+const f=modal('Глобальный поиск',body,()=>false,true,'Готово');
+const input=f.elements.query,results=f.querySelector('#gsearch-results'),count=f.querySelector('#gsearch-count');
+const norm=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ru-RU').trim();
+const update=()=>{
+const q=norm(input.value);results.innerHTML='';
+if(q.length<2){count.textContent='Введите минимум 2 символа';return}
+const matches=[];
+const add=(type,id,title,meta,haystack)=>{
+if(norm(haystack).includes(q))matches.push({type,id,title,meta});
+};
+S.batches.forEach(b=>add('batch',b.id,b.desc,(b.type||'Комплектующее')+' · '+D(b.date),[b.type,b.desc,b.supplier,b.note,b.reason].join(' ')));
+S.builds.forEach(b=>add('build',b.id,'Сборка №'+b.num+' · '+(b.name||'Без названия'),(b.status||'')+' · '+D(b.date),[b.num,b.name,b.status,b.builder,b.buyer,b.note].join(' ')));
+S.tx.forEach(t=>add('tx',t.id,t.desc||t.cat||'Операция',(t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход')+' · '+D(t.date)+' · '+R(t.amount),[t.desc,t.cat,t.grp,t.note,t.batchDesc,t.buildId,t.sourceBuildNum,t.kind=='transfer'?'Перевод между кассами':''].join(' ')));
+S.tasks.forEach(t=>add('task',t.id,t.text||'Задача',(t.done?'Выполнено':'Открыта')+(t.due?' · до '+D(t.due):''),[t.text,t.who,t.due,t.q,t.build].join(' ')));
+const typeLabel={batch:'Склад',build:'Сборка',tx:'Операция',task:'Задача'};
+const shown=matches.slice(0,40);
+count.textContent='Найдено: '+matches.length+(matches.length>40?' · показаны первые 40':'');
+results.innerHTML=shown.length?shown.map(x=>'<button type="button" class="btn g gsearch-result" data-search-type="'+x.type+'" data-search-id="'+esc(x.id)+'"><span>'+esc(x.title)+'</span><small>'+typeLabel[x.type]+' · '+esc(x.meta)+'</small></button>').join(''):'<p class="em">По запросу ничего не найдено.</p>';
+};
+input.addEventListener('input',update);
+results.addEventListener('click',e=>{
+const result=e.target.closest('[data-search-type]');
+if(!result)return;
+const routes={batch:['stock','pe'],build:['builds','be'],tx:['tx','te'],task:['tasks','ke']},route=routes[result.dataset.searchType];
+if(!route)return;
+f.closest('.ov').remove();
+V.tab=route[0];render();act(route[1],result.dataset.searchId);
+});
+update();
+}
+
 /* ядро */
 function render(){$('#m').innerHTML={home,dash,stock,builds,tx:money,reports:reports,tasks,log:logv,set:sets}[V.tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id==V.tab))}
 const find=(a,id)=>S[a].find(x=>x.id==id);
-function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={nav:()=>{V.tab=id;render();scrollTo(0,0)},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>{const b=find('batches',id);if(b.problem){if(confirm('Снять пометку «проблема»?')){b.problem=0;b.reason=''}}else{const r=prompt('Что не так с деталью?');if(!r)return;b.problem=1;b.reason=r}save();render()},
 pd:()=>{const b=find('batches',id);if(used(b)){alert('Деталь стоит в сборках, удалить нельзя');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи, чтобы не потерять возможность возврата товара.');return}if(!confirm('Удалить партию «'+b.desc+'»?'))return;S.batches=S.batches.filter(x=>x!=b);if(b.txId&&confirm('Удалить и связанный расход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
 bd:()=>{const b=find('builds',id);if(!confirm('Удалить сборку №'+b.num+'? Детали вернутся на склад.'))return;S.builds=S.builds.filter(x=>x!=b);delete PH[b.id];if(b.txId&&confirm('Удалить и связанный доход?'))S.tx=S.tx.filter(t=>t.id!=b.txId);save();render()},
@@ -436,6 +469,23 @@ per:()=>{S.set.per=id;save.skip=1;save();render()},dcfg:()=>{V.dc=!V.dc;render()
 dmv:()=>{const[i,d]=id.split(':').map(Number),a=DD(),j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save.skip=1;save();render()},
 dty:()=>{const w=DD()[id],t=Wd[w.id][2];w.type=t[(t.indexOf(w.type)+1)%t.length];save.skip=1;save();render()},dwd:()=>{const w=DD()[id];w.w=w.w?0:1;save.skip=1;save();render()},drm:()=>{DD().splice(id,1);save.skip=1;save();render()},dadd:()=>{DD().push({id,type:Wd[id][2][0],w:0});save.skip=1;save();render()},
 calc:()=>cform(),inst:()=>dip&&dip.prompt(),wipe:()=>{if(confirm('Удалить все данные? Это нельзя отменить.')&&confirm('Точно удалить? Сначала скачайте копию.')){indexedDB.deleteDatabase('buildbook');setTimeout(()=>location.reload(),200)}}};A[a]&&A[a]()}
+document.addEventListener('keydown',e=>{
+const key=String(e.key||'').toLowerCase(),withSearch=(e.ctrlKey||e.metaKey)&&key==='k';
+if(withSearch){e.preventDefault();if(!document.querySelector('.ov'))globalSearch();return}
+if(key==='escape'){const overlay=document.querySelector('.ov');if(overlay)overlay.remove();return}
+if(!(e.ctrlKey&&e.altKey)||e.repeat)return;
+const navKeys={'1':'home','2':'dash','3':'stock','4':'builds','5':'tx','6':'reports','7':'tasks','8':'log','9':'set'};
+if(navKeys[key]){e.preventDefault();V.tab=navKeys[key];render();scrollTo(0,0);return}
+if(['n','p','t','i','e'].includes(key)){
+e.preventDefault();
+if(key==='n'){V.tab='builds';render();bform()}
+else if(key==='p'){V.tab='stock';render();pform()}
+else if(key==='t'){V.tab='tasks';render();kform(0,0)}
+else if(key==='i'){V.tab='tx';render();tform(0,'i')}
+else if(key==='e'){V.tab='tx';render();tform(0,'e')}
+}
+});
+
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');a&&act(a.dataset.a,a.dataset.id)});
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
 document.addEventListener('change',e=>{if(!e.target.matches('[data-imp]'))return;const fl=e.target.files[0];if(!fl)return;fl.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.batches)||!Array.isArray(d.builds)||!Array.isArray(d.tx))throw 0;if(confirm('Заменить все текущие данные данными из копии?')){S=Object.assign(S,d);PH=S.photos||{};delete S.photos;S.categories=S.categories||{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.stockGroup=S.stockGroup||'Сборка ПК';S.partSaleGroup=S.partSaleGroup||'Продажи';S.partSaleCategory=S.partSaleCategory||'Комплектующие';S.set=S.set||{theme:'auto',year:new Date().getFullYear(),backup:''};EXP=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));INC=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));syncCategories();save();render();toast('Данные загружены')}}catch(_){alert('Файл не похож на копию Buildbook')}})});
