@@ -796,11 +796,11 @@ function mergeBackupData(data){
  });
  (data.batches||[]).forEach(source=>{
   const mapped=batchMap[String(source.id||'')],target=mapped&&S.batches.find(b=>b.id==mapped),txId=source.txId&&txMap[String(source.txId)];
-  if(target&&txId)target.txId=txId;
+  if(target&&txId&&!target.txId)target.txId=txId;
  });
  (data.builds||[]).forEach(source=>{
   const mapped=buildMap[String(source.id||'')],target=mapped&&S.builds.find(b=>b.id==mapped),txId=source.txId&&txMap[String(source.txId)];
-  if(target&&txId)target.txId=txId;
+  if(target&&txId&&!target.txId)target.txId=txId;
  });
  if(data.photos&&typeof data.photos==='object')Object.entries(data.photos).forEach(([old,photos])=>{
   const mapped=buildMap[old];if(mapped&&Array.isArray(photos)&&!PH[mapped])PH[mapped]=clone(photos);
