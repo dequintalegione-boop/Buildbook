@@ -148,6 +148,9 @@ function migrateState(source){
   version++;
   migrated=true;
  }
+ const beforeMetadata=JSON.stringify(state);
+ ensureProfileMetadata(state,new Date().toISOString());
+ if(JSON.stringify(state)!==beforeMetadata)migrated=true;
  ['accounts','batches','builds','tx','stockEvents','tasks','trash','checklist'].forEach(key=>{
   if(!Array.isArray(state[key]))throw new Error('Повреждена структура данных: раздел «'+key+'» не является списком. Данные не изменены.');
  });
