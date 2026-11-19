@@ -110,7 +110,7 @@ alerts=[];api.action('ccdel',encodeURIComponent(JSON.stringify(['e','Сборк�
 await test('Журнал фиксирует изменения',()=>assert(api.getLogs().length>0,'В журнале нет записей'));
 await test('Дашборд и графики отображаются без ошибки',()=>{api.action('nav','dash');assert(w.document.querySelectorAll('#m .qd').length>0,'На дашборде нет блоков');assert(w.document.querySelector('#m svg'),'Не построился SVG-график')});
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
-await sleep(500);const expected=state().batches.length;const src=frame.getAttribute('src');await new Promise((resolve,reject)=>{frame.onload=resolve;frame.onerror=reject;frame.src=src+'&reload='+Date.now()});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
+await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';
 }
