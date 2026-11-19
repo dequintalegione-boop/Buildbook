@@ -19,11 +19,11 @@ function report(name,ok,detail){const li=document.createElement('li');li.classNa
 async function test(name,fn){try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
-batches:[
-{id:'gpu-batch',type:'Видеокарты',desc:'Тестовая видеокарта',date:'2026-01-10',price:100,qty:10,problem:0,reason:'',supplier:'Поставщик'},
-{id:'ssd-batch',type:'ССД',desc:'Тестовый SSD',date:'2026-01-11',price:50,qty:2,problem:0,reason:''}
+stockEvents:[],batches:[
+{id:'gpu-batch',type:'Видеокарты',desc:'Тестовая видеокарта',date:'2026-01-10',price:100,qty:10,problemQty:0,problemReason:'',writtenOffQty:0,supplier:'Поставщик'},
+{id:'ssd-batch',type:'ССД',desc:'Тестовый SSD',date:'2026-01-11',price:50,qty:2,problemQty:0,problemReason:'',writtenOffQty:0}
 ],
-builds:[{id:'build-open',num:1,name:'Тестовая сборка',status:'Собирается',builder:'Тест',buyer:'',date:'2026-01-12',sold:'',planned:0,price:0,note:'',lines:[{batchId:'gpu-batch',qty:4}]}],
+builds:[{id:'build-open',num:1,name:'Тестовая сборка',status:'Собирается',builder:'Тест',buyer:'',date:'2026-01-12',sold:'',planned:0,price:0,note:'',lines:[{batchId:'gpu-batch',qty:4,problem:false}]}],
 tx:[],seq:1,tasks:[],notes:'',stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
 categories:{
 e:{'Сборка ПК':['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее','Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},
@@ -261,6 +261,66 @@ assert(w.document.querySelector('#m h1').textContent==='Склад','Ctrl+Alt+3 
 w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',ctrlKey:true,altKey:true,bubbles:true}));
 assert(form()&&form().querySelector('h3')?.textContent==='Новая сборка','Ctrl+Alt+N не открыл новую сборку');
 form().closest('.ov').remove();
+});
+
+await test('Проблемным можно отметить только часть свободного нормального остатка',()=>{
+api.setState(fixture());api.action('nav','stock');api.action('pprob','gpu-batch');let f=form();assert(f,'Форма отметки проблемы не открылась');
+setv(f,'qty','3');setv(f,'reason','Не проходит проверку');submit(f);
+const b=state().batches.find(x=>x.id==='gpu-batch');assert(b.problemQty===3,'Не отмечено 3 проблемные единицы');
+assert(api.normalAvailable('gpu-batch')===3,'Нормальный остаток должен быть 3');assert(api.problemAvailable('gpu-batch')===3,'Проблемный остаток должен быть 3');
+assert(api.available('gpu-batch')===6,'Общий свободный остаток должен остаться 6');
+});
+await test('Количество проблемных единиц нельзя увеличить сверх нормального остатка',()=>{
+api.action('pprob','gpu-batch');const f=form();setv(f,'qty','4');setv(f,'reason','Повторная проверка');submit(f);
+assert(alerts.some(x=>x.includes('Проверьте количество')),'Не сработала проверка доступного количества');
+assert(form()===f,'Форма закрылась после ошибочной отметки');assert(state().batches.find(x=>x.id==='gpu-batch').problemQty===3,'Количество проблемных деталей изменилось при ошибке');f.closest('.ov').remove();
+});
+await test('Проблемную деталь можно добавить в сборку только отдельным выбором',()=>{
+api.action('nav','builds');api.action('be','build-open');const f=form();click('[data-add]');
+const select=f.querySelector('select[data-i="1"][data-k="batchId"]');assert(select,'Не появился выбор второй детали');
+assert([...select.options].some(o=>o.value==='gpu-batch'),'Нормальная деталь отсутствует в списке');
+assert([...select.options].some(o=>o.value==='gpu-batch::problem'),'Проблемная деталь не показана для осознанного выбора');
+select.value='gpu-batch::problem';select.dispatchEvent(new w.Event('change',{bubbles:true}));
+submit(f);const b=state().builds.find(x=>x.id==='build-open');
+assert(b.lines.some(l=>l.problem&&l.batchId==='gpu-batch'&&l.qty===1),'Проблемная деталь не помечена в составе сборки');
+assert(api.problemAvailable('gpu-batch')===2,'Остаток проблемных деталей в сборке посчитан неверно');
+});
+await test('Можно частично снять отметку о проблеме со свободных деталей',()=>{
+api.action('pclear','gpu-batch');const f=form();assert(f,'Форма снятия отметки не открылась');
+setv(f,'qty','1');setv(f,'reason','Повторно проверена');submit(f);
+const b=state().batches.find(x=>x.id==='gpu-batch');assert(b.problemQty===2,'Должно остаться 2 отмеченные единицы');
+assert(api.normalAvailable('gpu-batch')===4,'Нормальный свободный остаток должен увеличиться до 4');
+assert(api.problemAvailable('gpu-batch')===1,'Проблемный свободный остаток должен стать 1');
+});
+await test('Списание проблемных деталей уменьшает остаток и сохраняет историю',()=>{
+api.action('pwriteoff','gpu-batch');const f=form();assert(f,'Форма списания не открылась');
+setv(f,'date','2026-04-02');setv(f,'qty','1');setv(f,'reason','Не подлежит ремонту');submit(f);
+const b=state().batches.find(x=>x.id==='gpu-batch');assert(api.writtenOff('gpu-batch')===1,'Не учтено одно списание');
+assert(b.problemQty===1,'После списания должна остаться одна проблемная единица в сборке');
+assert(api.problemAvailable('gpu-batch')===0,'Списанная единица доступна как проблемный остаток');
+assert(api.available('gpu-batch')===4,'Списанная единица не вычтена из общего остатка');
+assert(api.stockEvents().some(e=>e.kind==='writeoff'&&e.qty===1&&e.reason==='Не подлежит ремонту'),'Событие списания не попало в историю');
+});
+await test('Продажа проблемной детали из сборки и её возврат сохраняют тип остатка',()=>{
+api.openSale();let f=form();assert(f.textContent.includes('проблемные единицы'),'Проблемная деталь сборки не показана в продаже');
+const rows=[...f.querySelectorAll('tbody tr')],i=rows.findIndex(r=>r.textContent.includes('Из сборки №1')&&r.textContent.includes('проблемные единицы'));
+assert(i>=0,'Не найдена проблемная позиция из сборки');f.querySelector('[name="pick-'+i+'"]').checked=true;setv(f,'qty-'+i,'1');setv(f,'price-'+i,'200');submit(f);
+const sale=state().tx.find(t=>t.partSale&&t.sourceProblem);assert(sale,'Продажа не сохранила признак проблемного товара');
+assert(api.writtenOff('gpu-batch')===1&&api.problemAvailable('gpu-batch')===0,'Продажа затронула списание или оставила проблемный свободный остаток');
+api.action('td',sale.id);const b=state().batches.find(x=>x.id==='gpu-batch');
+assert(b.qty===10&&b.problemQty===1,'Возврат не восстановил складской остаток');
+assert(state().builds.find(x=>x.id==='build-open').lines.some(l=>l.problem&&l.qty===1),'Возвращённая деталь не вернулась в сборку как проблемная');
+});
+await test('Редактирование партии не позволяет затронуть занятые, проблемные и списанные единицы',()=>{
+api.action('pe','gpu-batch');const f=form();setv(f,'qty','5');submit(f);
+assert(alerts.some(x=>x.includes('занятого, проблемного и списанного')),'Не сработала защита минимального количества партии');
+assert(form()===f,'Форма партии закрылась при недопустимом количестве');f.closest('.ov').remove();
+});
+await test('История проблем и списаний отображает все складские события',()=>{
+assert(api.stockEvents().length===3,'Ожидалось три складских события');
+api.action('phistory');const f=form();assert(f&&f.textContent.includes('Не подлежит ремонту'),'Причина списания не отображается в истории');
+assert(f.textContent.includes('Отметка проблемы')&&f.textContent.includes('Снятие отметки'),'В истории отсутствуют изменения пометки');
+f.closest('.ov').remove();
 });
 
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
