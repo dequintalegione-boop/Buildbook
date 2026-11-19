@@ -573,6 +573,20 @@ const CSV_FIELDS={
   ['lines','Состав / комплектующие (ID:кол-во)',['комплектующие','компоненты','состав','детали','parts','lines']],
   ['note','Комментарий',['комментарий','примечание','note']]
  ],
+ accounts:[
+  ['id','ID кассы',['id','ид','идентификатор','идентификаторкассы']],
+  ['name','Название кассы',['касса','названиекассы','счет','счёт','кошелек','кошелёк','account','name']],
+  ['open','Начальный остаток',['начальныйостаток','начальныйбаланс','остатокначало','openingbalance','open']]
+ ],
+ tasks:[
+  ['id','ID задачи',['id','ид','идентификатор','идентификаторзадачи']],
+  ['text','Текст задачи',['задача','текстзадачи','описаниезадачи','текст','task','title']],
+  ['q','Квадрант',['квадрант','приоритет','quadrant','q']],
+  ['done','Выполнено',['выполнено','готово','завершено','done','completed']],
+  ['due','Срок',['срок','дедлайн','датаокончания','due','deadline']],
+  ['who','Исполнитель',['исполнитель','ответственный','assignee','who']],
+  ['build','ID сборки',['идсборки','idсборки','идентификаторсборки','buildid','build']]
+ ],
  tx:[
   ['id','ID операции',['id','ид','идентификатор','идентификатороперации']],
   ['kind','Тип операции',['тип','вид','типоперации','kind','операция']],
@@ -667,6 +681,24 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     if(x.status==ST[3]){x.sold=x.sold||date;const importedCost=csvNumber(value(row,'cost'));x.cost=Number.isFinite(importedCost)&&importedCost>=0?importedCost:live(x)}
     else x.cost=null;
     S.builds.push(x);S.seq=Math.max(S.seq,+num||0);stats.added++;
+   }else if(kind=='accounts'){
+    const sourceId=value(row,'id'),name=value(row,'name'),openRaw=value(row,'open'),open=openRaw===''?0:csvNumber(openRaw);
+    if(!name||!Number.isFinite(open))throw new Error('Нужны название кассы и корректный начальный остаток.');
+    if(sourceId&&S.accounts.some(a=>a.id==sourceId))throw new Error('Касса с таким ID уже существует.');
+    if(S.accounts.some(a=>csvHeaderNorm(a.name)===csvHeaderNorm(name)))throw new Error('Касса с таким названием уже существует.');
+    S.accounts.push({id:sourceId||uid(),name,open});stats.added++;
+   }else if(kind=='tasks'){
+    const sourceId=value(row,'id'),textValue=value(row,'text').trim();
+    if(!textValue)throw new Error('Не заполнен текст задачи.');
+    const id=sourceId||uid();if(S.tasks.some(t=>t.id==id))throw new Error('Задача с таким ID уже существует.');
+    const qRaw=value(row,'q'),q=qRaw===''?4:csvNumber(qRaw);
+    if(!Number.isInteger(q)||q<0||q>=QN.length)throw new Error('Квадрант должен быть целым числом от 0 до '+(QN.length-1)+'.');
+    const doneRaw=csvHeaderNorm(value(row,'done')),done=['1','true','да','yes','готово','выполнено','завершено'].includes(doneRaw)?1:0;
+    const dueRaw=value(row,'due'),due=dueRaw?csvDate(dueRaw):'';
+    if(dueRaw&&!due)throw new Error('Некорректная дата срока задачи.');
+    const build=value(row,'build');
+    if(build&&!S.builds.some(b=>b.id==build))throw new Error('Не найдена сборка по указанному ID.');
+    S.tasks.push({id,text:textValue,q,done,due,who:value(row,'who'),build:build||''});stats.added++;
    }else if(kind=='tx'){
     const date=csvDate(value(row,'date')),amount=csvNumber(value(row,'amount'));
     if(!date||!Number.isFinite(amount)||amount<=0)throw new Error('Нужны корректная дата и сумма больше нуля.');
@@ -870,7 +902,7 @@ function xlsxDataRows(kind){
  if(kind=='builds')return [['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Цена продажи','Себестоимость','Комплектующие','Комментарий'],...S.builds.map(b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,b.price,cost(b),(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note])];
  if(kind=='tx')return [['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],...S.tx.map(t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||''])];
  if(kind=='accounts')return [['ID','Касса','Начальный остаток','Текущий баланс'],...S.accounts.map(a=>[a.id,a.name,a.open,bal(a)])];
- if(kind=='tasks')return [['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],...S.tasks.map(t=>[t.id,t.text,t.q,t.done?'Да':'Нет',t.due||'',t.who||t.assignee||'',t.buildId||''])];
+ if(kind=='tasks')return [['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],...S.tasks.map(t=>[t.id,t.text,t.q,t.done?'Да':'Нет',t.due||'',t.who||t.assignee||'',t.build||t.buildId||''])];
  return [];
 }
 function xlsxAddSheet(wb,name,rows){
@@ -924,7 +956,11 @@ function guessXlsxKind(sheetName,headers){
  const name=csvHeaderNorm(sheetName),h=headers.map(csvHeaderNorm);
  if(name.includes('склад')||name.includes('stock'))return'batches';
  if(name.includes('сборк')||name.includes('build'))return'builds';
+ if(name.includes('касс')||name.includes('счет')||name.includes('счёт')||name.includes('account'))return'accounts';
+ if(name.includes('задач')||name.includes('task'))return'tasks';
  if(name.includes('транзакц')||name.includes('операц')||name.includes('доход')||name.includes('расход')||name.includes('transaction'))return'tx';
+ if(h.includes('начальныйостаток')&&(h.includes('касса')||h.includes('счет')||h.includes('счёт')))return'accounts';
+ if(h.includes('квадрант')&&h.some(x=>['задача','текстзадачи','task'].includes(x)))return'tasks';
  if(h.includes('сумма')||h.includes('amount')||h.includes('типоперации'))return'tx';
  if(h.includes('номерсборки')||h.includes('статус'))return'builds';
  if(h.includes('тип')&&h.includes('описание')&&h.includes('колво'))return'batches';
@@ -952,7 +988,7 @@ function xlsxMappingHtml(kind,headers,sheetIndex){
  }).join('');
 }
 function applyXlsxSelections(plans,choices){
- const order={batches:0,builds:1,tx:2},selected=choices.filter(x=>x.include&&x.kind!='skip').sort((a,b)=>(order[a.kind]??9)-(order[b.kind]??9));
+ const order={accounts:0,batches:1,builds:2,tx:3,tasks:4},selected=choices.filter(x=>x.include&&x.kind!='skip').sort((a,b)=>(order[a.kind]??99)-(order[b.kind]??99));
  const total={added:0,skipped:0,errors:[],sheets:[]};
  selected.forEach(choice=>{
   const result=applyCsvImport(choice.matrix,choice.kind,choice.mapping,choice.defaultKind||'e');
@@ -973,12 +1009,12 @@ function xlsxImportWizard(buffer){
  let workbook,plans;
  try{workbook=X.read(buffer,{type:'array',cellDates:false});plans=xlsxWorkbookPlans(workbook)}catch(error){alert('Не удалось прочитать XLSX: '+(error.message||'повреждённый файл'));return}
  if(!plans.length){alert('В книге Excel нет листов.');return}
- const kinds=[['skip','Не импортировать'],['batches','Склад'],['builds','Сборки'],['tx','Операции']];
+ const kinds=[['skip','Не импортировать'],['accounts','Кассы'],['batches','Склад'],['builds','Сборки'],['tx','Операции'],['tasks','Задачи']];
  const body=plans.map((p,i)=>{
   const preview=p.matrix.slice(0,5).map(row=>'<tr>'+p.headers.map((_,j)=>'<td>'+esc(row[j]??'')+'</td>').join('')+'</tr>').join('');
   return '<section class="cat-group"><label class="ck"><input type="checkbox" name="xlsx_use_'+i+'" '+(p.kind!='skip'?'checked':'')+'> Обработать лист «'+esc(p.name)+'»</label><label>Тип данных<select name="xlsx_kind_'+i+'">'+opt(kinds,p.kind)+'</select></label><div id="xlsx_map_'+i+'" class="g2"></div><div id="xlsx_default_'+i+'"></div><small>Предпросмотр: '+Math.max(0,p.matrix.length-1)+' строк данных</small><div class="sell-scroll"><table><thead><tr>'+p.headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div></section>';
  }).join('');
- const f=modal('Импорт книги Excel','<p class="mu">Найдено листов: '+plans.length+'. Для каждого листа выберите назначение и сопоставьте столбцы. Импорт выполняется в порядке: склад → сборки → операции, чтобы сохранить связи по ID.</p>'+body,form=>{
+ const f=modal('Импорт книги Excel','<p class="mu">Найдено листов: '+plans.length+'. Для каждого листа выберите назначение и сопоставьте столбцы. Импорт выполняется в порядке: кассы → склад → сборки → операции → задачи, чтобы сохранить связи по ID.</p>'+body,form=>{
   const choices=plans.map((p,i)=>{
    const kind=form.elements['xlsx_kind_'+i].value,mapping={};
    if(kind!='skip')CSV_FIELDS[kind].forEach(field=>mapping[field[0]]=form.elements['xlsx_map_'+i+'_'+field[0]].value);
