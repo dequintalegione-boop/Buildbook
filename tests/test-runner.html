@@ -438,6 +438,40 @@ assert(result.batches===1&&result.accounts===1,'Отчёт замены не п�
 assert(api.balance('restored-cash')===500,'Начальный остаток восстановленной кассы рассчитан неверно');
 });
 
+await test('Локальная SheetJS 0.20.3 импортирует многостраничную XLSX-книгу',()=>{
+assert(w.XLSX&&w.XLSX.version==='0.20.3','Локальная библиотека SheetJS не загрузилась или версия отличается');
+api.setState(fixture());
+const X=w.XLSX,wb=X.utils.book_new();
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Номер сборки','Название','Статус','Дата сборки','Комплектующие'],
+['xlsx-build','72','Сборка из Excel','Собирается','2026-07-02','xlsx-batch:1']
+]),'Сборки');
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Тип','Описание','Дата','Цена','Количество'],
+['xlsx-batch','ССД','SSD из Excel','2026-07-01','90','3']
+]),'Склад');
+X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet([
+['ID','Дата','Тип','Сумма','Описание','Категория','Касса','ID сборки'],
+['xlsx-income','2026-07-03','Доход','450','Продажа сборки','Сборка ПК','Наличные','xlsx-build']
+]),'Транзакции');
+const buffer=X.write(wb,{bookType:'xlsx',type:'array'}),result=api.importXlsx(buffer),s=state();
+assert(result.added===3&&result.skipped===0,'Ожидалось три импортированные записи');
+assert(s.batches.some(b=>b.id==='xlsx-batch'),'Не импортирован лист склада');
+assert(s.builds.some(b=>b.id==='xlsx-build'&&b.lines[0].batchId==='xlsx-batch'),'Не импортирована ссылка сборки на партию');
+assert(s.tx.some(t=>t.id==='xlsx-income'&&t.buildId==='xlsx-build'),'Не импортирована операция с ID сборки');
+assert(api.available('xlsx-batch')===2,'Импортированная сборка не уменьшила доступный остаток');
+assert(api.balance('cash')===1450,'Импортированный доход не повлиял на кассу');
+});
+await test('Экспорт XLSX содержит листы всех разделов и финансовых отчётов',()=>{
+api.setState(fixture());
+const wb=api.xlsxWorkbook('all'),names=wb.SheetNames;
+['Склад','Сборки','Транзакции','Кассы','Задачи','Расходы','Доходы','Сводка','Прибыль сборок'].forEach(n=>assert(names.includes(n),'В XLSX отсутствует лист '+n));
+const stockRows=w.XLSX.utils.sheet_to_json(wb.Sheets['Склад'],{header:1,raw:false});
+assert(stockRows[0][0]==='ID'&&stockRows.some(r=>r[0]==='gpu-batch'),'В XLSX склада нет заголовков или ID партий');
+const buildRows=w.XLSX.utils.sheet_to_json(wb.Sheets['Сборки'],{header:1,raw:false});
+assert(buildRows.some(r=>r[0]==='build-open'&&String(r[11]).includes('gpu-batch')),'В XLSX не сохранена ссылка сборки на партию');
+});
+
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
 await sleep(500);const expected=state().batches.length;await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');
 });
