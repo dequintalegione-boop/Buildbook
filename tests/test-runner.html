@@ -143,9 +143,13 @@ await test('Слой хранения читает состояние, журн�
 const name=tempDatabaseName('buildbook-storage-test'),repository=w.BuildbookRepository.create(name);
 await repository.clear();
 try{
+summary.textContent='Выполняется: Blob repository — подготовка';
 const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
+summary.textContent='Выполняется: Blob repository — запись';
 await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
+summary.textContent='Выполняется: Blob repository — чтение';
 const stored=await repository.readProfile();
+summary.textContent='Выполняется: Blob repository — проверка';
 assert(stored.state.marker==='Состояние','Не прочитано состояние профиля');
 assert(stored.logs[0].id==='journal-entry','Не прочитан журнал');
 assert(stored.photos.build1[0] instanceof w.Blob&&stored.photos.build1[0].size===photo.size,'Фотография не сохранена как Blob');
@@ -891,9 +895,12 @@ assert(state().builds.length===1,'После конфликта появилас
 await test('Фотографии сохраняются в IndexedDB как Blob',async()=>{
 api.setState(fixture());
 const photo='data:image/jpeg;base64,AAECAwQFBgc=';
+summary.textContent='Выполняется: Blob application — подготовка';
 api.setPhotos({'build-open':[photo]});
 await sleep(500);
+summary.textContent='Выполняется: Blob application — запись';
 await api.flushStorage();
+summary.textContent='Выполняется: Blob application — чтение';
 const stored=await api.photoStorageInfo();
 assert(stored['build-open']&&stored['build-open'][0].isBlob,'Фото записано в IndexedDB как строка, а не Blob');
 assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size>0,'У Blob не сохранены MIME-тип или байты изображения');
