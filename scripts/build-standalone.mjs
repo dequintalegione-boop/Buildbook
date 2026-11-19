@@ -14,35 +14,34 @@ const [html, repository, xlsx] = await Promise.all([
   readFile(xlsxPath, 'utf8')
 ]);
 
-function replaceExactlyOnce(source, needle, replacement, label) {
+function assertOneReference(source, needle, label) {
   const count = source.split(needle).length - 1;
   if (count !== 1) {
     throw new Error(`Expected exactly one ${label} reference in index.html, found ${count}.`);
   }
-  return source.replace(needle, replacement);
 }
 
-let standalone = html;
-standalone = replaceExactlyOnce(
-  standalone,
-  '<script src="./vendor/xlsx.full.min.js"></script>',
+const xlsxTag = '<script src="./vendor/xlsx.full.min.js"></script>';
+const repositoryTag = '<script src="./repository.js"></script>';
+assertOneReference(html, xlsxTag, 'SheetJS');
+assertOneReference(html, repositoryTag, 'IndexedDB repository');
+
+let standalone = html.replace(
+  xlsxTag,
   `<script>
 /* Bundled locally from vendor/xlsx.full.min.js. */
 ${xlsx}
-</script>`,
-  'SheetJS'
+</script>`
 );
-standalone = replaceExactlyOnce(
-  standalone,
-  '<script src="./repository.js"></script>',
+standalone = standalone.replace(
+  repositoryTag,
   `<script>
 /* Bundled locally from repository.js. */
 ${repository}
-</script>`,
-  'IndexedDB repository'
+</script>`
 );
 
-if (standalone.includes('src="./repository.js"') || standalone.includes('src="./vendor/xlsx.full.min.js"')) {
+if (standalone.includes(xlsxTag) || standalone.includes(repositoryTag)) {
   throw new Error('The standalone bundle still references an external repository or SheetJS file.');
 }
 
