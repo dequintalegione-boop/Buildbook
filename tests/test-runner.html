@@ -69,6 +69,20 @@ try{api.migrateState({schemaVersion:api.schemaVersion+1,batches:[],builds:[],tx:
 catch(error){rejected=String(error.message).includes('более новой версией')}
 assert(rejected,'Будущая версия схемы не была заблокирована');
 });
+await test('Миграция отклоняет повреждённый корневой формат',()=>{
+let rejected=false;
+try{api.migrateState('повреждённый профиль')}catch(error){rejected=String(error.message).includes('неверный формат')}
+assert(rejected,'Некорректный профиль был молча заменён пустыми значениями');
+});
+await test('Импорт бэкапа блокирует данные от более новой схемы',()=>{
+api.setState(fixture());
+const before=state();
+let rejected=false;
+try{api.restoreBackup({...fixture(),schemaVersion:api.schemaVersion+1},'replace',false)}
+catch(error){rejected=String(error.message).includes('резервной копии')}
+assert(rejected,'Бэкап будущей схемы был принят старой версией');
+assert(JSON.stringify(state())===JSON.stringify(before),'Состояние изменилось после отклонённого бэкапа');
+});
 await test('Мигрированная схема сохраняется в IndexedDB',async()=>{
 await api.flushStorage();
 assert(await api.persistedSchema()===api.schemaVersion,'В IndexedDB не записана актуальная версия схемы');
