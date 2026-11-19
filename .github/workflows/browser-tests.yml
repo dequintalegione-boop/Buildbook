@@ -10,13 +10,14 @@ permissions:
 
 jobs:
   browser-tests:
-    name: Buildbook ${{ matrix.browser }} suite
+    name: Buildbook ${{ matrix.app }} / ${{ matrix.browser }} suite
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
+        app: [index, standalone]
 
     steps:
       - name: Checkout
@@ -33,9 +34,13 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps ${{ matrix.browser }}
 
+      - name: Build autonomous HTML bundle
+        run: node scripts/build-standalone.mjs
+
       - name: Run application and browser suite
         env:
           BROWSER: ${{ matrix.browser }}
+          APP_VARIANT: ${{ matrix.app }}
         run: |
           python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/buildbook-http.log 2>&1 &
           for i in $(seq 1 30); do
