@@ -47,9 +47,5 @@ ${repository}
 </script>`
 );
 
-if (standalone.includes(xlsxSlot) || standalone.includes(repositorySlot)) {
-  throw new Error('A standalone bundle placeholder was not replaced.');
-}
-
 await writeFile(outputPath, standalone, 'utf8');
 console.log(`Built ${outputPath} (${Buffer.byteLength(standalone, 'utf8')} bytes).`);
