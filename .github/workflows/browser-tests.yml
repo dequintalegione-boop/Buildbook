@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: buildbook-browser-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   browser-tests:
     name: Buildbook ${{ matrix.app }} / ${{ matrix.browser }} suite
@@ -15,6 +19,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
         browser: [chromium, firefox, webkit]
         app: [index, standalone]
