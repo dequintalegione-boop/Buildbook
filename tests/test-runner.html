@@ -1422,10 +1422,11 @@ d.tx=[
 {id:'calendar-detail-two',kind:'e',date,amount:2000,acc:'cash',desc:'Закупка SSD',cat:'Сборка ПК'}
 ];
 api.setState(d);api.action('nav','calendar');api.action('calday',date);
-const overlay=w.document.querySelector('.ov'),normalize=value=>String(value||'').replace(/\s+/g,' ');
-assert(overlay&&overlay.textContent.includes('Операции за '+date),'Не открылось окно операций выбранного дня');
-assert(overlay.textContent.includes('Продажа видеокарты')&&overlay.textContent.includes('Закупка SSD'),'В окне не показаны все сделки за день');
-assert(normalize(overlay.textContent).includes('+12 000')&&normalize(overlay.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
+const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
+assert(panel&&panel.textContent.includes('Операции за '+date),'Не открылся блок операций выбранного дня');
+assert(panel.textContent.includes('Продажа видеокарты')&&panel.textContent.includes('Закупка SSD'),'В блоке не показаны все сделки за день');
+assert(normalize(panel.textContent).includes('+12 000')&&normalize(panel.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
+api.action('caldayclear');assert(!w.document.querySelector('.calendar-day-details'),'Кнопка скрытия не закрыла подробности дня');
 });
 await test('Календарь переключает месяцы и возвращается к текущему месяцу',()=>{
 api.setState(fixture());api.action('nav','calendar');
