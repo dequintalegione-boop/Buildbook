@@ -232,7 +232,7 @@ await test('Склад считает доступное количество с
 assert(api.available('gpu-batch')===6,'Ожидалось 6 свободных GPU');assert(api.used('gpu-batch')===4,'Ожидалось 4 GPU в сборке');
 });
 await test('Модальное окно продажи показывает свободные детали и детали из сборки',()=>{
-api.action('nav','stock');api.openSale();const f=form();assert(f,'Окно продажи не открылось');assert(f.querySelectorAll('tbody tr').length===3,'Должно быть 3 строки продажи');assert(f.textContent.includes('Из сборки №1'),'Не помечена деталь из сборки');
+api.action('nav','stock');api.openSale();const f=form();assert(f,'Окно продажи не открылось');assert(f.querySelectorAll('.sell-item').length===3,'Должно быть 3 карточки продажи');assert(f.textContent.includes('Из сборки №1'),'Не помечена деталь из сборки');
 });
 await test('Продажа не принимает количество больше доступного',()=>{
 const f=form();f.querySelector('[name="pick-0"]').checked=true;setv(f,'qty-0','99');setv(f,'price-0','150');submit(f);assert(alerts.some(x=>x.includes('Проверьте количество')),'Не показана ошибка количества');assert(form()===f,'Форма закрылась после ошибочной продажи');assert(api.getState().batches[0].qty===10,'Склад изменился при ошибке');
@@ -1768,33 +1768,42 @@ const toggle=w.document.querySelector('[data-f="layoutEdit"]');
 toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
 const group=w.document.querySelector('#m .cat-group');
 const navItem=w.document.querySelector('nav button[data-id="home"]');
-assert(group&&w.getComputedStyle(group).outlineStyle==='none','Группа настроек получила обводку');
-assert(navItem&&w.getComputedStyle(navItem).outlineStyle==='none','Пункт меню получил обводку');
+assert(group&&w.getComputedStyle(group).outlineStyle==='solid'&&w.getComputedStyle(group).outlineWidth==='1px','Перетаскиваемая группа не получила тонкую обводку');
+assert(navItem&&w.getComputedStyle(navItem).outlineStyle==='solid'&&w.getComputedStyle(navItem).outlineWidth==='1px','Пункт меню не получил тонкую обводку');
 api.action('nav','dash');
 const card=w.document.querySelector('#m .dash-widget');
-assert(card&&w.getComputedStyle(card).outlineStyle==='none','Виджет дашборда получил обводку');
+assert(card&&w.getComputedStyle(card).outlineStyle==='solid'&&w.getComputedStyle(card).outlineWidth==='1px','Перетаскиваемый виджет не получил тонкую обводку');
 });
-await test('Вкладки можно переместить в «Прочее» и открыть из выпадающего списка',()=>{
+await test('Вкладки можно перемещать перетаскиванием и кнопкой в папку «Прочее» и обратно',()=>{
  const data=fixture();data.set=data.set||{};data.set.otherTabs=[];api.setState(data);api.action('nav','set');
  let toggle=w.document.querySelector('[data-f="layoutEdit"]');toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
- const home=w.document.querySelector('nav button[data-id="home"]'),folder=w.document.querySelector('#nav-other-folder');
- assert(home&&home.draggable&&folder&&!folder.hidden,'В режиме компоновки не появилась область «Прочее»');
+ let home=w.document.querySelector('nav button[data-id="home"]'),folder=w.document.querySelector('#nav-other-folder');
+ assert(home&&home.draggable&&folder&&!folder.hidden,'В режиме компоновки не появилась большая область «Прочее»');
+ let moveControl=home.querySelector('.nav-move-control');assert(moveControl&&moveControl.dataset.a==='nav-to-other','У вкладки нет отдельного действия перемещения');
+ moveControl.click();
+ assert(state().set.otherTabs.includes('home'),'Кнопка перемещения не добавила вкладку в «Прочее»');
+ let otherHome=w.document.querySelector('#nav-other-list button[data-id="home"]');
+ assert(otherHome&&otherHome.querySelector('.nav-move-control').dataset.a==='nav-to-main','У вкладки в «Прочее» нет действия возврата');
+ otherHome.querySelector('.nav-move-control').click();
+ assert(!state().set.otherTabs.includes('home'),'Кнопка возврата не вернула вкладку в меню');
+ toggle=w.document.querySelector('[data-f="layoutEdit"]');home=w.document.querySelector('nav button[data-id="home"]');folder=w.document.querySelector('#nav-other-folder');
  const transfer={setData(){},getData(){return''}},start=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(start,'dataTransfer',{value:transfer});home.dispatchEvent(start);
+ const over=new w.Event('dragover',{bubbles:true,cancelable:true});Object.defineProperty(over,'dataTransfer',{value:transfer});folder.dispatchEvent(over);
  const drop=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:transfer});folder.dispatchEvent(drop);
- assert(state().set.otherTabs.includes('home'),'Вкладка не попала в список «Прочее»');
- toggle=w.document.querySelector('[data-f="layoutEdit"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
- const closedFolder=w.document.querySelector('#nav-other-folder'),otherHome=w.document.querySelector('#nav-other-list button[data-id="home"]');
- assert(closedFolder&&!closedFolder.hidden&&otherHome,'Перемещённая вкладка пропала после выключения режима редактирования');
+ assert(state().set.otherTabs.includes('home'),'Перетаскивание не переместило вкладку в папку');
+ toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+ const closedFolder=w.document.querySelector('#nav-other-folder'),movedHome=w.document.querySelector('#nav-other-list button[data-id="home"]');
+ assert(closedFolder&&!closedFolder.hidden&&movedHome,'Папка скрылась, хотя в ней осталась вкладка');
  closedFolder.querySelector('[data-a="other-toggle"]').click();
  assert(closedFolder.classList.contains('open'),'Выпадающий список «Прочее» не открылся');
- otherHome.click();
+ movedHome.click();
  assert(w.document.querySelector('#m h1')?.textContent.trim()==='Сводка','Вкладка из «Прочее» не открывается');
 });
 await test('Кнопка «Подробнее» в сборках открывает отдельное всплывающее окно',()=>{
  api.setState(fixture());api.action('nav','builds');
  const button=w.document.querySelector('#m button[data-a="bview"]');
  assert(button&&button.textContent.includes('Подробнее'),'В списке сборок нет кнопки «Подробнее»');
- button.click();
+ api.action('bview','build-open');
  const popup=w.document.querySelector('.ov .md');
  assert(popup&&popup.textContent.includes('Полная карточка сборки'),'Не открылось всплывающее окно подробностей');
  assert(popup.textContent.includes('Режим редактирования'),'В карточке нет режима редактирования');
@@ -1803,9 +1812,9 @@ await test('Продажа деталей доступна из меню «Тр�
  api.setState(fixture());api.action('nav','tx');
  const dropdown=w.document.querySelector('.tx-action-dropdown');
  assert(dropdown,'У кнопки «Транзакция» нет выпадающего меню');
- dropdown.querySelector('summary').click();
- const sell=dropdown.querySelector('button[data-a="sellParts"]');
- assert(dropdown.open&&sell,'В меню транзакций нет действия «Продать детали»');
+ dropdown.querySelector('[data-a="txmenu-toggle"]').click();
+ const menu=w.document.querySelector('.tx-action-menu'),sell=menu&&menu.querySelector('button[data-a="sellParts"]');
+ assert(menu&&!menu.hidden&&sell,'В меню транзакций нет действия «Продать детали»');
  sell.click();
  const popup=w.document.querySelector('.ov .md');
  assert(popup&&popup.textContent.includes('Продажа комплектующих'),'Не открылось окно продажи комплектующих');
@@ -1819,7 +1828,34 @@ await test('Вкладка «Деньги» переименована в «Ра
  const heading=w.document.querySelector('#m h1');
  assert(nav&&nav.textContent.trim()==='Расходы','Название вкладки в боковом меню не обновлено');
  assert(heading&&heading.textContent.trim()==='Расходы','Заголовок страницы не обновлён');
- assert(!w.document.querySelector('#m [data-a="sellParts"]'),'Отдельная кнопка продажи деталей всё ещё находится на странице расходов');
+ assert(!w.document.querySelector('#m .money-actions > [data-a="sellParts"]')&&w.document.querySelector('#m .tx-action-menu [data-a="sellParts"]'),'Продажа деталей должна находиться в меню «Транзакция», а не отдельной кнопкой');
+});
+await test('Выполненные задачи отображаются в календаре в день завершения',()=>{
+ const data=fixture(),d=new Date(),key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+ data.tasks=[{id:'calendar-task',text:'Проверить задачу в календаре',q:1,done:1,doneAt:key,due:key,who:'Тест'}];
+ api.setState(data);api.action('nav','calendar');
+ const day=w.document.querySelector('[data-calendar-date="'+key+'"]');
+ assert(day&&!day.disabled,'День с выполненной задачей не стал активным в календаре');
+ assert(day.dataset.taskCount==='1'&&day.textContent.includes('1 задач'),'В ячейке календаря не показан счётчик задач');
+ day.click();
+ const panel=w.document.querySelector('.calendar-day-details');
+ assert(panel&&panel.textContent.includes('Задача выполнена')&&panel.textContent.includes('Проверить задачу в календаре'),'В списке действий дня не отображается выполненная задача');
+});
+await test('Выполненные задачи старше двух дней автоматически отправляются в архив',()=>{
+ const dateShift=days=>{const d=new Date();d.setDate(d.getDate()-days);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+ const data=fixture();data.tasks=[
+  {id:'task-archive-old',text:'Старая выполненная задача',q:0,done:1,doneAt:dateShift(3)},
+  {id:'task-archive-recent',text:'Недавно выполненная задача',q:0,done:1,doneAt:dateShift(2)}
+ ];
+ api.setState(data);api.action('nav','tasks');
+ assert(state().tasks.find(x=>x.id==='task-archive-old').archivedAt,'Задача старше двух дней не отправлена в архив');
+ assert(!w.document.querySelector('.qg [data-id="task-archive-old"]'),'Архивная задача осталась среди активных');
+ assert(w.document.querySelector('.qg [data-id="task-archive-recent"]'),'Задача, выполненная два дня назад, отправлена в архив слишком рано');
+ const archive=w.document.querySelector('.task-archive');
+ assert(archive&&archive.textContent.includes('Старая выполненная задача'),'Задача отсутствует в блоке архива');
+ archive.querySelector('[data-a="krestore"][data-id="task-archive-old"]').click();
+ const restored=state().tasks.find(x=>x.id==='task-archive-old');
+ assert(restored&&!restored.done&&!restored.archivedAt&&w.document.querySelector('.qg [data-id="task-archive-old"]'),'Возврат из архива не восстановил задачу в активный список');
 });
 await test('Интерфейс использует локальный современный шрифт без внешнего запроса',()=>{
 const style=w.document.querySelector('style')?.textContent||'';
@@ -1830,7 +1866,7 @@ await test('Готовые и протестированные ПК отобра
 api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
 assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
 assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе: status='+JSON.stringify(state().builds[0]?.status)+'; rows='+JSON.stringify([...w.document.querySelectorAll('#m tbody tr')].map(x=>x.textContent)));
-const detailsButton=w.document.querySelector('#m button[data-a="bview"]');assert(detailsButton,'У готового ПК нет кнопки подробностей');detailsButton.click();const details=w.document.querySelector('.ov .md');assert(details&&details.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан во всплывающей карточке');
+const detailsRow=w.document.querySelector('#m tr[data-a="bview"]');assert(detailsRow,'У готового ПК нет строки с подробностями');detailsRow.click();const details=w.document.querySelector('.ov .md');assert(details&&details.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан во всплывающей карточке');
 });
 await test('Продажа ПК из вкладки «Расходы» закрывает сборку и записывает покупателя',()=>{
 api.setState(fixture());const b=state().builds[0];b.status='Протестирована';b.planned=850;api.setState(state());
