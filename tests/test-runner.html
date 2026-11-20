@@ -1381,7 +1381,7 @@ assert(api.getLogs().length===1106,'Журнал сократился до фи�
 });
 await test('Отключение долгов и инвестиций сразу скрывает пункт бокового меню',()=>{
 api.setState(fixture());api.action('nav','set');
-let toggle=click('[data-f="debtsInvestments"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+let toggle=w.document.querySelector('[data-f="debtsInvestments"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
 const nav=w.document.querySelector('nav button[data-id="assets"]');
 assert(state().set.debtsInvestments===false,'Настройка раздела не сохранилась');
 assert(nav&&nav.hidden&&nav.style.display==='none','Раздел остался видимым в боковой панели');
@@ -1402,7 +1402,7 @@ assert(state().hiddenCategories.e.includes('Транспорт::Бензин д�
 });
 await test('Общий режим позволяет менять порядок меню и разделов, а затем отключается',()=>{
 api.setState(fixture());api.action('nav','set');
-let toggle=click('[data-f="layoutEdit"]');toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+let toggle=w.document.querySelector('[data-f="layoutEdit"]');toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
 let home=w.document.querySelector('nav button[data-id="home"]'),dash=w.document.querySelector('nav button[data-id="dash"]');
 assert(home&&dash&&home.draggable&&dash.draggable,'Пункты бокового меню не стали перетаскиваемыми');
 const transfer={setData(){},getData(){return''}};
