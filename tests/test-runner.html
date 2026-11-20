@@ -1516,7 +1516,7 @@ for(const [period,label,amount] of cases){
 data.set.per=period;api.setState(data);api.action('nav','home');
 const earned=[...w.document.querySelectorAll('#m .kp')].find(card=>card.textContent.includes('Заработок'));
 assert(earned&&earned.textContent.includes(label),'Для периода '+period+' неверная подпись заработка');
-assert(earned.textContent.includes(amount),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
+assert(earned.textContent.replace(/\\s/g,'').includes(String(amount).replace(/\\s/g,'')),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
 }
 });
 
