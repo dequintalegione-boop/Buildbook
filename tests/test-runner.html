@@ -539,9 +539,9 @@ assert(api.available('gpu-batch')===4,'Списанная единица не в
 assert(api.stockEvents().some(e=>e.kind==='writeoff'&&e.qty===1&&e.reason==='Не подлежит ремонту'),'Событие списания не попало в историю');
 });
 await test('Продажа проблемной детали из сборки и её возврат сохраняют тип остатка',()=>{
-api.openSale();let f=form();assert(f.textContent.includes('проблемные единицы'),'Проблемная деталь сборки не показана в продаже');
-const rows=[...f.querySelectorAll('tbody tr')],i=rows.findIndex(r=>r.textContent.includes('Из сборки №1')&&r.textContent.includes('проблемные единицы'));
-assert(i>=0,'Не найдена проблемная позиция из сборки');f.querySelector('[name="pick-'+i+'"]').checked=true;setv(f,'qty-'+i,'1');setv(f,'price-'+i,'200');submit(f);
+api.openSale();let f=form();assert(f.textContent.includes('Проблемные единицы'),'Проблемная деталь сборки не показана в продаже');
+const cards=[...f.querySelectorAll('.sell-item')],card=cards.find(item=>item.textContent.includes('Из сборки №1')&&item.textContent.includes('Проблемные единицы'));
+assert(card,'Не найдена проблемная позиция из сборки');const pick=card.querySelector('input[type="checkbox"]'),i=pick.name.slice('pick-'.length);pick.checked=true;setv(f,'qty-'+i,'1');setv(f,'price-'+i,'200');submit(f);
 const sale=state().tx.find(t=>t.partSale&&t.sourceProblem);assert(sale,'Продажа не сохранила признак проблемного товара');
 assert(api.writtenOff('gpu-batch')===1&&api.problemAvailable('gpu-batch')===0,'Продажа затронула списание или оставила проблемный свободный остаток');
 api.action('td',sale.id);const b=state().batches.find(x=>x.id==='gpu-batch');
@@ -1423,10 +1423,37 @@ d.tx=[
 ];
 api.setState(d);api.action('nav','calendar');api.action('calday',date);
 const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
-assert(panel&&panel.textContent.includes('Операции за '+date),'Не открылся блок операций выбранного дня');
+assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня');
+assert(panel.textContent.includes('Расход')&&!panel.textContent.includes('Выбыло'),'Подпись «Выбыло» не заменена на «Расход».');
 assert(panel.textContent.includes('Продажа видеокарты')&&panel.textContent.includes('Закупка SSD'),'В блоке не показаны все сделки за день');
 assert(normalize(panel.textContent).includes('+12 000')&&normalize(panel.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
 api.action('caldayclear');assert(!w.document.querySelector('.calendar-day-details'),'Кнопка скрытия не закрыла подробности дня');
+});
+await test('Календарь показывает задачи с приоритетом на сегодня и на будущие даты',()=>{
+ const data=fixture(),todayDate=api.localDateISO(new w.Date()),futureObject=new w.Date();
+ futureObject.setDate(futureObject.getDate()+3);
+ const futureDate=api.localDateISO(futureObject);
+ data.tasks=[
+  {id:'calendar-task-today',text:'Задача на сегодня',q:0,done:0,due:todayDate,who:'',build:''},
+  {id:'calendar-task-future-a',text:'Первая будущая задача',q:1,done:0,due:futureDate,who:'',build:''},
+  {id:'calendar-task-future-b',text:'Вторая будущая задача',q:1,done:0,due:futureDate,who:'',build:''}
+ ];
+ api.setState(data);api.action('nav','calendar');api.action('calnow');
+ const todayButton=w.document.querySelector('[data-calendar-date="'+todayDate+'"]');
+ assert(todayButton&&!todayButton.disabled,'Сегодняшний день с задачей не подсвечен и неактивен');
+ assert(todayButton.textContent.includes('1 важная и срочная задача'),'На сегодняшнем дне не показан приоритет задачи');
+ api.action('calday',todayDate);
+ const todayPanel=w.document.querySelector('.calendar-day-details');
+ assert(todayPanel&&todayPanel.textContent.includes('Задача на сегодня'),'Задача на сегодня не отображается в подробностях дня');
+ const sameMonth=futureDate.slice(0,7)===todayDate.slice(0,7);
+ if(!sameMonth)api.action('calnext');
+ const futureButton=w.document.querySelector('[data-calendar-date="'+futureDate+'"]');
+ assert(futureButton&&!futureButton.disabled,'Будущий день с задачами не подсвечен и неактивен');
+ assert(futureButton.textContent.includes('2 важные, но не срочные задачи'),'В будущем дне не показано количество и приоритет задач');
+ api.action('calday',futureDate);
+ const futurePanel=w.document.querySelector('.calendar-day-details');
+ assert(futurePanel&&futurePanel.textContent.includes('Первая будущая задача')&&futurePanel.textContent.includes('Вторая будущая задача'),'Будущие задачи не отображаются в подробностях дня');
+ assert(futurePanel.textContent.includes('Срок задачи'),'Будущие задачи не помечены как задачи по сроку');
 });
 await test('Календарь переключает месяцы и возвращается к текущему месяцу',()=>{
 api.setState(fixture());api.action('nav','calendar');
@@ -1572,6 +1599,23 @@ assert(earned.textContent.replace(/\\s/g,'').includes(String(amount).replace(/\\
 }
 });
 
+await test('Сводка рассчитывает чистую прибыль по продажам и прочим расходам',()=>{
+ const data=fixture(),date=api.localDateISO(new w.Date());data.set.per='all';
+ data.builds.push({id:'profit-build',num:20,name:'Проданный ПК',status:'Продана',date,sold:date,planned:700,price:700,cost:300,lines:[]});
+ data.tx=[
+  {id:'profit-part-sale',kind:'i',date,amount:300,desc:'Продажа детали',cat:'Комплектующие',qty:1,acc:'cash',partSale:true,costAmount:100,grossProfit:200},
+  {id:'profit-other-income',kind:'i',date,amount:250,desc:'Прочий доход',cat:'Другое',qty:1,acc:'cash'},
+  {id:'profit-overhead',kind:'e',date,amount:200,desc:'Операционный расход',cat:'Бензин',grp:'Транспорт',qty:1,acc:'cash'},
+  {id:'profit-stock-purchase',kind:'e',date,amount:500,desc:'Закупка склада',cat:'Видеокарты',grp:'Сборка ПК',qty:1,acc:'cash',batchId:'gpu-batch'}
+ ];
+ api.setState(data);api.action('nav','home');
+ const card=[...w.document.querySelectorAll('#m .kp')].find(item=>item.textContent.includes('Чистая прибыль'));
+ assert(card&&card.textContent.includes('650'),'Чистая прибыль должна равняться 650 ₽ с учётом маржи ПК и детали, прочего дохода и операционного расхода');
+ api.action('nav','reports');api.action('rptab','summary');
+ const summary=w.document.querySelector('#m');
+ assert(summary.textContent.includes('Остаток')&&summary.textContent.includes('Чистая прибыль'),'Годовая сводка не показывает новые названия показателей');
+ assert([...summary.querySelectorAll('thead th')].some(th=>th.textContent.trim()==='Чистая прибыль'),'В таблице годовой сводки нет колонки чистой прибыли');
+});
 await test('Расход сверх остатка кассы блокируется',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
 const f=form(),beforeAlerts=alerts.length;
