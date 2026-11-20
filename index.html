@@ -374,7 +374,13 @@ async function load(){
  }
  if(remoteStorageRevision>storageRevision)markStorageConflict(remoteStorageRevision);
  else storageConflict=false;
- const {state:storedState,logs:storedLog,photos:storedPhotos}=profile;
+ let storedState=profile.state,storedLog=profile.logs,storedPhotos=profile.photos;
+ if(storedState&&storedState.set&&storedState.set.fieldProtection&&storedState.set.fieldProtection.enabled){
+  if(!storedState._fieldVault)throw new Error('Профиль отмечен как защищённый, но зашифрованные данные не найдены. Не перезаписывайте эту базу; восстановите резервную копию.');
+  STARTUP_STAGE='waiting-for-field-password';
+  const unlocked=await waitForFieldUnlock(profile);
+  storedState=unlocked.state;storedLog=unlocked.logs;
+ }else FIELD_PROTECTION_KEY=null;
  const previousState=storedState?JSON.stringify(storedState):'';
  STARTUP_STAGE='migrating-profile';
  const migrated=migrateState(storedState||defaultState());
@@ -391,9 +397,10 @@ async function load(){
  const needsWrite=!storedState||migrated.migrated||previousState!==currentState||!storedLog||!storedPhotos||journalMigrated;
  if(needsWrite&&!storageConflict){
   STARTUP_STAGE='saving-migrated-profile';
+  const protectedProfile=await protectProfileForStorage(S,LOG,FIELD_PROTECTION_KEY);
   const photoBlobs=await photosAsBinary(PH);
   try{
-   storageRevision=await repository.writeProfile(S,LOG,photoBlobs,storageRevision);
+   storageRevision=await repository.writeProfile(protectedProfile.state,protectedProfile.logs,photoBlobs,storageRevision);
    if(storageChannel)storageChannel.postMessage({type:'profile-saved',revision:storageRevision});
   }catch(error){
    if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT')markStorageConflict(error.currentRevision);
@@ -409,9 +416,10 @@ function persistCurrent(){
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
   if(storageConflict)return false;
+  const protectedProfile=await protectProfileForStorage(state,logs,FIELD_PROTECTION_KEY);
   const photoBlobs=await photosAsBinary(photos);
   try{
-   storageRevision=await repository.writeProfile(state,logs,photoBlobs,storageRevision);
+   storageRevision=await repository.writeProfile(protectedProfile.state,protectedProfile.logs,photoBlobs,storageRevision);
   }catch(error){
    if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT')markStorageConflict(error.currentRevision);
    throw error;
@@ -2520,6 +2528,8 @@ async function installApp(){
 
 
 function render(){
+ if(APP_LOCKED){renderFieldUnlockScreen();return}
+ const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=false;
  if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Не удалось открыть Buildbook</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Данные не были заменены пустой базой. Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p></section>';return}
  const conflictBanner=storageConflict?'<section class="tw" style="padding:16px;margin-bottom:14px;border:1px solid var(--bad)"><b>Данные изменены в другой вкладке</b><p class="mu">Сохранение в этой вкладке остановлено, чтобы не перезаписать более свежий профиль. Изменения, сделанные здесь после конфликта, пока остаются только в памяти этой вкладки. Скачайте отдельную копию, затем перезагрузите приложение и при необходимости объедините резервную копию.</p><button class="btn p" data-a="expzip">Скачать полный бэкап этой вкладки</button> <button class="btn" data-a="reload">Перезагрузить Buildbook</button></section>':'';
  if(V.tab==='assets'&&!S.set.debtsInvestments)V.tab='set';
