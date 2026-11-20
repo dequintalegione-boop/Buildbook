@@ -20,7 +20,7 @@ const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
 function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · приложение: '+APP_VARIANT+' · выполнено тестов: '+(passed+failed)}
-async function test(name,fn){summary.textContent='Выполняется: '+name;try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
+async function test(name,fn){summary.textContent='Выполняется: '+name;try{if(w)w.document.querySelectorAll('.ov').forEach(overlay=>overlay.remove());await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
 stockEvents:[],batches:[
@@ -33,10 +33,10 @@ categories:{
 e:{'Сборка ПК':['Видеокарты','Процессоры','Мат платы','Оперативка','ССД','БП','Башни','Корпусы','Вентиляторы','Периферия','Прочее','Компы и другое'],'ЧП':['ДТП','Проебы','Штрафы','Другое'],'Продажи и продвижение':['Авито','Продвижение','Реклама','Накрутка','Другое'],'Ремонт и обслуживание':['Строй материалы','Инструменты','Другое'],'Общие расходы':['Передвижение','Еда','Жижи общак','Развлечения','Другое'],'Транспорт':['Бензин','Ремонт Автомобиля','Масло','Авто другое']},
 i:{'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']}},
 hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
-set:{theme:'light',year:2026,backup:'',dash:null,per:'m'}
+set:{theme:'light',year:2026,backup:'',dash:null,per:'m',demoLoaded:false}
 });
 function state(){return api.getState()}
-function form(){return w.document.querySelector('.ov form')}
+function form(){return [...w.document.querySelectorAll('.ov form')].at(-1)||null}
 function submit(f){assert(f&&typeof f.onsubmit==='function','Форма не найдена');f.onsubmit({preventDefault:function(){}})}
 function click(selector){const el=w.document.querySelector(selector);assert(el,'Не найден элемент '+selector);el.click();return el}
 function setv(f,name,value){assert(f.elements[name],'Поле формы не найдено: '+name);f.elements[name].value=value}
