@@ -1834,12 +1834,12 @@ await test('Продажа деталей доступна из меню «Тр�
  assert(!popup.querySelector('.sell-scroll table'),'Старый широкоформатный список с горизонтальной прокруткой остался в продаже деталей');
  assert(popup.querySelector('[name="qty-0"]')&&popup.querySelector('[name="price-0"]'),'В карточке продажи не отображаются количество и цена');
 });
-await test('Вкладка «Деньги» переименована в «Расходы»',()=>{
+await test('Вкладка «Расходы» переименована в «Транзакции»',()=>{
  api.setState(fixture());api.action('nav','tx');
  const nav=w.document.querySelector('nav button[data-id="tx"]');
  const heading=w.document.querySelector('#m h1');
- assert(nav&&nav.textContent.trim()==='Расходы','Название вкладки в боковом меню не обновлено');
- assert(heading&&heading.textContent.trim()==='Расходы','Заголовок страницы не обновлён');
+ assert(nav&&nav.textContent.trim()==='Транзакции','Название вкладки в боковом меню не обновлено');
+ assert(heading&&heading.textContent.trim()==='Транзакции','Заголовок страницы не обновлён');
  assert(!w.document.querySelector('#m .money-actions > [data-a="sellParts"]')&&w.document.querySelector('#m .tx-action-menu [data-a="sellParts"]'),'Продажа деталей должна находиться в меню «Транзакция», а не отдельной кнопкой');
 });
 await test('Выполненные задачи отображаются в календаре в день завершения',()=>{
@@ -1880,7 +1880,7 @@ assert(w.document.body.textContent.includes('Готовые ПК на склад
 assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе: status='+JSON.stringify(state().builds[0]?.status)+'; rows='+JSON.stringify([...w.document.querySelectorAll('#m tbody tr')].map(x=>x.textContent)));
 const detailsRow=w.document.querySelector('#m tr[data-a="bview"]');assert(detailsRow,'У готового ПК нет строки с подробностями');detailsRow.click();const details=w.document.querySelector('.ov .md');assert(details&&details.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан во всплывающей карточке');
 });
-await test('Продажа ПК из вкладки «Расходы» закрывает сборку и записывает покупателя',()=>{
+await test('Продажа ПК из вкладки «Транзакции» закрывает сборку и записывает покупателя',()=>{
 const data=fixture();data.builds[0].status='Протестирована';data.builds[0].planned=850;api.setState(data);
 const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','i');const f=form();
 setv(f,'kind','i');setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
