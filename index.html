@@ -680,7 +680,7 @@ function tform(id,k0){const o=id&&S.tx.find(t=>t.id==id),k=o?o.kind:k0||'e';cons
 const debtPayments=d=>(Array.isArray(d&&d.payments)?d.payments:[]).reduce((n,p)=>n+Math.max(0,Number(p.amount)||0),0);
 const debtOutstanding=d=>Math.max(0,(Number(d&&d.principal)||0)-debtPayments(d));
 const debtDirectionLabel=d=>d.direction==='given'?'Мне должны':'Я должен';
-const debtDueLabel=d=>debtOutstanding(d)<=0.005?'Погашен':d.status==='archived'?'В архиве':d.dueDate&&d.dueDate<today()?'Просрочен':'Активен';
+const debtDueLabel=d=>d.status==='archived'?'В архиве':debtOutstanding(d)<=0.005?'Погашен':d.dueDate&&d.dueDate<today()?'Просрочен':'Активен';
 function createDebtRecord(data){
  const direction=data.direction==='received'?'received':'given',person=String(data.person||'').trim(),principal=Number(data.principal),date=String(data.date||today()),dueDate=String(data.dueDate||''),accountId=String(data.accountId||'');
  if(!person)return {ok:false,error:'Укажите человека или организацию.'};
@@ -1794,7 +1794,7 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     const sourceId=value(row,'id'),id=sourceId||uid();
     if(S.debts.some(d=>d.id==id))throw new Error('Долг с таким ID уже существует.');
     const directionRaw=csvHeaderNorm(value(row,'direction'));
-    const direction=['given','мне должны','выдан','выдал','выданный'].includes(directionRaw)?'given':['received','ядолжен','получен','занял','полученный'].includes(directionRaw)?'received':'';
+    const direction=['given','мнедолжны','выдан','выдал','выданный'].includes(directionRaw)?'given':['received','ядолжен','получен','занял','полученный'].includes(directionRaw)?'received':'';
     const person=value(row,'person'),principal=csvNumber(value(row,'principal')),date=csvDate(value(row,'date'));
     if(!direction||!person||!Number.isFinite(principal)||principal<=0||!date)throw new Error('Нужны направление, контрагент, сумма больше нуля и дата.');
     const dueRaw=value(row,'dueDate'),dueDate=dueRaw?csvDate(dueRaw):'';
