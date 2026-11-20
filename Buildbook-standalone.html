@@ -1,5 +1,29 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buildbook: учёт сборок, склада и финансов</title><meta name="description" content="Buildbook: локальный учёт сборок ПК, склада деталей и денег команды"><meta name="theme-color" content="#0f766e"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
 <style>
+/* Лёгкая индикация перетаскиваемых блоков и доступная зона «Прочее». */
+body.layout-editing [data-layout-item="1"]{outline:1px solid rgba(255,255,255,.20);outline-offset:2px;border-radius:10px;transition:outline-color .15s ease,outline-offset .15s ease}
+body.layout-editing [data-layout-item="1"]:hover{outline-color:rgba(255,255,255,.36);outline-offset:3px}
+.nav-other-folder.editing{min-height:82px;justify-content:center;border:1px dashed rgba(255,255,255,.34);background:color-mix(in srgb,var(--s2) 70%,transparent)}
+.nav-other-folder.editing .nav-other-drop-label{display:block;text-align:center;padding:7px 8px;border-radius:7px;background:rgba(255,255,255,.035)}
+.nav-other-folder.layout-drag-target{outline:2px solid rgba(255,255,255,.44);outline-offset:2px;background:color-mix(in srgb,var(--a) 14%,var(--s2))}
+body.layout-editing nav button[data-id]{position:relative;padding-right:34px}
+.nav-move-control{display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);min-width:21px;height:21px;line-height:19px;text-align:center;font-size:12px!important;font-weight:700;color:var(--m);border:1px solid rgba(255,255,255,.24);border-radius:6px;background:rgba(255,255,255,.055);cursor:pointer;opacity:.72}
+.nav-move-control:hover{opacity:1;color:var(--t);background:rgba(255,255,255,.13)}
+body.layout-editing .nav-move-control{display:inline-block}
+.tx-action-dropdown{position:relative}
+.tx-action-menu[hidden]{display:none}
+.tx-action-menu-toggle{min-width:36px;border-radius:0 8px 8px 0}
+.tx-action-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:12;display:grid;gap:4px;min-width:205px;padding:7px;background:var(--s);border:1px solid var(--b);border-radius:10px;box-shadow:0 10px 28px #0002}
+.tx-action-menu button{all:unset;display:block;cursor:pointer;padding:9px 10px;border-radius:7px;color:var(--t);font:inherit;text-align:left;white-space:nowrap}
+.tx-action-menu button:hover,.tx-action-menu button:focus-visible{background:var(--s2);outline:0}
+.task-archive{margin-top:16px;padding:14px 16px}
+.task-archive summary{cursor:pointer;font-weight:700;display:flex;align-items:center;gap:8px}
+.task-archive .task-archive-list{display:grid;gap:6px;margin-top:12px}
+.task-archive .task-archive-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--b);border-radius:9px;background:var(--s)}
+.task-archive .task-archive-actions{display:flex;gap:5px;flex-wrap:wrap}
+@media(max-width:760px){body.layout-editing nav button[data-id]{padding-right:27px}.nav-move-control{right:2px;min-width:19px}.nav-other-folder.editing{min-height:0}.nav-other-folder.editing .nav-other-drop-label{display:none}.task-archive .task-archive-item{align-items:flex-start;flex-direction:column}}
+
+
 /* Navigation folder and compact transaction/sale controls. */
 nav{overflow-y:auto;scrollbar-width:thin}
 .nav-other-folder[hidden]{display:none}
@@ -176,7 +200,7 @@ const defaultState=()=>({
  hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false,otherTabs:[]}
 });
-let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
+let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,txMenuOpen:false,calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
 const DATA_SCHEMA_VERSION=5;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
@@ -1480,7 +1504,7 @@ function calendar(){
  '<p class="calendar-note">В ячейке показано чистое движение денег за день: поступления минус списания. Чем насыщеннее цвет, тем больше сумма относительно других дней месяца. Внутренние переводы между кассами исключены. Нажмите на день с операциями, чтобы открыть подробности.</p></section>'+((V.calendar&&V.calendar.selectedDate||'').startsWith(monthKey)?calendarDayPanel(V.calendar.selectedDate):'');
 }
 function money(){const f=V.t,q=f.q.toLowerCase(),matchesKind=t=>!f.k||(f.k==='loans'?String(t.kind).startsWith('loan_'):f.k==='investments'?String(t.kind).startsWith('investment_'):t.kind===f.k),rows=S.tx.filter(t=>matchesKind(t)&&(!f.m||t.date.startsWith(f.m))&&(!f.cat||t.cat==f.cat)&&(!f.grp||(t.grp||categoryGroup(t.kind,t.cat)||'Без группы')===f.grp)&&(!f.acc||t.acc==f.acc||t.fromAcc==f.acc||t.toAcc==f.acc)&&(!q||(t.desc+' '+t.cat+' '+t.note).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)),sm=k=>rows.filter(t=>t.kind==k).reduce((n,t)=>n+t.amount,0),an=id=>(S.accounts.find(a=>a.id==id)||{name:'—'}).name,ps=S.tx.filter(t=>t.partSale&&(!f.m||t.date.startsWith(f.m))),psRevenue=ps.reduce((n,t)=>n+t.amount,0),psCost=ps.reduce((n,t)=>n+(t.costAmount||0),0),psProfit=ps.reduce((n,t)=>n+(t.grossProfit||0),0);
-return head('Расходы','<div class="money-actions"><button class="btn" data-a="catbrowse">Выбрать категорию</button><div class="tx-action-split"><button class="btn p" data-a="tadd">Транзакция</button><details class="tx-action-dropdown"><summary class="btn p" aria-label="Дополнительные действия с транзакциями">▾</summary><div class="tx-action-menu"><button type="button" data-a="tadd" data-id="i">Добавить доход</button><button type="button" data-a="sellParts">Продать детали</button><button type="button" data-a="xfer">Перевод между кассами</button></div></details></div></div>')+'<div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+' <button class="btn ic g" data-a="aedit" data-id="'+a.id+'" title="Изменить кассу">✎</button></span><b>'+R(bal(a))+'</b></div>').join('')+'<button class="btn g" data-a="aadd">+ Касса</button></div><div class="k">'+kpi('Выручка от деталей',R(psRevenue))+kpi('Себестоимость деталей',R(psCost))+kpi('Валовая прибыль',R(psProfit),psProfit>=0?'ok':'bad')+'</div><div class="fl"><select data-f="t.k">'+opt([['','Все операции'],['e','Расходы'],['i','Доходы'],['transfer','Переводы между кассами'],['loans','Долги'],['investments','Инвестиции']],f.k)+'</select><input type="month" data-f="t.m" value="'+f.m+'"><input data-f="t.q" placeholder="Поиск" value="'+esc(f.q)+'"><select data-f="t.cat">'+opt([["","Все категории"],...Array.from(new Set(S.tx.map(t=>t.cat).filter(Boolean))).sort().map(x=>[x,x])],f.cat)+'</select><select data-f="t.acc">'+opt([["","Все кассы"],...S.accounts.map(x=>[x.id,x.name])],f.acc)+'</select><span class="money-totals"><strong>Доходы</strong> <b class="ok">'+R(sm('i'))+'</b><strong>Расходы</strong> <b class="bad">'+R(sm('e'))+'</b></span></div>'+table(['Дата','Категория','Описание','Касса / перевод','Сумма',''],rows.map(t=>'<tr><td>'+D(t.date)+'</td><td>'+esc(t.cat)+'</td><td>'+esc(t.desc)+(t.partSale?'<br><small>Количество: '+t.qty+' шт. · Цена за шт.: '+R(t.unitPrice)+' · Себестоимость: '+R(t.costAmount)+' · Валовая прибыль: <b class="'+((t.grossProfit||0)>=0?'ok':'bad')+'">'+R(t.grossProfit)+'</b></small>':'')+(t.note?' <small>'+esc(t.note)+'</small>':'')+ '</td><td>'+(t.kind=='transfer'?esc(an(t.fromAcc))+' → '+esc(an(t.toAcc)):esc(an(t.acc)))+'</td><td class="r '+(t.kind=='transfer'?'':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'ok':'bad'))+'">'+(t.kind=='transfer'?'↔':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'+':'−'))+R(t.amount)+'</td>'+btns('t',t.id)+'</tr>'),'Операций нет. Закупки и продажи попадают сюда автоматически, остальное добавьте кнопками выше.')}
+return head('Расходы','<div class="money-actions"><button class="btn" data-a="catbrowse">Выбрать категорию</button><div class="tx-action-split"><button class="btn p" data-a="tadd">Транзакция</button><div class="tx-action-dropdown"><button type="button" class="btn p tx-action-menu-toggle" data-a="txmenu-toggle" aria-label="Дополнительные действия с транзакциями" aria-expanded="'+(V.txMenuOpen?'true':'false')+'">▾</button><div class="tx-action-menu" '+(V.txMenuOpen?'':'hidden')+'><button type="button" data-a="taddincome">Добавить доход</button><button type="button" data-a="sellParts">Продать детали</button><button type="button" data-a="xfer">Перевод между кассами</button></div></div></div></div>')+'<div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+' <button class="btn ic g" data-a="aedit" data-id="'+a.id+'" title="Изменить кассу">✎</button></span><b>'+R(bal(a))+'</b></div>').join('')+'<button class="btn g" data-a="aadd">+ Касса</button></div><div class="k">'+kpi('Выручка от деталей',R(psRevenue))+kpi('Себестоимость деталей',R(psCost))+kpi('Валовая прибыль',R(psProfit),psProfit>=0?'ok':'bad')+'</div><div class="fl"><select data-f="t.k">'+opt([['','Все операции'],['e','Расходы'],['i','Доходы'],['transfer','Переводы между кассами'],['loans','Долги'],['investments','Инвестиции']],f.k)+'</select><input type="month" data-f="t.m" value="'+f.m+'"><input data-f="t.q" placeholder="Поиск" value="'+esc(f.q)+'"><select data-f="t.cat">'+opt([["","Все категории"],...Array.from(new Set(S.tx.map(t=>t.cat).filter(Boolean))).sort().map(x=>[x,x])],f.cat)+'</select><select data-f="t.acc">'+opt([["","Все кассы"],...S.accounts.map(x=>[x.id,x.name])],f.acc)+'</select><span class="money-totals"><strong>Доходы</strong> <b class="ok">'+R(sm('i'))+'</b><strong>Расходы</strong> <b class="bad">'+R(sm('e'))+'</b></span></div>'+table(['Дата','Категория','Описание','Касса / перевод','Сумма',''],rows.map(t=>'<tr><td>'+D(t.date)+'</td><td>'+esc(t.cat)+'</td><td>'+esc(t.desc)+(t.partSale?'<br><small>Количество: '+t.qty+' шт. · Цена за шт.: '+R(t.unitPrice)+' · Себестоимость: '+R(t.costAmount)+' · Валовая прибыль: <b class="'+((t.grossProfit||0)>=0?'ok':'bad')+'">'+R(t.grossProfit)+'</b></small>':'')+(t.note?' <small>'+esc(t.note)+'</small>':'')+ '</td><td>'+(t.kind=='transfer'?esc(an(t.fromAcc))+' → '+esc(an(t.toAcc)):esc(an(t.acc)))+'</td><td class="r '+(t.kind=='transfer'?'':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'ok':'bad'))+'">'+(t.kind=='transfer'?'↔':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'+':'−'))+R(t.amount)+'</td>'+btns('t',t.id)+'</tr>'),'Операций нет. Закупки и продажи попадают сюда автоматически, остальное добавьте кнопками выше.')}
 function accountForm(id){
  const account=id&&S.accounts.find(item=>item.id===id);
  if(id&&!account){toast('Касса не найдена.');return}
@@ -3214,6 +3238,15 @@ function layoutContainerKey(parent){
  return 'page:'+V.tab+':'+(parent&&parent.tagName||'div').toLowerCase()+':'+(cls||'plain')+':'+Math.max(0,siblings.indexOf(parent));
 }
 let navOtherOpen=false;
+function moveNavigationTab(id,target){
+ const items=[...document.querySelectorAll('nav button[data-id]')],item=items.find(x=>x.dataset.id===id);
+ if(!item)return;
+ const other=new Set(Array.isArray(S.set.otherTabs)?S.set.otherTabs:[]);
+ if(target==='other')other.add(id);else other.delete(id);
+ S.set.otherTabs=[...other];
+ if(!Array.isArray(S.set.navOrder))S.set.navOrder=items.map(x=>'nav:'+x.dataset.id);
+ save.skip=1;save();render();
+}
 function applyLayoutEditing(){
  const enabled=!!S.set.layoutEdit,nav=document.querySelector('nav'),main=document.querySelector('#m');
  document.body.classList.toggle('layout-editing',enabled);
@@ -3228,11 +3261,25 @@ function applyLayoutEditing(){
   const mainItems=allItems.filter(item=>!otherIds.has(item.dataset.id)),otherItems=allItems.filter(item=>otherIds.has(item.dataset.id));
   mainItems.forEach(item=>{if(folder)nav.insertBefore(item,folder);else nav.appendChild(item)});
   if(otherList)otherItems.forEach(item=>otherList.appendChild(item));
-  mainItems.forEach(item=>{item.dataset.layoutItem='1';item.dataset.layoutContainer='sidebar-main';item.dataset.layoutId='nav:'+item.dataset.id;item.dataset.navTab='1';item.dataset.navZone='main';item.draggable=enabled});
-  otherItems.forEach(item=>{item.dataset.layoutItem='1';item.dataset.layoutContainer='sidebar-other';item.dataset.layoutId='nav:'+item.dataset.id;item.dataset.navTab='1';item.dataset.navZone='other';item.draggable=enabled});
+  mainItems.forEach(item=>{
+   item.dataset.layoutItem='1';item.dataset.layoutContainer='sidebar-main';item.dataset.layoutId='nav:'+item.dataset.id;item.dataset.navTab='1';item.dataset.navZone='main';item.draggable=enabled;
+   let control=item.querySelector(':scope > .nav-move-control');
+   if(enabled){
+    if(!control){item.insertAdjacentHTML('beforeend','<span class="nav-move-control" data-a="nav-to-other" data-id="'+esc(item.dataset.id)+'" title="Переместить вкладку в Прочее" aria-label="Переместить в Прочее">↗</span>');control=item.querySelector(':scope > .nav-move-control')}
+    if(control){control.dataset.a='nav-to-other';control.dataset.id=item.dataset.id;control.title='Переместить вкладку в Прочее';control.setAttribute('aria-label','Переместить в Прочее');control.textContent='↗'}
+   }else if(control)control.remove();
+  });
+  otherItems.forEach(item=>{
+   item.dataset.layoutItem='1';item.dataset.layoutContainer='sidebar-other';item.dataset.layoutId='nav:'+item.dataset.id;item.dataset.navTab='1';item.dataset.navZone='other';item.draggable=enabled;
+   let control=item.querySelector(':scope > .nav-move-control');
+   if(enabled){
+    if(!control){item.insertAdjacentHTML('beforeend','<span class="nav-move-control" data-a="nav-to-main" data-id="'+esc(item.dataset.id)+'" title="Вернуть вкладку в меню" aria-label="Вернуть в меню">↶</span>');control=item.querySelector(':scope > .nav-move-control')}
+    if(control){control.dataset.a='nav-to-main';control.dataset.id=item.dataset.id;control.title='Вернуть вкладку в основное меню';control.setAttribute('aria-label','Вернуть в меню');control.textContent='↶'}
+   }else if(control)control.remove();
+  });
   if(folder){
    const activeInOther=otherItems.some(item=>item.dataset.id===V.tab);
-   folder.hidden=!enabled&&!otherItems.some(item=>!item.hidden&&item.style.display!=='none');
+   folder.hidden=!enabled&&otherItems.length===0;
    folder.classList.toggle('editing',enabled);folder.classList.toggle('open',enabled||navOtherOpen);
    if(folderButton){folderButton.classList.toggle('on',activeInOther&&!enabled);folderButton.setAttribute('aria-expanded',String(enabled||navOtherOpen))}
   }
@@ -3389,7 +3436,7 @@ function trash(){
  return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
 }
 
-function act(a,id){const A={'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;navOtherOpen=false;render();scrollTo(0,0)},'other-toggle':()=>{if(!S.set.layoutEdit){navOtherOpen=!navOtherOpen;applyLayoutEditing()}},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),calprev:()=>calendarShift(-1),calnext:()=>calendarShift(1),calnow:()=>{const d=new Date();V.calendar={year:d.getFullYear(),month:d.getMonth()};render()},calday:()=>calendarDay(id),caldayclear:()=>{if(V.calendar)delete V.calendar.selectedDate;render()},padd:()=>pform(),bview:()=>buildDetails(id),pe:()=>{const batch=find('batches',id);if(batch&&batch.kitPurchaseId){tform(batch.kitPurchaseId);return}pform(id)},badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;navOtherOpen=false;V.txMenuOpen=false;render();scrollTo(0,0)},'other-toggle':()=>{if(!S.set.layoutEdit){navOtherOpen=!navOtherOpen;applyLayoutEditing()}},'nav-to-other':()=>moveNavigationTab(id,'other'),'nav-to-main':()=>moveNavigationTab(id,'main'),'txmenu-toggle':()=>{V.txMenuOpen=!V.txMenuOpen;render()},taddincome:()=>{V.txMenuOpen=false;tform(0,'i')},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),calprev:()=>calendarShift(-1),calnext:()=>calendarShift(1),calnow:()=>{const d=new Date();V.calendar={year:d.getFullYear(),month:d.getMonth()};render()},calday:()=>calendarDay(id),caldayclear:()=>{if(V.calendar)delete V.calendar.selectedDate;render()},padd:()=>pform(),bview:()=>buildDetails(id),pe:()=>{const batch=find('batches',id);if(batch&&batch.kitPurchaseId){tform(batch.kitPurchaseId);return}pform(id)},badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
 pd:()=>{const b=find('batches',id);if(!b)return;if(b.kitPurchaseId){alert('Эта позиция входит в покупку комплектом. Изменяйте весь комплект через транзакцию, чтобы сохранить распределение себестоимости.');return}const linkedBuilds=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==b.id));if(linkedBuilds.length){alert('Нельзя удалить партию: она используется в сборках '+linkedBuilds.map(build=>'№'+build.num+(build.name?' («'+build.name+'»)':'')).join(', ')+'. Сначала удалите или измените состав этих сборок.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift(makeTrashEntry('batch',b,{relatedTx}));S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
 bd:()=>{const b=find('builds',id);if(!b)return;if(!confirm('Переместить сборку №'+b.num+' в корзину? Детали вернутся в доступный остаток.'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный доход?')){const cashCheck=checkTransactionBalance(null,linked);if(!cashCheck.ok){alert(cashCheck.error+' Сборка не удалена.');return}relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}const photos=Array.isArray(PH[b.id])?trashClone(PH[b.id]):[];S.trash.unshift(makeTrashEntry('build',b,{relatedTx,photos}));S.builds=S.builds.filter(x=>x.id!==b.id);delete PH[b.id];save();render()},
@@ -3449,7 +3496,7 @@ document.addEventListener('click',e=>{
   table.querySelectorAll('th[data-sort-col]').forEach(item=>item.setAttribute('aria-sort','none'));
   th.setAttribute('aria-sort',descending?'descending':'ascending');return;
  }
- const a=e.target.closest('[data-a]');if(a){const menu=a.closest('details.tx-action-dropdown');if(menu)menu.removeAttribute('open');act(a.dataset.a,a.dataset.id)}
+ const a=e.target.closest('[data-a]');if(a){const menu=a.closest('.tx-action-menu');if(menu){V.txMenuOpen=false;menu.hidden=true}act(a.dataset.a,a.dataset.id)}
 });
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else if(k=='debtsInvestments'){S.set.debtsInvestments=!!v;save.skip=1;save()}else if(k=='layoutEdit'){S.set.layoutEdit=!!v;save.skip=1;save()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
 document.addEventListener('change',e=>{
@@ -3473,7 +3520,7 @@ document.addEventListener('dragover',e=>{
   const targetNav=e.target.closest&&e.target.closest('button[data-id][data-nav-tab="1"]');
   if(targetNav&&targetNav!==draggedLayoutNode){e.preventDefault();targetNav.classList.add('layout-drag-target');return}
   const targetFolder=e.target.closest&&e.target.closest('#nav-other-folder[data-nav-other-drop]');
-  if(targetFolder&&draggedLayoutNode.dataset.navZone==='main'){e.preventDefault();targetFolder.classList.add('layout-drag-target');return}
+  if(targetFolder&&draggedLayoutNode.dataset.navZone==='main'){e.preventDefault();e.dataTransfer.dropEffect='move';targetFolder.classList.add('layout-drag-target');return}
  }
  const layout=e.target.closest&&e.target.closest('[data-layout-item="1"][draggable="true"]');
  if(layout&&draggedLayoutNode&&layout!==draggedLayoutNode&&layout.dataset.layoutContainer===draggedLayoutNode.dataset.layoutContainer){e.preventDefault();layout.classList.add('layout-drag-target');return}
