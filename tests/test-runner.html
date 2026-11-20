@@ -1760,7 +1760,7 @@ const demo=page.querySelector('[data-a="demoload"]')?.closest('section');
 const install=page.querySelector('[data-a="inst"]')?.closest('section');
 const wipe=page.querySelector('[data-a="wipe"]');
 assert(demo&&install&&demo.compareDocumentPosition(install)&w.Node.DOCUMENT_POSITION_FOLLOWING,'Демо-данные расположены не перед установкой приложения');
-assert(wipe&&wipe.compareDocumentPosition(demo)&w.Node.DOCUMENT_POSITION_FOLLOWING,'Удаление данных должно находиться выше блока демо-данных');
+assert(install&&wipe&&(install.compareDocumentPosition(wipe)&w.Node.DOCUMENT_POSITION_FOLLOWING),'Удаление данных должно находиться в самом низу настроек после установки приложения');
 });
 await test('Режим компоновки не добавляет зелёную обводку блокам',()=>{
 api.setState(fixture());api.action('nav','set');
