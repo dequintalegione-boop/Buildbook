@@ -2024,6 +2024,37 @@ await test('Удаление демо-данных сохраняет обычн
  assert(!after.set.demoLoaded,'Флаг загруженного демо-набора не сброшен');
 });
 
+
+await test('Вкладка «Транзакции» использует компактные действия и показывает сумму наценки',()=>{
+ const data=fixture();
+ data.tx=[{id:'part-sale-ui',kind:'i',date:'2026-05-20',amount:250,desc:'Продажа тестовой детали',cat:'Комплектующие',grp:'Продажи',qty:1,acc:'cash',partSale:true,unitPrice:250,costAmount:170,grossProfit:80}];
+ api.setState(data);api.action('nav','tx');
+ const root=w.document.querySelector('#m'),header=root.querySelector('.money-actions');
+ assert(header&&header.querySelector('[data-a="tadd"]'),'Основная кнопка «Транзакция» пропала');
+ assert(!header.querySelector('[data-a="taddincome"]')&&!header.querySelector('[data-a="catbrowse"]'),'На вкладке остались удалённые дополнительные кнопки');
+ assert(!root.textContent.includes('Выручка от деталей')&&!root.textContent.includes('Себестоимость деталей'),'Сводка всё ещё показывает удалённые блоки по деталям');
+ const summary=[...root.querySelectorAll('.k .kp')];
+ assert(summary.length===1&&summary[0].textContent.includes('Сумма наценки'),'В блоках транзакций должна остаться только сумма наценки');
+ const row=[...root.querySelectorAll('tbody tr')].find(item=>item.textContent.includes('Продажа тестовой детали'));
+ assert(row&&row.textContent.includes('Сумма наценки')&&row.textContent.includes('80'),'В деталях продажи не подписана сумма наценки');
+ api.action('txmenu-toggle');
+ const menu=w.document.querySelector('#m .tx-action-menu');
+ assert(menu&&!menu.hidden&&menu.querySelector('[data-a="sellParts"]')&&menu.querySelector('[data-a="xfer"]'),'Меню потеряло продажу комплектующих или перевод между кассами');
+ assert(!menu.querySelector('[data-a="taddincome"]'),'Выпадающий список всё ещё содержит «Добавить доход»');
+});
+await test('Папка «Прочее» в режиме редактирования не выходит за ширину боковой панели',()=>{
+ const data=fixture();data.set.layoutEdit=true;data.set.otherTabs=['home','tasks','reports'];
+ api.setState(data);api.action('nav','set');
+ const nav=w.document.querySelector('nav'),folder=w.document.querySelector('#nav-other-folder'),list=w.document.querySelector('#nav-other-list');
+ assert(folder&&!folder.hidden&&list&&list.children.length===3,'В «Прочее» не выведены три тестовые вкладки');
+ const within=element=>element.getBoundingClientRect().right<=nav.getBoundingClientRect().right+1&&element.scrollWidth<=element.clientWidth+1;
+ assert(within(folder),'Контейнер папки «Прочее» шире бокового меню');
+ assert(within(list),'Список вкладок выходит за границы контейнера «Прочее»');
+ [...list.querySelectorAll('button[data-id]')].forEach(button=>assert(within(button),'Вкладка '+button.dataset.id+' выходит за ширину папки'));
+ const css=w.document.querySelector('style')?.textContent||'';
+ assert(css.includes('body.layout-editing #nav-other-list>button[data-id]')&&css.includes('overflow-wrap:anywhere'),'Не подключены правила переноса длинных названий');
+});
+
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
