@@ -1464,6 +1464,23 @@ assert(earned&&earned.textContent.includes('3 месяца'),'Подпись з�
 assert(earned.textContent.includes('700'),'Заработок должен суммировать прибыль за весь выбранный период (700 ₽)');
 });
 
+await test('Заработок на главной сводке и его подпись учитывают все выбранные периоды',()=>{
+const data=fixture(),dateAt=monthsAgo=>{const d=new Date();d.setUTCDate(10);d.setUTCMonth(d.getUTCMonth()-monthsAgo);return d.toISOString().slice(0,10)};
+data.builds.push(
+{id:'home-sale-month',num:11,name:'Продажа за месяц',status:'Продана',date:dateAt(0),sold:dateAt(0),price:300,cost:200,lines:[]},
+{id:'home-sale-quarter',num:12,name:'Продажа за квартал',status:'Продана',date:dateAt(2),sold:dateAt(2),price:500,cost:300,lines:[]},
+{id:'home-sale-year',num:13,name:'Продажа за год',status:'Продана',date:dateAt(6),sold:dateAt(6),price:800,cost:500,lines:[]},
+{id:'home-sale-old',num:14,name:'Старая продажа',status:'Продана',date:dateAt(14),sold:dateAt(14),price:1000,cost:600,lines:[]}
+);
+const cases=[['m','Заработок за месяц','100'],['q','Заработок за 3 месяца','300'],['y','Заработок за год','600'],['all','Заработок за всё время','1000']];
+for(const [period,label,amount] of cases){
+data.set.per=period;api.setState(data);api.action('nav','home');
+const earned=[...w.document.querySelectorAll('#m .kp')].find(card=>card.textContent.includes('Заработок'));
+assert(earned&&earned.textContent.includes(label),'Для периода '+period+' неверная подпись заработка');
+assert(earned.textContent.includes(amount),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
+}
+});
+
 await test('Расход сверх остатка кассы блокируется',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
 const f=form(),beforeAlerts=alerts.length;
