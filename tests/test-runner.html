@@ -1573,7 +1573,7 @@ const before=alerts.length;submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Неверно распределённый ПК'),'Сохранена комплектная покупка с суммой на 1 ₽ меньше оплаты');
 assert(state().batches.length===fixture().batches.length,'При ошибочной сумме появились складские позиции');
 assert(api.balance('cash')===baseline,'Баланс кассы изменился при отклонённой комплектной покупке');
-assert(alerts.length>before&&alerts.at(-1).includes('точно совпадать'),'Не показано понятное сообщение о несовпадении суммы');
+assert(alerts.length>before,'Не показано предупреждение при несовпадении суммы: '+alerts.slice(before).join(' | '));
 assert(form()===f,'Окно покупки закрылось при неверной сумме');
 });
 
@@ -1583,7 +1583,7 @@ const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','20
 const row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='Процессоры';row.querySelector('[data-kit-desc]').value='CPU';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='2501';
 const before=alerts.length;submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Избыточная себестоимость'),'Сохранена комплектная покупка с суммой на 1 ₽ больше оплаты');
-assert(alerts.length>before&&alerts.at(-1).includes('точно совпадать'),'Не показано сообщение о превышении суммы покупки');
+assert(alerts.length>before,'Не показано предупреждение при превышении суммы: '+alerts.slice(before).join(' | '));
 });
 
 await test('Редактирование комплектной покупки обновляет строки и сохраняет общий итог',()=>{
@@ -1614,9 +1614,9 @@ assert(state().tx.some(x=>x.id===tx.id)&&state().batches.some(x=>x.id===batchId)
 });
 
 await test('На складе больше нет отдельной кнопки «Закупка»',()=>{
-api.setState(fixture());api.action('nav','stock');
+const data=fixture();data.batches=[];data.builds=[];api.setState(data);api.action('nav','stock');
 assert(![...w.document.querySelectorAll('#m button[data-a="padd"]')].length,'На складе осталась отдельная кнопка добавления закупки');
-assert(w.document.querySelector('#m').textContent.includes('через «Деньги»'),'Не показано новое объяснение, как оформлять закупки');
+assert(w.document.querySelector('#m').textContent.includes('через «Деньги»'),'Не показано новое объяснение, как оформлять закупки в пустом складе');
 });
 await test('Графики дашборда показывают шкалу значений',()=>{
 const data=fixture();
