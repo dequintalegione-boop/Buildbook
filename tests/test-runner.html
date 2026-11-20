@@ -877,13 +877,15 @@ const source={
  batches:[{id:'meta-batch',qty:2,price:100}],
  builds:[{id:'meta-build',num:1,lines:[]}],
  tx:[{id:'meta-tx',kind:'e',amount:20}],
+ debts:[{id:'meta-debt',direction:'given',principal:100,payments:[]}],
+ investments:[{id:'meta-investment',name:'Тестовый актив',currentValue:100,events:[]}],
  stockEvents:[{id:'meta-event',kind:'writeoff',batchId:'meta-batch'}],
  tasks:[{id:'meta-task',text:'Сохранить метаданные'}],
  checklist:[{id:'meta-check',text:'Проверка'}],
  trash:[{id:'meta-trash-entry',type:'task',at:'2026-08-10T10:00:00.000Z',record:{id:'meta-deleted-task',text:'Удалена'}}]
 };
 const migrated=api.migrateState(source).state;
-for(const key of ['accounts','batches','builds','tx','stockEvents','tasks','checklist']){
+for(const key of ['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','checklist']){
  assert(api.metadataValid(migrated[key][0]),'Метаданные не созданы для '+key);
  assert(migrated[key][0].deletedAt===null,'Активная запись отмечена удалённой: '+key);
 }
@@ -1233,6 +1235,39 @@ await test('Резервная копия объединяет долги, ин�
 await test('Полная XLSX-выгрузка включает листы долгов и инвестиций',()=>{
  api.setState(fixture());const wb=api.xlsxWorkbook('all');
  assert(wb.SheetNames.includes('Долги')&&wb.SheetNames.includes('Инвестиции'),'В XLSX не включены новые разделы');
+});
+await test('CSV-импорт долгов и инвестиций сохраняет реквизиты и истории JSON',()=>{
+ api.setState(fixture());
+ const debtCsv='ID;Направление;Кому / от кого;Сумма;Дата;Срок возврата;ID кассы;Комментарий;Статус;ID исходной операции;Платежи JSON\ncsv-debt;given;Пётр;200;2026-05-01;2026-05-20;cash;Долг CSV;active;;[]';
+ const debt=api.importCsv(debtCsv,'debts',{id:0,direction:1,person:2,principal:3,date:4,dueDate:5,accountId:6,note:7,status:8,originTxId:9,paymentsJson:10});
+ assert(debt.added===1&&debt.skipped===0,'Долг CSV не импортирован');
+ const investmentCsv='ID;Название;Тип актива;Площадка / брокер;Дата;Текущая оценка;ID кассы;Комментарий;Статус;Движения JSON\ncsv-investment;ETF;funds;Брокер;2026-05-02;120;cash;Актив CSV;active;[]';
+ const inv=api.importCsv(investmentCsv,'investments',{id:0,name:1,type:2,platform:3,date:4,currentValue:5,accountId:6,note:7,status:8,eventsJson:9});
+ assert(inv.added===1&&inv.skipped===0,'Инвестиция CSV не импортирована');
+ const s=api.getState();
+ assert(s.debts[0].id==='csv-debt'&&s.debts[0].principal===200,'Не восстановлены поля долга');
+ assert(s.investments[0].id==='csv-investment'&&s.investments[0].currentValue===120,'Не восстановлены поля инвестиции');
+ assert(api.exportRows('debts')[0].includes('Платежи JSON'),'Экспорт строк долга не содержит историю платежей');
+ assert(api.exportRows('investments')[0].includes('Движения JSON'),'Экспорт строк инвестиции не содержит историю движений');
+});
+await test('XLSX round-trip сохраняет долги, инвестиции и связанные движения',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Должник XLSX',principal:300,date:'2026-05-01',dueDate:'2026-05-30',accountId:'cash',note:'XLSX'});
+ assert(debt.ok,'Не создан тестовый долг');
+ const payment=api.repayDebt({id:debt.id,amount:75,date:'2026-05-05',accountId:'cash',note:'Возврат XLSX'});
+ assert(payment.ok,'Не добавлен платёж долга');
+ const investment=api.createInvestment({name:'Фонд XLSX',type:'funds',platform:'Broker',date:'2026-05-02',amount:200,currentValue:225,accountId:'cash',note:'XLSX'});
+ assert(investment.ok,'Не создана тестовая инвестиция');
+ const wb=api.xlsxWorkbook('all'),buffer=w.XLSX.write(wb,{bookType:'xlsx',type:'array'});
+ api.setState(fixture());
+ const imported=api.importXlsx(buffer);
+ assert(imported.sheets.some(x=>x.kind==='debts'&&x.added===1),'Лист долгов не импортирован из XLSX');
+ assert(imported.sheets.some(x=>x.kind==='investments'&&x.added===1),'Лист инвестиций не импортирован из XLSX');
+ const restoredDebt=api.getDebts().find(x=>x.id===debt.id),restoredInvestment=api.getInvestments().find(x=>x.id===investment.id);
+ assert(restoredDebt&&restoredDebt.payments.length===1&&api.debtOutstanding(debt.id)===225,'Не восстановлены реквизиты или платежи долга');
+ assert(restoredInvestment&&restoredInvestment.events.length===1&&api.investmentProfit(investment.id)===25,'Не восстановлены история или результат инвестиции');
+ assert(api.getState().tx.some(x=>x.debtId===debt.id&&x.debtRole==='payment'),'Потеряна связь платежа долга с операцией');
+ assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
