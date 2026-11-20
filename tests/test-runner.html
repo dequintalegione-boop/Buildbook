@@ -15,7 +15,7 @@ const frame=document.getElementById('app'),results=document.getElementById('resu
 const RUNNER_BROWSER=new URLSearchParams(location.search).get('browser')||'auto';
 const APP_VARIANT=new URLSearchParams(location.search).get('app')==='standalone'?'standalone':'index';
 frame.src=APP_VARIANT==='standalone'?'../Buildbook-standalone.html?test=1':'../index.html?test=1';
-let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,tempDatabaseCounter=0;
+let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,moneyStockBaseline=null,tempDatabaseCounter=0;
 const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
@@ -269,7 +269,7 @@ api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','СС�
 });
 
 await test('Расход из вкладки «Деньги» автоматически добавляет комплектующее на склад',()=>{
-api.action('nav','tx');api.action('tadd','e');const f=form();
+moneyStockBaseline=api.balance('cash');api.action('nav','tx');api.action('tadd','e');const f=form();
 setv(f,'kind','e');setv(f,'date','2026-04-02');setv(f,'amount','1200');setv(f,'qty','2');setv(f,'cat','ССД');setv(f,'desc','SSD из финансового расхода');setv(f,'acc','cash');submit(f);
 const s=state(),tx=s.tx.find(x=>x.desc==='SSD из финансового расхода'),batch=tx&&s.batches.find(x=>x.id===tx.batchId);
 assert(tx&&tx.kind==='e','Финансовый расход не создан');
@@ -277,7 +277,7 @@ assert(batch&&batch.txId===tx.id,'Складская партия не связ�
 assert(batch.type==='ССД'&&batch.desc===tx.desc&&batch.qty===2,'Реквизиты партии не соответствуют расходу');
 assert(batch.price===600,'Цена за штуку должна рассчитываться из общей суммы и количества');
 assert(tx.grp==='Сборка ПК','Не сохранена группа категории комплектующих');
-assert(api.balance('cash')===-1200,'Расход не уменьшил баланс кассы на полную сумму');
+assert(api.balance('cash')===moneyStockBaseline-1200,'Расход не уменьшил баланс кассы на полную сумму');
 });
 await test('Редактирование расхода закупки синхронно обновляет связанную партию',()=>{
 const tx=state().tx.find(x=>x.desc==='SSD из финансового расхода'),batchId=tx&&tx.batchId;assert(batchId,'У расхода нет связи с партией');
@@ -289,7 +289,7 @@ const updated=state().tx.find(x=>x.id===tx.id),batch=state().batches.find(x=>x.i
 assert(updated&&updated.batchId===batchId,'ID партии изменился при редактировании');
 assert(batch&&batch.desc==='SSD обновлённый'&&batch.date==='2026-04-03'&&batch.qty===3,'Поля партии не обновились вслед за расходом');
 assert(batch.price===500&&batch.note==='Проверка синхронизации','Цена или комментарий партии не синхронизированы');
-assert(updated.amount===1500&&api.balance('cash')===-1500,'Сумма операции или баланс кассы рассчитаны неверно');
+assert(updated.amount===1500&&api.balance('cash')===moneyStockBaseline-1500,'Сумма операции или баланс кассы рассчитаны неверно');
 });
 await test('Удаление расхода из «Денег» корректно удаляет связанную закупку со склада',()=>{
 const tx=state().tx.find(x=>x.desc==='SSD обновлённый');assert(tx&&tx.batchId,'Не найдена тестовая закупка');
@@ -297,7 +297,7 @@ w.confirm=()=>true;api.action('td',tx.id);
 assert(!state().tx.some(x=>x.id===tx.id),'Финансовая операция осталась после удаления');
 assert(!state().batches.some(x=>x.id===tx.batchId),'Связанная партия осталась на складе после подтверждённого удаления');
 assert(state().trash.some(x=>x.type==='batch'&&x.record.id===tx.batchId),'Удалённая партия не помещена в корзину');
-assert(api.balance('cash')===0,'После удаления расхода баланс кассы не восстановился');
+assert(api.balance('cash')===moneyStockBaseline,'После удаления расхода баланс кассы не восстановился');
 });
 await test('Категория «Компы и другое» остаётся обычным расходом, а не складской партией',()=>{
 api.action('nav','tx');api.action('tadd','e');const f=form();
