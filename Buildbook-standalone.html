@@ -2462,32 +2462,315 @@ function logv(){
 }
 
 function demoDate(daysAgo,fromDate=new Date()){const date=new Date(fromDate.getTime());date.setDate(date.getDate()-daysAgo);return localDateISO(date)}
+function demoMonthDate(monthOffset,day=15){
+ const now=new Date(),date=new Date(now.getFullYear(),now.getMonth()-monthOffset,1);
+ const lastDay=new Date(date.getFullYear(),date.getMonth()+1,0).getDate();
+ date.setDate(Math.max(1,Math.min(lastDay,Math.round(Number(day)||1))));
+ return localDateISO(date);
+}
+function demoShiftDate(value,days){
+ const date=new Date(String(value)+'T12:00:00');date.setDate(date.getDate()+(Number(days)||0));return localDateISO(date);
+}
+function demoStamp(date){
+ const parsed=new Date(String(date||today())+'T12:00:00'),iso=(Number.isFinite(parsed.getTime())?parsed:new Date()).toISOString();
+ return {createdAt:iso,updatedAt:iso,deletedAt:null,schemaVersion:DATA_SCHEMA_VERSION};
+}
+function demoRecord(data,date){return Object.assign(demoStamp(date),data)}
+function demoPushTx(data){
+ const record=demoRecord(Object.assign({id:uid()},data,{demo:true}),data.date);
+ S.tx.push(record);return record;
+}
+function demoEntryCount(){
+ return ['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'].reduce((sum,key)=>sum+(S[key]||[]).filter(item=>item&&item.demo).length,0)+(LOG||[]).filter(item=>item&&item.demo).length;
+}
 function loadDemoData(){
- if(S.set.demoLoaded){alert('Демо-данные уже загружены. Сначала удалите их, чтобы загрузить заново.');return}
- const account=S.accounts[0];if(!account){alert('Сначала создайте кассу.');return}
- const types=[['Видеокарты','RTX 4070 Super',3,28000],['Процессоры','Ryzen 7 7700',3,12000],['Оперативка','DDR5 32 ГБ',6,5000],['ССД','NVMe 1 ТБ',3,6000]];
- const requiredCash=types.reduce((total,item)=>total+item[2]*item[3],0);
- if(bal(account)<requiredCash-.000001){alert('Для загрузки демо-данных в кассе «'+account.name+'» должно быть не менее '+R(requiredCash)+' свободных средств на закупки. Сейчас доступно '+R(Math.max(0,bal(account)))+'.');return}
- const batches=types.map(([type,desc,qty,price])=>({id:uid(),type,desc,qty,price,date:demoDate(20),supplier:'Демо-поставщик',link:'',note:'Демонстрационная партия',problemQty:0,writtenOffQty:0,problemReason:'',demo:true}));
- S.batches.push(...batches);
- batches.forEach(batch=>{const tx={id:uid(),kind:'e',date:batch.date,amount:batch.qty*batch.price,desc:'Закупка '+batch.desc,cat:batch.type,grp:S.stockGroup,qty:batch.qty,acc:account.id,note:'Демо-операция закупки',batchId:batch.id,demo:true};batch.txId=tx.id;S.tx.push(tx)});
- const lines=batches.map((batch,index)=>({batchId:batch.id,qty:index===2?2:1,problem:false}));
- const buildCost=lines.reduce((sum,line)=>sum+batches.find(item=>item.id===line.batchId).price*line.qty,0);
- const sold={id:uid(),num:++S.seq,name:'Игровой ПК — демонстрация',status:ST[3],builder:'Демо-сборщик',buyer:'Демо-покупатель',date:demoDate(10),sold:demoDate(3),planned:72000,price:68000,cost:buildCost,lines:JSON.parse(JSON.stringify(lines)),note:'Демонстрационная проданная сборка',demo:true};
- const tested={id:uid(),num:++S.seq,name:'Рабочая станция — демонстрация',status:ST[2],builder:'Демо-сборщик',buyer:'',date:demoDate(2),sold:'',planned:74000,price:0,cost:null,lines:JSON.parse(JSON.stringify(lines)),note:'Демонстрационная сборка в тестировании',demo:true};
- S.builds.push(sold,tested);
- const saleTx={id:uid(),kind:'i',date:sold.sold,amount:sold.price,desc:'Продажа сборки №'+sold.num,cat:'Сборка ПК',grp:'Заработок',qty:1,acc:account.id,note:'Демо-операция продажи',buildId:sold.id,demo:true};sold.txId=saleTx.id;S.tx.push(saleTx);
- S.tasks.push({id:uid(),text:'Проверить температуры под нагрузкой',q:0,done:0,due:demoDate(-1),who:'Демо-сборщик',build:tested.id,demo:true},{id:uid(),text:'Подготовить фотографии сборки',q:1,done:0,due:demoDate(2),who:'',build:tested.id,demo:true},{id:uid(),text:'Заказать кабели для укладки',q:2,done:1,due:demoDate(1),who:'',build:'',demo:true},{id:uid(),text:'Обновить описание объявления',q:4,done:0,due:'',who:'',build:sold.id,demo:true});
- S.checklist.push({id:uid(),text:'Проверить комплектность перед выдачей',done:0,demo:true},{id:uid(),text:'Сохранить фото тестирования',done:1,demo:true});
- S.notes=(S.notes?S.notes+'\n\n':'')+'ДЕМО: пример заметки команды. После знакомства с приложением демо-данные можно удалить в настройках.';
- S.set.demoLoaded=true;save();render();toast('Демо-данные добавлены. Их можно удалить в настройках.');
+ if(S.set.demoLoaded){alert('Полугодовые демо-данные уже загружены. Сначала удалите их, чтобы загрузить набор заново.');return}
+ const months=Array.from({length:6},(_,index)=>{
+  const offset=5-index,date=demoMonthDate(offset,1),monthKey=date.slice(0,7);
+  return {index,offset,date,month:monthKey,label:new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(new Date(date+'T12:00:00'))};
+ });
+ const bank=demoRecord({id:uid(),name:'Демо · Расчётный счёт',open:4200000,demo:true},months[0].date);
+ const cash=demoRecord({id:uid(),name:'Демо · Наличные',open:650000,demo:true},months[0].date);
+ S.accounts.push(bank,cash);
+
+ const catalogForMonth=index=>[
+  {type:'Видеокарты',desc:['GeForce RTX 4070 Super 12 ГБ','GeForce RTX 4060 Ti 16 ГБ','Radeon RX 7800 XT 16 ГБ'][index%3],qty:6,price:28000+index*450},
+  {type:'Процессоры',desc:['AMD Ryzen 7 7700','AMD Ryzen 5 7600','Intel Core i5-14600KF'][index%3],qty:6,price:13000+index*350},
+  {type:'Мат платы',desc:['B650M Gaming Wi-Fi','B650 AORUS Elite','B760M DDR5'][index%3],qty:6,price:9000+index*250},
+  {type:'Оперативка',desc:['DDR5 32 ГБ 6000 MHz','DDR5 32 ГБ RGB','DDR5 64 ГБ Kit'][index%3],qty:12,price:4200+index*100},
+  {type:'ССД',desc:['NVMe 1 ТБ Gen4','NVMe 2 ТБ Gen4','NVMe 1 ТБ Pro'][index%3],qty:12,price:4300+index*120},
+  {type:'БП',desc:['750W 80+ Gold','850W 80+ Gold','650W 80+ Bronze'][index%3],qty:6,price:6800+index*180},
+  {type:'Башни',desc:['Башенный кулер 120 мм','Dual Tower Black','ARGB Tower Cooler'][index%3],qty:6,price:2800+index*90},
+  {type:'Корпусы',desc:['Mesh ATX Black','Airflow Mid Tower','Panorama White'][index%3],qty:6,price:6500+index*160},
+  {type:'Вентиляторы',desc:['120 мм PWM Black','ARGB 120 мм','140 мм PWM'][index%3],qty:12,price:650+index*25},
+  {type:'Периферия',desc:['Комплект клавиатура + мышь','Игровая мышь RGB','Механическая клавиатура'][index%3],qty:10,price:1450+index*45},
+  {type:'Прочее',desc:['Кабели и переходники','Термопаста и крепёж','Комплект расходных материалов'][index%3],qty:16,price:250+index*15}
+ ];
+ const monthBatches=months.map(()=>({}));
+ const suppliers=['ТехноОпт','Прайм-Комплект','СнабПро','Компьютерный склад'];
+ months.forEach(month=>{
+  catalogForMonth(month.index).forEach((item,itemIndex)=>{
+   const date=demoMonthDate(month.offset,3+(itemIndex%5)),batch=demoRecord({
+    id:uid(),type:item.type,desc:item.desc+' · партия '+(month.index+1),qty:item.qty,price:item.price,date,
+    supplier:suppliers[(month.index+itemIndex)%suppliers.length],link:'',note:'Демо-закупка за '+month.label,
+    problemQty:0,problemReason:'',writtenOffQty:0,demo:true
+   },date);
+   S.batches.push(batch);monthBatches[month.index][item.type]=batch;
+   const purchase=demoPushTx({kind:'e',date,amount:item.qty*item.price,desc:'Закупка партии: '+batch.desc,cat:item.type,grp:S.stockGroup||'Сборка ПК',qty:item.qty,acc:bank.id,note:'Демо-поставка от '+batch.supplier,batchId:batch.id});
+   batch.txId=purchase.id;
+  });
+ });
+
+ const builders=['Илья','Артём','Максим','Влад','Сергей'];
+ const buyers=['Александр К.','Дмитрий С.','Иван П.','Анна М.','Михаил В.','Екатерина Р.','Павел Д.','Никита А.','Роман Л.'];
+ const buildStatuses=[
+  [ST[3],ST[3],ST[1]],
+  [ST[3],ST[2],ST[0]],
+  [ST[3],ST[3],ST[1]],
+  [ST[3],ST[2],ST[0]],
+  [ST[3],ST[3],ST[2]],
+  [ST[3],ST[1],ST[0]]
+ ];
+ const buildsByMonth=months.map(()=>[]);
+ months.forEach(month=>{
+  for(let index=0;index<3;index++){
+   const source=monthBatches[month.index],status=buildStatuses[month.index][index],date=demoMonthDate(month.offset,11+index*4);
+   const lineSpecs=[['Видеокарты',1],['Процессоры',1],['Мат платы',1],['Оперативка',2],['ССД',1],['БП',1],['Башни',1],['Корпусы',1],['Вентиляторы',2]];
+   const lines=lineSpecs.map(([type,qty])=>({batchId:source[type].id,qty,problem:false}));
+   const buildCost=lines.reduce((sum,line)=>{const part=S.batches.find(item=>item.id===line.batchId);return sum+(part?part.price*line.qty:0)},0);
+   const sold=status===ST[3],price=106000+month.index*1800+index*2600,soldDate=sold?demoMonthDate(month.offset,13+index*4):'';
+   const build=demoRecord({
+    id:uid(),num:++S.seq,name:['Игровой ПК','Универсальная сборка','Рабочая станция'][index]+' · '+month.label,
+    status,builder:builders[(month.index+index)%builders.length],buyer:sold?buyers[(month.index*2+index)%buyers.length]:'',
+    date,sold:soldDate,planned:price+6500,price:sold?price:0,cost:sold?buildCost:null,lines,
+    note:'Демонстрационная комплектация: подбор деталей, сборка и проверка перед выдачей',demo:true
+   },date);
+   S.builds.push(build);buildsByMonth[month.index].push(build);
+   if(sold){
+    const saleTx=demoPushTx({kind:'i',date:soldDate,amount:price,desc:'Продажа ПК №'+build.num+' · '+build.name,cat:'Сборка ПК',grp:categoryGroup('i','Сборка ПК')||'Заработок',qty:1,acc:bank.id,note:'Оплата от '+build.buyer,buildId:build.id,buyer:build.buyer});
+    build.txId=saleTx.id;
+   }
+  }
+ });
+
+ months.forEach(month=>{
+  const peripheral=monthBatches[month.index]['Периферия'],fans=monthBatches[month.index]['Вентиляторы'];
+  [
+   {batch:peripheral,qty:2,multiplier:1.42,day:23},
+   {batch:fans,qty:2,multiplier:1.38,day:25}
+  ].forEach((sale,index)=>{
+   const batch=sale.batch,qty=sale.qty,unitCost=Number(batch.price)||0,unitPrice=Math.round(unitCost*sale.multiplier),amount=qty*unitPrice,costAmount=qty*unitCost;
+   batch.qty=Math.max(0,batch.qty-qty);
+   const category=S.partSaleCategory||'Комплектующие',group=categoryGroup('i',category)||S.partSaleGroup||'Продажи';
+   demoPushTx({kind:'i',date:demoMonthDate(month.offset,sale.day),amount,desc:'Продажа комплектующих: '+batch.desc,cat:category,grp:group,qty,acc:cash.id,note:'Розничная продажа со склада',partSale:true,saleId:uid(),batchId:batch.id,batchDesc:batch.desc,batchType:batch.type,unitCost,unitPrice,costAmount,grossProfit:amount-costAmount,sourceBuildId:null,sourceBuildNum:null,sourceProblem:false});
+  });
+  const recurring=[
+   ['Продвижение объявлений на Авито','Авито','Продажи и продвижение',4200+month.index*120],
+   ['Поездки к поставщикам и клиентам','Бензин','Транспорт',6500+month.index*180],
+   ['Инструменты и расходные материалы','Инструменты','Ремонт и обслуживание',3800+month.index*90],
+   ['Питание команды на сменах','Еда','Общие расходы',2800+month.index*80],
+   ['Аренда и коммунальные расходы','Другое','Общие расходы',15500+month.index*250],
+   ['Оплата работы сборщика','Компы и другое','Сборка ПК',22000+month.index*900]
+  ];
+  recurring.forEach((entry,index)=>{
+   demoPushTx({kind:'e',date:demoMonthDate(month.offset,7+index*3),amount:entry[3],desc:entry[0]+' · '+month.label,cat:entry[1],grp:entry[2],qty:1,acc:cash.id,note:'Регулярный расход команды'});
+  });
+  demoPushTx({kind:'i',date:demoMonthDate(month.offset,26),amount:11500+month.index*450,desc:'Обслуживание и настройка ПК · '+month.label,cat:'Другое',grp:'Заработок',qty:1,acc:cash.id,note:'Оплата сервиса от частных клиентов'});
+  if(month.index%2===0)demoPushTx({kind:'transfer',date:demoMonthDate(month.offset,19),amount:35000,desc:'Перевод на наличные закупки · '+month.label,cat:'Перевод',grp:'Переводы',qty:1,fromAcc:bank.id,toAcc:cash.id,note:'Перемещение средств между демо-кассами'});
+ });
+
+ const problemBatch=monthBatches[2]['Прочее'];
+ problemBatch.problemQty=1;problemBatch.writtenOffQty=1;problemBatch.problemReason='Повреждена упаковка, одна единица списана';
+ [
+  {kind:'problem',date:demoMonthDate(3,16),qty:3,reason:'Повреждение упаковки при получении партии'},
+  {kind:'writeoff',date:demoMonthDate(3,20),qty:1,reason:'Списание одной повреждённой единицы'},
+  {kind:'unmark',date:demoMonthDate(3,24),qty:1,reason:'После проверки часть деталей возвращена в нормальный остаток'}
+ ].forEach(event=>S.stockEvents.push(demoRecord({id:uid(),kind:event.kind,date:event.date,createdAt:demoStamp(event.date).createdAt,batchId:problemBatch.id,batchType:problemBatch.type,batchDesc:problemBatch.desc,qty:event.qty,reason:event.reason,demo:true},event.date)));
+ const secondIssue=monthBatches[4]['Корпусы'];
+ [
+  {kind:'problem',date:demoMonthDate(1,16),qty:1,reason:'Царапина на корпусе, требуется проверка'},
+  {kind:'unmark',date:demoMonthDate(1,21),qty:1,reason:'Дефект не подтвердился после осмотра'}
+ ].forEach(event=>S.stockEvents.push(demoRecord({id:uid(),kind:event.kind,date:event.date,createdAt:demoStamp(event.date).createdAt,batchId:secondIssue.id,batchType:secondIssue.type,batchDesc:secondIssue.desc,qty:event.qty,reason:event.reason,demo:true},event.date)));
+
+ function addDemoDebt(direction,person,principal,date,dueDate,note,payments,status='active'){
+  const id=uid(),originTxId=uid(),accountId=bank.id,record=demoRecord({id,direction,person,principal,date,dueDate,accountId,note,originTxId,payments:[],status,demo:true},date);
+  S.debts.push(record);
+  demoPushTx({id:originTxId,kind:direction==='given'?'loan_out':'loan_in',date,amount:principal,desc:(direction==='given'?'Выдан долг: ':'Получен заём: ')+person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note,debtId:id,debtRole:'origin'});
+  payments.forEach(payment=>{
+   const paymentId=uid(),txId=uid(),incoming=direction==='given';
+   record.payments.push({id:paymentId,amount:payment.amount,date:payment.date,accountId,note:payment.note,txId});
+   demoPushTx({id:txId,kind:incoming?'loan_repayment_in':'loan_repayment_out',date:payment.date,amount:payment.amount,desc:(incoming?'Возврат долга от ':'Погашение долга: ')+person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note:payment.note,debtId:id,debtPaymentId:paymentId,debtRole:'payment'});
+  });
+ }
+ addDemoDebt('given','ООО «ТехноОпт»',75000,demoMonthDate(4,14),demoMonthDate(3,25),'Краткосрочный аванс поставщику',[
+  {amount:25000,date:demoMonthDate(3,10),note:'Первый частичный возврат'},
+  {amount:20000,date:demoMonthDate(2,12),note:'Второй частичный возврат'}
+ ]);
+ addDemoDebt('received','Максим К.',90000,demoMonthDate(3,18),demoMonthDate(1,20),'Заём на расширение закупки',[
+  {amount:35000,date:demoMonthDate(2,22),note:'Частичное погашение'}
+ ]);
+ addDemoDebt('given','Сервисный партнёр',25000,demoMonthDate(2,9),demoMonthDate(1,25),'Временная помощь партнёру',[
+  {amount:10000,date:demoMonthDate(1,12),note:'Возврат первой части'},
+  {amount:15000,date:demoMonthDate(0,8),note:'Окончательный возврат'}
+ ]);
+ addDemoDebt('received','Организация доставки',35000,demoMonthDate(1,7),demoMonthDate(0,10),'Аванс на логистику',[
+  {amount:35000,date:demoMonthDate(0,11),note:'Полное погашение'}
+ ],'archived');
+
+ function addDemoInvestment(name,type,platform,date,currentValue,note,eventSpecs,status='active'){
+  const item=demoRecord({id:uid(),name,type,platform,date,currentValue,accountId:bank.id,note,events:[],status,demo:true},date);
+  S.investments.push(item);
+  eventSpecs.forEach(spec=>{
+   const eventId=uid(),txId=uid(),incoming=spec.type==='withdrawal';
+   item.events.push({id:eventId,type:spec.type,amount:spec.amount,date:spec.date,accountId:bank.id,note:spec.note,txId});
+   demoPushTx({id:txId,kind:incoming?'investment_in':'investment_out',date:spec.date,amount:spec.amount,desc:(incoming?'Вывод из инвестиции: ':'Вложение в инвестицию: ')+name,cat:'Инвестиции',grp:'Инвестиции',qty:1,acc:bank.id,note:spec.note,investmentId:item.id,investmentEventId:eventId,investmentRole:spec.type});
+  });
+ }
+ addDemoInvestment('Индексный фонд МосБиржи','funds','БКС Мир инвестиций',demoMonthDate(5,18),72000,'Регулярное долгосрочное вложение',[
+  {type:'contribution',amount:60000,date:demoMonthDate(5,18),note:'Первоначальное вложение'},
+  {type:'contribution',amount:10000,date:demoMonthDate(2,14),note:'Плановое пополнение'},
+  {type:'withdrawal',amount:5000,date:demoMonthDate(0,9),note:'Частичный вывод'}
+ ]);
+ addDemoInvestment('ОФЗ 262xx','bonds','Т-Инвестиции',demoMonthDate(4,12),103500,'Консервативная часть портфеля',[
+  {type:'contribution',amount:80000,date:demoMonthDate(4,12),note:'Покупка облигаций'},
+  {type:'contribution',amount:20000,date:demoMonthDate(1,16),note:'Дополнительная покупка'}
+ ]);
+ addDemoInvestment('Криптопортфель','crypto','Биржевой аккаунт',demoMonthDate(3,6),0,'Закрытая демонстрационная позиция',[
+  {type:'contribution',amount:25000,date:demoMonthDate(3,6),note:'Первоначальная покупка'},
+  {type:'withdrawal',amount:30000,date:demoMonthDate(1,6),note:'Полный вывод с прибылью'}
+ ],'closed');
+
+ const taskTexts=[
+  'Проверить комплектность входящей поставки',
+  'Согласовать конфигурацию с заказчиком',
+  'Собрать фотографии и результаты тестов',
+  'Обновить карточки товаров и закупочные цены',
+  'Подготовить сборку к выдаче',
+  'Проверить остатки перед следующей закупкой'
+ ];
+ months.forEach(month=>{
+  for(let index=0;index<taskTexts.length;index++){
+   const due=demoMonthDate(month.offset,5+index*3),done=index<4,doneAt=done?demoShiftDate(due,1):'';
+   const completedAge=done?Math.floor((new Date(today()+'T12:00:00').getTime()-new Date(doneAt+'T12:00:00').getTime())/86400000):0;
+   const task=demoRecord({
+    id:uid(),text:taskTexts[index]+' · '+month.label,q:(month.index+index)%5,done:done?1:0,due,
+    who:builders[(month.index+index)%builders.length],build:buildsByMonth[month.index][index%3].id,
+    doneAt:doneAt||'',archivedAt:done&&completedAge>2?demoShiftDate(doneAt,3):undefined,demo:true
+   },due);
+   if(!task.archivedAt)delete task.archivedAt;
+   S.tasks.push(task);
+  }
+ });
+ [
+  ['Проверить комплектность перед выдачей',0],
+  ['Сохранить фото финального тестирования',1],
+  ['Сверить серийные номера комплектующих',1],
+  ['Обновить шаблон сметы для клиента',0],
+  ['Проверить расходники на рабочем месте',0],
+  ['Подготовить упаковку и маркировку',1],
+  ['Сделать резервную копию базы',1],
+  ['Проверить кабели и переходники',0],
+  ['Сверить остаток наличных',1],
+  ['Обновить список поставщиков',0]
+ ].forEach(([text,done],index)=>S.checklist.push(demoRecord({id:uid(),text,done,demo:true},demoMonthDate(0,Math.max(1,Math.min(21,index+4))))));
+
+ months.forEach(month=>{
+  const monthB=monthBatches[month.index];
+  S.salesPlans.push(
+   demoRecord({id:uid(),month:month.month,metric:'quantity',scope:'builds',targetQty:3,targetAmount:null,demo:true},month.date),
+   demoRecord({id:uid(),month:month.month,metric:'revenue',scope:'all_sales',targetQty:null,targetAmount:320000+month.index*12000,demo:true},month.date),
+   demoRecord({id:uid(),month:month.month,metric:'quantity',scope:'parts_category',category:'Периферия',targetQty:4,targetAmount:null,demo:true},month.date),
+   demoRecord({id:uid(),month:month.month,metric:'quantity',scope:'parts_product',product:monthB['Видеокарты'].desc+' · партия '+(month.index+1),targetQty:2,targetAmount:null,demo:true},month.date)
+  );
+ });
+
+ function addDemoTrash(type,record,date){
+  const at=demoStamp(date).createdAt,saved=demoRecord(Object.assign({},record,{deletedAt:at,demo:true}),date);
+  S.trash.unshift({id:uid(),type,at,createdAt:at,updatedAt:at,deletedAt:at,record:saved,demo:true,schemaVersion:DATA_SCHEMA_VERSION});
+ }
+ addDemoTrash('task',{id:uid(),text:'Уточнить время доставки заказа',q:2,done:0,due:demoMonthDate(4,19),who:'Илья',build:'',demo:true},demoMonthDate(4,21));
+ addDemoTrash('task',{id:uid(),text:'Пересчитать смету для старого клиента',q:1,done:1,due:demoMonthDate(3,11),doneAt:demoMonthDate(3,12),demo:true},demoMonthDate(3,16));
+ addDemoTrash('checklist',{id:uid(),text:'Проверить наличие упаковочных материалов',done:1,demo:true},demoMonthDate(2,22));
+ addDemoTrash('checklist',{id:uid(),text:'Сверить список заказов с перепиской',done:0,demo:true},demoMonthDate(0,13));
+
+ const noteBlock=[
+  '— Демо-данные Buildbook —',
+  'История команды за шесть календарных месяцев. Это вымышленные записи для проверки интерфейса, отчётов, календаря и связей между разделами.',
+  ...months.map(month=>month.label+': закупки комплектующих, сборки ПК, продажи, сервисные работы и ежемесячные расходы.'),
+  '— Конец демо-данных Buildbook —'
+ ].join('\n');
+ S.notes=[String(S.notes||'').trim(),noteBlock].filter(Boolean).join('\n\n');
+
+ months.forEach(month=>{
+  const monthTx=S.tx.filter(tx=>tx.demo&&String(tx.date||'').slice(0,7)===month.month).length;
+  const stamp=demoStamp(demoMonthDate(month.offset,Math.min(26,20+month.index)));
+  LOG.unshift({t:new Date(stamp.createdAt).toLocaleString('ru-RU'),l:'Демо · '+month.label+': закупки, сборки и расчёты',changes:[{path:['tx'],beforeExists:true,beforeValue:0,afterExists:true,afterValue:monthTx}],demo:true});
+ });
+ S.set.demoLoaded=true;S.set.demoVersion=2;
+ save();render();toast('Добавлены демо-данные за 6 месяцев · '+demoEntryCount()+' записей');
 }
 function removeDemoData(){
- if(!S.set.demoLoaded&&!['batches','builds','tx','tasks','checklist'].some(key=>(S[key]||[]).some(item=>item.demo))){toast('Демо-данных нет.');return}
- if(!confirm('Удалить только записи, созданные кнопкой «Загрузить демо-данные»? Ваши обычные записи и настройки останутся.'))return;
- ['batches','builds','tx','tasks','checklist'].forEach(key=>{S[key]=(S[key]||[]).filter(item=>!item.demo)});
- S.set.demoLoaded=false;S.notes=String(S.notes||'').replace(/(?:\n\n)?ДЕМО: пример заметки команды\. После знакомства с приложением демо-данные можно удалить в настройках\.?/g,'').trim();
- save();render();toast('Демо-данные удалены. Остальные записи сохранены.');
+ const collections=['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'];
+ const hasDemo=collections.some(key=>(S[key]||[]).some(item=>item&&item.demo))||(LOG||[]).some(item=>item&&item.demo)||String(S.notes||'').includes('— Демо-данные Buildbook —');
+ if(!S.set.demoLoaded&&!hasDemo){toast('Демо-данных нет.');return}
+ if(!confirm('Удалить демонстрационные записи за полгода? Обычные данные останутся. Записи, на которые уже ссылаются ваши реальные операции, сборки или задачи, будут сохранены.'))return;
+
+ const keepBatchIds=new Set(),keepBuildIds=new Set(),keepDebtIds=new Set(),keepInvestmentIds=new Set(),keepTxIds=new Set(),keepAccountIds=new Set();
+ (S.tx||[]).filter(item=>!item.demo).forEach(tx=>{
+  if(tx.batchId)keepBatchIds.add(tx.batchId);
+  if(tx.buildId)keepBuildIds.add(tx.buildId);
+  if(tx.sourceBuildId)keepBuildIds.add(tx.sourceBuildId);
+  if(tx.debtId)keepDebtIds.add(tx.debtId);
+  if(tx.investmentId)keepInvestmentIds.add(tx.investmentId);
+  [tx.acc,tx.fromAcc,tx.toAcc].filter(Boolean).forEach(id=>keepAccountIds.add(id));
+ });
+ (S.builds||[]).filter(item=>!item.demo).forEach(build=>(build.lines||[]).forEach(line=>keepBatchIds.add(line.batchId)));
+ (S.tasks||[]).filter(item=>!item.demo&&item.build).forEach(task=>keepBuildIds.add(task.build));
+ (S.debts||[]).filter(item=>!item.demo).forEach(debt=>{
+  if(debt.accountId)keepAccountIds.add(debt.accountId);
+  (debt.payments||[]).forEach(payment=>{if(payment.accountId)keepAccountIds.add(payment.accountId)});
+ });
+ (S.investments||[]).filter(item=>!item.demo).forEach(investment=>{
+  if(investment.accountId)keepAccountIds.add(investment.accountId);
+  (investment.events||[]).forEach(event=>{if(event.accountId)keepAccountIds.add(event.accountId)});
+ });
+
+ (S.builds||[]).filter(item=>keepBuildIds.has(item.id)).forEach(build=>{
+  if(build.txId)keepTxIds.add(build.txId);
+  (build.lines||[]).forEach(line=>keepBatchIds.add(line.batchId));
+ });
+ (S.batches||[]).filter(item=>keepBatchIds.has(item.id)).forEach(batch=>{if(batch.txId)keepTxIds.add(batch.txId)});
+ (S.debts||[]).filter(item=>keepDebtIds.has(item.id)).forEach(debt=>{
+  if(debt.originTxId)keepTxIds.add(debt.originTxId);
+  (debt.payments||[]).forEach(payment=>{if(payment.txId)keepTxIds.add(payment.txId)});
+  if(debt.accountId)keepAccountIds.add(debt.accountId);
+  (debt.payments||[]).forEach(payment=>{if(payment.accountId)keepAccountIds.add(payment.accountId)});
+ });
+ (S.investments||[]).filter(item=>keepInvestmentIds.has(item.id)).forEach(investment=>{
+  if(investment.accountId)keepAccountIds.add(investment.accountId);
+  (investment.events||[]).forEach(event=>{if(event.txId)keepTxIds.add(event.txId);if(event.accountId)keepAccountIds.add(event.accountId)});
+ });
+
+ const preserve=(item,set)=>!!(item&&item.demo&&set.has(item.id));
+ S.accounts=(S.accounts||[]).filter(item=>!item.demo||keepAccountIds.has(item.id));
+ S.batches=(S.batches||[]).filter(item=>!item.demo||preserve(item,keepBatchIds));
+ S.builds=(S.builds||[]).filter(item=>!item.demo||preserve(item,keepBuildIds));
+ S.tx=(S.tx||[]).filter(item=>!item.demo||keepTxIds.has(item.id));
+ S.debts=(S.debts||[]).filter(item=>!item.demo||preserve(item,keepDebtIds));
+ S.investments=(S.investments||[]).filter(item=>!item.demo||preserve(item,keepInvestmentIds));
+ S.stockEvents=(S.stockEvents||[]).filter(item=>!item.demo||keepBatchIds.has(item.batchId));
+ S.salesPlans=(S.salesPlans||[]).filter(item=>!item.demo);
+ S.tasks=(S.tasks||[]).filter(item=>!item.demo);
+ S.checklist=(S.checklist||[]).filter(item=>!item.demo);
+ S.trash=(S.trash||[]).filter(item=>!item.demo);
+ ['accounts','batches','builds','tx','debts','investments','stockEvents'].forEach(key=>(S[key]||[]).forEach(item=>{if(item.demo)item.demo=false}));
+ LOG=(LOG||[]).filter(item=>!item.demo);
+ S.set.demoLoaded=false;delete S.set.demoVersion;
+ S.notes=String(S.notes||'')
+  .replace(/(?:\n\n)?— Демо-данные Buildbook —[\s\S]*?— Конец демо-данных Buildbook —/g,'')
+  .replace(/(?:\n\n)?ДЕМО: пример заметки команды\. После знакомства с приложением демо-данные можно удалить в настройках\.?/g,'').trim();
+ const retained=['accounts','batches','builds','tx','debts','investments','stockEvents'].reduce((sum,key)=>sum+(S[key]||[]).filter(item=>item&&!item.demo).length,0);
+ save();render();toast(retained?'Демо-данные удалены. Связанные с реальными записями элементы сохранены.':'Демо-данные удалены. Остальные записи сохранены.');
 }
 /* настройки */
 const catKey=(...p)=>encodeURIComponent(JSON.stringify(p));
@@ -3224,12 +3507,12 @@ function xlsxImportWizard(buffer){
 function dataStorageWarning(){
  return '<section style="padding:14px 16px;border-left:4px solid var(--w);background:color-mix(in srgb,var(--w) 8%,var(--s));border-radius:8px"><b>Внимание: данные не шифруются</b><p class="mu">Buildbook хранит сведения локально в IndexedDB браузера без шифрования. Резервные копии JSON/ZIP и выгрузки CSV/XLSX также не зашифрованы. Доступ к профилю браузера или устройству может открыть сохранённые данные. Не используйте приложение на общедоступных устройствах и регулярно сохраняйте резервные копии.</p></section>';
 }
-function sets(){const demoSection='<section><b>Демо-данные</b><p class="mu">Добавляет пример закупок, сборок, кассовых операций и задач. Ваши существующие записи не заменяются. Удаление затрагивает только созданные демо-записи.</p><button class="btn p" data-a="demoload">Загрузить демо-данные</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены.':'Демо-данные не загружены.')+'</p></section>';const wipeSection='<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div>';return head('Настройки')+'<div class="tw settings-page" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Журнал изменений</b><p class="mu">Все новые записи сохраняются без автоматического удаления. Для отдельного хранения можно скачать журнал в текстовом файле TXT.</p></section><section><b>Дополнительные разделы</b><label class="setting-toggle"><span>Включить раздел «Долги и инвестиции»</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Раздел ведёт выданные и полученные долги, платежи, инвестиционные вложения, выводы и текущую оценку активов. При отключении раздел скрывается, но записи и движения по кассам сохраняются.</p></section>'+'<section><b>Режим редактирования интерфейса</b><label class="setting-toggle"><span>Разрешить перетаскивание разделов и пунктов меню</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="layoutEdit" '+(S.set.layoutEdit?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Когда режим включён, перетаскивайте пункты боковой панели и карточки на страницах, чтобы менять их порядок. На дашборде дополнительно доступны настройка графиков и удаление ненужных блоков. Порядок сохраняется в этом профиле.</p></section>'+dataStorageWarning()+''+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button> <button class="btn" data-a="csv" data-id="debts">Долги</button> <button class="btn" data-a="csv" data-id="investments">Инвестиции</button> <button class="btn" data-a="csv" data-id="salesPlans">Планы продаж</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+demoSection+'<section><b>Установка приложения</b><p class="mu">Установка доступна через кнопку, если браузер поддерживает её, или вручную через меню браузера. Для iPhone и iPad показана отдельная инструкция Safari.</p><button class="btn p" data-a="inst">Установить как приложение</button></section>'+wipeSection+'</div><div class="ft">Buildbook, версия 2.31<br>Developed by <b>Quinta Legione</b></div>'}
+function sets(){const demoSection='<section><b>Демо-данные</b><p class="mu">Добавляет пример закупок, сборок, кассовых операций и задач. Ваши существующие записи не заменяются. Удаление затрагивает только созданные демо-записи.</p><button class="btn p" data-a="demoload">Загрузить демо-данные</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены.':'Демо-данные не загружены.')+'</p></section>';const wipeSection='<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div>';return head('Настройки')+'<div class="tw settings-page" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Журнал изменений</b><p class="mu">Все новые записи сохраняются без автоматического удаления. Для отдельного хранения можно скачать журнал в текстовом файле TXT.</p></section><section><b>Дополнительные разделы</b><label class="setting-toggle"><span>Включить раздел «Долги и инвестиции»</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Раздел ведёт выданные и полученные долги, платежи, инвестиционные вложения, выводы и текущую оценку активов. При отключении раздел скрывается, но записи и движения по кассам сохраняются.</p></section>'+'<section><b>Режим редактирования интерфейса</b><label class="setting-toggle"><span>Разрешить перетаскивание разделов и пунктов меню</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="layoutEdit" '+(S.set.layoutEdit?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Когда режим включён, перетаскивайте пункты боковой панели и карточки на страницах, чтобы менять их порядок. На дашборде дополнительно доступны настройка графиков и удаление ненужных блоков. Порядок сохраняется в этом профиле.</p></section>'+dataStorageWarning()+''+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button> <button class="btn" data-a="csv" data-id="debts">Долги</button> <button class="btn" data-a="csv" data-id="investments">Инвестиции</button> <button class="btn" data-a="csv" data-id="salesPlans">Планы продаж</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+demoSection+'<section><b>Установка приложения</b><p class="mu">Установка доступна через кнопку, если браузер поддерживает её, или вручную через меню браузера. Для iPhone и iPad показана отдельная инструкция Safari.</p><button class="btn p" data-a="inst">Установить как приложение</button></section>'+wipeSection+'</div><div class="ft">Buildbook, версия 2.32<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
 if(TEST_MODE){Object.defineProperty(window,'__BUILD_BOOK_TEST__',{configurable:false,enumerable:false,writable:false,value:Object.freeze({
-version:'2.31-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
+version:'2.32-test',database:DB_NAME,ready:()=>APP_READY,startupStage:()=>STARTUP_STAGE,schemaVersion:DATA_SCHEMA_VERSION,storageRevision:()=>storageRevision,storageConflict:()=>storageConflict,migrateState:source=>migrateState(source),flushStorage:()=>flushSave(),persistedSchema:async()=>{const state=await repository.read('s');return state&&state.schemaVersion||0},
 getState:()=>JSON.parse(JSON.stringify(S)),getDebts:()=>JSON.parse(JSON.stringify(S.debts||[])),getInvestments:()=>JSON.parse(JSON.stringify(S.investments||[])),debtOutstanding:id=>{const d=S.debts.find(x=>x.id===id);return d?debtOutstanding(d):null},investmentProfit:id=>{const i=S.investments.find(x=>x.id===id);return i?investmentProfit(i):null},createDebt:data=>createDebtRecord(data),repayDebt:data=>repayDebtRecord(data),archiveDebt:id=>archiveDebtRecord(id),createInvestment:data=>createInvestmentRecord(data),contributeInvestment:data=>contributeInvestmentRecord(data),withdrawInvestment:data=>withdrawInvestmentRecord(data),updateInvestment:data=>updateInvestmentRecord(data),closeInvestment:id=>closeInvestmentRecord(id),localDateISO:date=>localDateISO(date),demoDate:(daysAgo,date)=>demoDate(daysAgo,date||new Date()),resolveTheme:(mode,systemDark)=>resolveTheme(mode,systemDark),installInstructions:(ua,protocol,isIOS)=>installInstructions(ua,protocol,isIOS),formatStorageSize:formatStorageSize,metadataValid:record=>!!record&&validMetadataDate(record.createdAt)&&validMetadataDate(record.updatedAt)&&Object.prototype.hasOwnProperty.call(record,'deletedAt')&&record.schemaVersion===DATA_SCHEMA_VERSION,
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),shrinkPhoto:file=>shrink(file),createBackupSnapshot:date=>createBackupSnapshot(date),createZipBackup:date=>{const snapshot=createBackupSnapshot(date),photos=snapshot.photos;delete snapshot.photos;return createZipBackupBlob(snapshot,photos)},completeBackupExport:(blob,name,date,download)=>completeBackupExport(blob,name,date,download),backupTimestamp:()=>S.set.backup||'',photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
