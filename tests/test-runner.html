@@ -4,20 +4,22 @@
 :root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:640px;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
 </style></head><body>
 <h1>Buildbook — автоматические браузерные тесты</h1>
-<p class="muted">Проверяется приложение из <code>index.html</code> в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
+<p class="muted">Проверяется выбранная версия приложения в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
 <div class="card row"><div><b id="summary">Ожидание запуска…</b><div class="muted" id="details">Тесты выполняются локально в этом браузере.</div></div><button id="rerun">Запустить снова</button></div>
 <div class="card"><ol id="results"></ol></div>
-<div id="app-wrap"><iframe id="app" title="Тестируемое приложение" src="../index.html?test=1"></iframe></div>
+<div id="app-wrap"><iframe id="app" title="Тестируемое приложение" src="about:blank"></iframe></div>
 <script>
 (function(){
 'use strict';
 const frame=document.getElementById('app'),results=document.getElementById('results'),summary=document.getElementById('summary'),details=document.getElementById('details'),button=document.getElementById('rerun');
 const RUNNER_BROWSER=new URLSearchParams(location.search).get('browser')||'auto';
+const APP_VARIANT=new URLSearchParams(location.search).get('app')==='standalone'?'standalone':'index';
+frame.src=APP_VARIANT==='standalone'?'../Buildbook-standalone.html?test=1':'../index.html?test=1';
 let w,api,passed=0,failed=0,alerts=[],prompts=[],transferId=null,transferBaseline=null,tempDatabaseCounter=0;
 const tempDatabaseName=prefix=>'buildbook-repository-tests';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function assert(ok,msg){if(!ok)throw new Error(msg||'Условие не выполнено')}
-function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · выполнено тестов: '+(passed+failed)}
+function report(name,ok,detail){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'✓ ':'✗ ')+name+(detail?' — '+detail:'');results.append(li);if(ok)passed++;else failed++;summary.textContent='Пройдено: '+passed+' · Ошибок: '+failed;details.textContent='Движок: '+RUNNER_BROWSER+' · приложение: '+APP_VARIANT+' · выполнено тестов: '+(passed+failed)}
 async function test(name,fn){summary.textContent='Выполняется: '+name;try{await fn();report(name,true)}catch(e){report(name,false,e&&e.message||String(e));console.error(name,e)}}
 const fixture=()=>({
 accounts:[{id:'cash',name:'Наличные',open:1000},{id:'card',name:'Карта',open:0}],
@@ -145,14 +147,26 @@ await repository.clear();
 try{
 summary.textContent='Выполняется: Blob repository — подготовка';
 const photo=new w.Blob(['Buildbook photo'],{type:'image/png'});
-summary.textContent='Выполняется: Blob repository — запись';
-await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[photo]},0);
+summary.textContent='Выполняется: Blob repository — чтение байтов FileReader';
+const photoBytes=await Promise.race([
+ new Promise((resolve,reject)=>{
+  const reader=new w.FileReader();
+  reader.onload=()=>resolve(reader.result);
+  reader.onerror=()=>reject(reader.error||new Error('FileReader не смог прочитать Blob'));
+  reader.onabort=()=>reject(new Error('Чтение Blob через FileReader отменено'));
+  reader.readAsArrayBuffer(photo);
+ }),
+ sleep(10000).then(()=>{throw new Error('FileReader не завершил чтение Blob за 10 секунд')})
+]);
+assert(photoBytes instanceof w.ArrayBuffer&&photoBytes.byteLength===15,'FileReader вернул некорректный размер бинарных данных');
+summary.textContent='Выполняется: Blob repository — запись через ArrayBuffer';
+await repository.writeProfile({marker:'Состояние'},[{id:'journal-entry'}],{build1:[{__buildbookBlob:1,type:photo.type,bytes:photoBytes}]},0);
 summary.textContent='Выполняется: Blob repository — чтение';
 const stored=await repository.readProfile();
 summary.textContent='Выполняется: Blob repository — проверка';
 assert(stored.state.marker==='Состояние','Не прочитано состояние профиля');
 assert(stored.logs[0].id==='journal-entry','Не прочитан журнал');
-assert(stored.photos.build1[0] instanceof w.Blob&&stored.photos.build1[0].size===photo.size,'Фотография не сохранена как Blob');
+assert(stored.photos.build1[0].__buildbookBlob===1&&stored.photos.build1[0].bytes instanceof w.ArrayBuffer&&stored.photos.build1[0].bytes.byteLength===photoBytes.byteLength,'Фотография не сохранена как бинарный ArrayBuffer');
 assert((await repository.read('s')).marker==='Состояние','Отдельное чтение записи профиля не работает');
 }finally{await repository.clear();await repository.close()}
 });
@@ -172,7 +186,7 @@ await test('Старые данные автоматически мигриру�
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
 assert(result.migrated,'Миграция старой версии не запущена');
-assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===3,'Не записана текущая версия схемы 2');
+assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===4,'Не записана текущая версия схемы 4');
 assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
 assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
 assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
@@ -542,6 +556,109 @@ assert(api.available('ssd-batch')===1,'Остаток партии не учёл
 assert(!state().builds.some(x=>x.id==='bad-build'),'Сборка с неизвестной партией была добавлена');
 });
 
+await test('CSV-импорт касс добавляет счета, сохраняет ID и отклоняет некорректные строки',()=>{
+api.setState(fixture());
+const stats=api.importCsv('ID;Название кассы;Начальный остаток\naccount-checking;Расчётный счёт;2500\naccount-duplicate;Карта;100\naccount-invalid;Некорректный баланс;abc','accounts',{id:0,name:1,open:2});
+assert(stats.added===1&&stats.skipped===2,'Ожидалось 1 добавление и 2 пропуска');
+const accounts=state().accounts;
+const imported=accounts.find(x=>x.id==='account-checking');
+assert(imported&&imported.name==='Расчётный счёт'&&imported.open===2500,'Не импортированы реквизиты новой кассы');
+assert(!accounts.some(x=>x.id==='account-duplicate'),'Дублирующая касса ошибочно добавлена');
+assert(stats.errors.length===2,'Не показаны причины ошибочных строк');
+});
+await test('CSV-импорт задач сохраняет исполнителя, срок, приоритет и связь со сборкой',()=>{
+api.setState(fixture());
+const stats=api.importCsv('ID;Задача;Квадрант;Выполнено;Срок;Исполнитель;ID сборки\ntask-csv-1;Проверить тестовую сборку;1;Да;2026-05-10;Иван;build-open\ntask-csv-bad-build;Неизвестная сборка;0;Нет;2026-05-11;Пётр;missing-build\ntask-csv-bad-q;Некорректный приоритет;5;Нет;;;\ntask-csv-empty;;0;Нет;;;','tasks',{id:0,text:1,q:2,done:3,due:4,who:5,build:6});
+assert(stats.added===1&&stats.skipped===3,'Ожидалось 1 добавление и 3 пропуска');
+const imported=state().tasks.find(x=>x.id==='task-csv-1');
+assert(imported&&imported.text==='Проверить тестовую сборку','Текст задачи не импортирован');
+assert(imported.q===1&&imported.done===1,'Приоритет или статус задачи не сохранён');
+assert(imported.due==='2026-05-10'&&imported.who==='Иван'&&imported.build==='build-open','Срок, исполнитель или ID сборки не сохранены');
+assert(stats.errors.length===3,'Не показаны причины пропуска ошибочных задач');
+});
+await test('Автоопределение CSV распознаёт выгрузки касс и задач',()=>{
+assert(api.guessCsvKind(['ID','Название кассы','Начальный остаток','Текущий баланс'])==='accounts','CSV касс распознан как другой тип');
+assert(api.guessCsvKind(['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'])==='tasks','CSV задач распознан как другой тип');
+});
+await test('Отклонённый CSV-перевод не оставляет созданную кассу',()=>{
+api.setState(fixture());
+const before=state().accounts.length;
+const stats=api.importCsv('ID;Тип операции;Дата;Сумма;Описание;Касса отправления;Касса получения\nbad-transfer;Перевод;2026-05-12;100;Невалидный перевод;Новая касса;','tx',{id:0,kind:1,date:2,amount:3,desc:4,fromAcc:5,toAcc:6},'e');
+assert(stats.added===0&&stats.skipped===1,'Некорректный перевод не был отклонён');
+assert(state().accounts.length===before&&!state().accounts.some(a=>a.name==='Новая касса'),'Отклонённая строка оставила новую кассу в профиле');
+});
+await test('Импортированная продажа комплектующего не меняет склад повторно при удалении',()=>{
+api.setState(fixture());
+const beforeBatch=state().batches.find(b=>b.id==='gpu-batch').qty,beforeAvailable=api.available('gpu-batch');
+const raw='ID;Тип операции;Дата;Сумма;Описание;Категория;Касса;Количество;Продажа комплектующего;ID партии;Себестоимость продажи;Валовая прибыль;Себестоимость за штуку;Цена за штуку\nimported-part-sale;Доход;2026-05-13;200;Импортированная продажа;Комплектующие;cash;1;Да;gpu-batch;100;100;100;200';
+const stats=api.importCsv(raw,'tx',{id:0,kind:1,date:2,amount:3,desc:4,cat:5,acc:6,qty:7,partSale:8,batchId:9,costAmount:10,grossProfit:11,unitCost:12,unitPrice:13},'e');
+assert(stats.added===1&&stats.skipped===0,'Историческая продажа не импортирована');
+const imported=state().tx.find(x=>x.id==='imported-part-sale');
+assert(imported&&imported.partSale&&imported.partSaleImportedSnapshot,'Импортированная продажа не помечена как снимок учёта');
+assert(state().batches.find(b=>b.id==='gpu-batch').qty===beforeBatch&&api.available('gpu-batch')===beforeAvailable,'Импорт операции повторно изменил склад');
+api.action('td','imported-part-sale');
+assert(!state().tx.some(x=>x.id==='imported-part-sale'),'Удаление импортированной операции не сработало');
+assert(state().batches.find(b=>b.id==='gpu-batch').qty===beforeBatch&&api.available('gpu-batch')===beforeAvailable,'Удаление импортированной продажи повторно вернуло деталь на склад');
+});
+await test('Сжатие фото уменьшает большие изображения и возвращает JPEG',async()=>{
+const canvas=w.document.createElement('canvas');
+canvas.width=2400;canvas.height=1600;
+const context=canvas.getContext('2d');
+assert(context,'Canvas недоступен в браузере');
+context.fillStyle='#d44';context.fillRect(0,0,canvas.width,canvas.height);
+const sourceBlob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+assert(sourceBlob&&sourceBlob.size>0,'Не удалось создать исходное тестовое изображение');
+const file=new w.File([sourceBlob],'large-photo.png',{type:'image/png'});
+const result=await Promise.race([
+ api.shrinkPhoto(file),
+ sleep(10000).then(()=>{throw new Error('Сжатие фото не завершилось за 10 секунд')})
+]);
+assert(result.startsWith('data:image/jpeg;base64,'),'Результат сжатия не является JPEG data URL');
+const image=await new Promise((resolve,reject)=>{
+ const img=new w.Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Не удалось открыть сжатое изображение'));img.src=result;
+});
+assert(image.naturalWidth<=1100&&image.naturalHeight<=1100,'После сжатия одна из сторон превышает 1100 пикселей');
+assert(image.naturalWidth===1100&&image.naturalHeight===733,'При сжатии нарушены пропорции изображения');
+});
+await test('Повреждённое фото отклоняется и не оставляет Promise зависшим',async()=>{
+const file=new w.File(['это не изображение'],'broken.png',{type:'image/png'});
+let rejected=false;
+try{
+ await Promise.race([
+  api.shrinkPhoto(file),
+  sleep(3000).then(()=>{throw new Error('Обработка повреждённого фото зависла')})
+ ]);
+}catch(error){rejected=true;assert(/изображ|файл|открыть|размер/i.test(error.message),'Вернулась непонятная ошибка повреждённого фото: '+error.message)}
+assert(rejected,'Повреждённое изображение не было отклонено');
+});
+await test('JSON и ZIP-бэкапы включают дату создаваемой копии без преждевременного изменения профиля',async()=>{
+api.setState(fixture());
+const before=api.backupTimestamp(),backupAt='20.11.2026 23:15:00';
+const jsonSnapshot=api.createBackupSnapshot(backupAt);
+assert(jsonSnapshot.set.backup===backupAt,'Дата не попала в JSON-снимок');
+assert(api.backupTimestamp()===before,'Создание JSON-снимка преждевременно изменило профиль');
+const zip=api.createZipBackup(backupAt);
+const restored=api.readZipBackup(await zip.arrayBuffer());
+assert(restored.set.backup===backupAt,'Дата не попала в ZIP-бэкап');
+assert(api.backupTimestamp()===before,'Создание ZIP-бэкапа преждевременно изменило профиль');
+});
+await test('Дата последней резервной копии фиксируется только после запуска скачивания',()=>{
+api.setState(fixture());
+const before=api.backupTimestamp(),backupAt='20.11.2026 23:20:00',blob=new w.Blob(['backup']);
+let failed=false;
+try{api.completeBackupExport(blob,'backup.json',backupAt,()=>{throw new Error('Тестовый отказ скачивания')})}catch(error){failed=true}
+assert(failed,'Тестовый отказ скачивания не был передан вызывающему коду');
+assert(api.backupTimestamp()===before,'Дата бэкапа изменилась после неудачного скачивания');
+let triggered=false;
+api.completeBackupExport(blob,'backup.json',backupAt,()=>{triggered=true});
+assert(triggered&&api.backupTimestamp()===backupAt,'Дата не обновилась после успешного запуска скачивания');
+});
+await test('Автономный HTML-бандл самодостаточен',()=>{
+if(APP_VARIANT!=='standalone')return;
+const external=Array.from(w.document.scripts).map(x=>x.getAttribute('src')).filter(Boolean);
+assert(!external.some(src=>/repository\.js|xlsx\.full\.min\.js/.test(src)),'Автономный HTML зависит от внешнего repository.js или SheetJS');
+assert(w.BuildbookRepository&&w.XLSX,'В автономном HTML не встроен слой хранения или библиотека XLSX');
+});
 await test('Добавление бэкапа сохраняет текущие данные и восстанавливает связи по ID',()=>{
 api.setState(fixture());
 const backup={
@@ -760,13 +877,15 @@ const source={
  batches:[{id:'meta-batch',qty:2,price:100}],
  builds:[{id:'meta-build',num:1,lines:[]}],
  tx:[{id:'meta-tx',kind:'e',amount:20}],
+ debts:[{id:'meta-debt',direction:'given',principal:100,payments:[]}],
+ investments:[{id:'meta-investment',name:'Тестовый актив',currentValue:100,events:[]}],
  stockEvents:[{id:'meta-event',kind:'writeoff',batchId:'meta-batch'}],
  tasks:[{id:'meta-task',text:'Сохранить метаданные'}],
  checklist:[{id:'meta-check',text:'Проверка'}],
  trash:[{id:'meta-trash-entry',type:'task',at:'2026-08-10T10:00:00.000Z',record:{id:'meta-deleted-task',text:'Удалена'}}]
 };
 const migrated=api.migrateState(source).state;
-for(const key of ['accounts','batches','builds','tx','stockEvents','tasks','checklist']){
+for(const key of ['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','checklist']){
  assert(api.metadataValid(migrated[key][0]),'Метаданные не созданы для '+key);
  assert(migrated[key][0].deletedAt===null,'Активная запись отмечена удалённой: '+key);
 }
@@ -801,15 +920,15 @@ assert(entry&&entry.record.deletedAt===entry.at,'Пункт не попал в �
 api.action('trrestore',entry.id);
 assert(state().checklist.some(x=>x.id==='metadata-check'&&x.deletedAt===null),'Пункт не восстановлен');
 });
-await test('Схема 1 мигрирует на схему 3 без потери существующих данных',()=>{
+await test('Схема 1 мигрирует на схему 4 без потери существующих данных',()=>{
 const source={schemaVersion:1,batches:[{id:'v1-batch',qty:3,price:40}],builds:[],tx:[],tasks:[],trash:[],notes:'Из схемы 1'};
 const result=api.migrateState(source),migrated=result.state;
-assert(result.migrated&&migrated.schemaVersion===3,'Не выполнена миграция на схему 3');
+assert(result.migrated&&migrated.schemaVersion===4,'Не выполнена миграция на схему 4');
 assert(Array.isArray(migrated.checklist)&&migrated.checklist.length===0,'Не добавлен пустой чек-лист');
 assert(migrated.batches[0].id==='v1-batch'&&migrated.batches[0].qty===3,'Изменились данные схемы 1');
 assert(migrated.notes==='Из схемы 1','Потеряны заметки при миграции');
 const repeated=api.migrateState(migrated);
-assert(!repeated.migrated&&repeated.state.schemaVersion===3,'Повторная миграция не должна запускаться');
+assert(!repeated.migrated&&repeated.state.schemaVersion===4,'Повторная миграция не должна запускаться');
 });
 await test('Чек-лист можно добавлять, отмечать и удалять',()=>{
 api.setState(fixture());prompts.push('Проверить комплектующие перед тестом');api.action('ckadd');
@@ -892,7 +1011,7 @@ let rejected=false;try{api.importBuildCardZip(buffer)}catch(e){rejected=String(e
 assert(rejected,'Импорт допустил повтор номера');
 assert(state().builds.length===1,'После конфликта появилась лишняя сборка');
 });
-await test('Фотографии сохраняются в IndexedDB как Blob',async()=>{
+await test('Фотографии сохраняются в IndexedDB как ArrayBuffer и восстанавливаются после запуска',async()=>{
 api.setState(fixture());
 const photo='data:image/jpeg;base64,AAECAwQFBgc=';
 summary.textContent='Выполняется: Blob application — подготовка';
@@ -902,11 +1021,11 @@ summary.textContent='Выполняется: Blob application — запись';
 await api.flushStorage();
 summary.textContent='Выполняется: Blob application — чтение';
 const stored=await api.photoStorageInfo();
-assert(stored['build-open']&&stored['build-open'][0].isBlob,'Фото записано в IndexedDB как строка, а не Blob');
-assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size>0,'У Blob не сохранены MIME-тип или байты изображения');
+assert(stored['build-open']&&stored['build-open'][0].isBinary,'Фото не сохранено в IndexedDB как бинарный ArrayBuffer');
+assert(stored['build-open'][0].type==='image/jpeg'&&stored['build-open'][0].size>0,'У бинарной фотографии не сохранены MIME-тип или байты');
 });
 await test('Данные тестовой базы сохраняются после перезагрузки iframe',async()=>{
-await sleep(500);const expected=state().batches.length,expectedPhoto=api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0];await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');if(expectedPhoto)assert(api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0]===expectedPhoto,'Фото не восстановилось из Blob после перезагрузки');
+await sleep(500);const expected=state().batches.length,expectedPhoto=api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0];await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Тестовое приложение не перезагрузилось')),12000);frame.onload=()=>{clearTimeout(timer);resolve()};frame.onerror=reject;if(frame.dataset.embedded==='1'){frame.srcdoc=frame.srcdoc+'\\n<!-- reload test -->'}else{frame.src=frame.getAttribute('src')+'&reload='+Date.now()}});await sleep(350);w=frame.contentWindow;api=w.__BUILD_BOOK_TEST__;assert(api,'Тестовый API не восстановился после reload');assert(api.getState().batches.length===expected,'Число партий изменилось после перезагрузки');if(expectedPhoto)assert(api.getPhotos()['build-open']&&api.getPhotos()['build-open'][0]===expectedPhoto,'Фото не восстановилось после перезагрузки из ArrayBuffer');
 });
 await test('Откат одного действия сохраняет более поздние независимые изменения',()=>{
 const data=fixture();
@@ -999,6 +1118,156 @@ api.setState({...state(),notes:'Изменение без сохранения �
 await api.flushStorage();
 assert(api.storageRevision()===revision,'Устаревшая вкладка попыталась изменить ревизию профиля');
 }finally{channel.close()}
+});
+await test('Календарные даты используют локальный день, а не UTC',async()=>{
+const justAfterLocalMidnight=new w.Date(2026,10,20,0,30,0);
+assert(api.localDateISO(justAfterLocalMidnight)==='2026-11-20','Дата после местной полуночи сместилась из-за UTC');
+const previousDay=api.demoDate(1,new w.Date(2026,2,1,0,30,0));
+assert(previousDay==='2026-02-28','Демо-дата рассчитана не по локальному календарю: '+previousDay);
+});
+await test('Автоматическая тема учитывает системную схему и не перебивает ручной выбор',async()=>{
+assert(api.resolveTheme('auto',true)==='dark','Автоматическая тема не выбрала тёмную схему системы');
+assert(api.resolveTheme('auto',false)==='light','Автоматическая тема не выбрала светлую схему системы');
+assert(api.resolveTheme('dark',false)==='dark','Системная тема перебила ручной выбор тёмной темы');
+assert(api.resolveTheme('light',true)==='light','Системная тема перебила ручной выбор светлой темы');
+});
+await test('Инструкция установки PWA доступна для iOS, HTTPS и file://',async()=>{
+const ios=api.installInstructions('Mozilla/5.0 (iPhone)','https:',true);
+assert(ios.includes('Safari')&&ios.includes('На экран Домой'),'Не показана инструкция установки для iOS');
+const file=api.installInstructions('Chrome','file:',false);
+assert(file.includes('HTTPS')||file.includes('localhost'),'Не объяснено ограничение file://');
+const desktop=api.installInstructions('Chrome','https:',false);
+assert(desktop.includes('меню браузера'),'Не показан запасной путь установки для браузера без prompt API');
+});
+await test('Миграция схемы 3 добавляет долги и инвестиции без потери прежних данных',()=>{
+ const source={schemaVersion:3,accounts:[{id:'cash-v3',name:'Касса',open:100}],batches:[{id:'v3-batch',qty:2,price:50}],builds:[],tx:[],stockEvents:[],tasks:[],trash:[],checklist:[],set:{theme:'dark'}};
+ const result=api.migrateState(source),state=result.state;
+ assert(result.migrated&&state.schemaVersion===4,'Профиль не мигрировал на схему 4');
+ assert(Array.isArray(state.debts)&&state.debts.length===0,'Не создан список долгов');
+ assert(Array.isArray(state.investments)&&state.investments.length===0,'Не создан список инвестиций');
+ assert(state.set.debtsInvestments===true&&state.set.theme==='dark','Миграция не включила новый раздел или изменила существующие настройки');
+ assert(state.batches[0].id==='v3-batch'&&state.accounts[0].open===100,'Существующие данные схемы 3 изменились');
+ assert(source.schemaVersion===3&&!source.debts&&!source.investments,'Миграция изменила исходный объект');
+});
+await test('Выданный долг уменьшает кассу, частичный возврат увеличивает её и не считается доходом',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createDebt({direction:'given',person:'Алексей',principal:500,date:'2026-05-01',dueDate:'2026-05-20',accountId:'cash',note:'Тестовый долг'});
+ assert(created.ok,'Не удалось создать долг: '+created.error);
+ assert(api.balance('cash')===baseline-500,'Выдача долга не уменьшила кассу');
+ const debt=api.getDebts().find(x=>x.id===created.id);
+ assert(debt&&debt.direction==='given'&&api.debtOutstanding(created.id)===500,'Не сохранён выданный долг');
+ const paid=api.repayDebt({id:created.id,amount:125,date:'2026-05-10',accountId:'cash',note:'Частичный возврат'});
+ assert(paid.ok&&api.debtOutstanding(created.id)===375,'Частичный возврат не уменьшил остаток долга');
+ assert(api.balance('cash')===baseline-375,'Возврат долга не увеличил кассу');
+ const state=api.getState(),cashIncome=state.tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0);
+ assert(!state.tx.some(x=>x.kind==='i'&&x.debtId===created.id),'Возврат долга попал в обычные доходы');
+ const tooMuch=api.repayDebt({id:created.id,amount:400,date:'2026-05-11',accountId:'cash'});
+ assert(!tooMuch.ok&&api.debtOutstanding(created.id)===375,'Система допустила возврат больше остатка');
+ assert(api.balance('cash')===baseline-375,'Отклонённый платёж изменил кассу');
+ const done=api.repayDebt({id:created.id,amount:375,date:'2026-05-12',accountId:'cash'});
+ assert(done.ok&&api.debtOutstanding(created.id)===0,'Полный возврат не закрыл долг');
+ assert(api.balance('cash')===baseline,'После полного возврата баланс не восстановился');
+ assert(api.getState().tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)===cashIncome,'Возвраты долга изменили отчётные доходы');
+});
+await test('Полученный заём увеличивает кассу, погашение уменьшает её',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createDebt({direction:'received',person:'Поставщик',principal:300,date:'2026-05-02',accountId:'cash'});
+ assert(created.ok&&api.balance('cash')===baseline+300,'Получение займа не увеличило кассу');
+ const paid=api.repayDebt({id:created.id,amount:100,date:'2026-05-15',accountId:'cash'});
+ assert(paid.ok&&api.balance('cash')===baseline+200,'Погашение займа не уменьшило кассу');
+ assert(api.debtOutstanding(created.id)===200,'Неверно рассчитан остаток полученного займа');
+ assert(!api.getState().tx.some(x=>x.kind==='e'&&x.debtId===created.id),'Погашение долга попало в обычные расходы');
+});
+await test('Архивирование долга сохраняет историю и блокирует новые платежи',()=>{
+ api.setState(fixture());
+ const created=api.createDebt({direction:'given',person:'Контрагент',principal:100,date:'2026-05-01',accountId:'cash'});
+ const archived=api.archiveDebt(created.id);
+ assert(archived.ok&&archived.status==='archived','Долг не перемещён в архив');
+ const before=api.balance('cash'),payment=api.repayDebt({id:created.id,amount:20,date:'2026-05-02',accountId:'cash'});
+ assert(!payment.ok&&api.balance('cash')===before,'Архивный долг разрешил платёж');
+ assert(api.getDebts().some(x=>x.id===created.id),'Архивирование удалило запись долга');
+});
+await test('Инвестиция учитывает вложения, пополнения, выводы и результат',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createInvestment({name:'Тестовый актив',type:'funds',platform:'Брокер',date:'2026-05-01',amount:500,currentValue:550,accountId:'cash',note:'Тест'});
+ assert(created.ok,'Не удалось создать инвестицию: '+created.error);
+ assert(api.balance('cash')===baseline-500,'Первоначальное вложение не списано с кассы');
+ assert(api.investmentProfit(created.id)===50,'Неверно рассчитан начальный результат');
+ const added=api.contributeInvestment({id:created.id,amount:100,date:'2026-05-05',accountId:'cash'});
+ assert(added.ok&&api.balance('cash')===baseline-600,'Пополнение не списано с кассы');
+ assert(api.getInvestments().find(x=>x.id===created.id).currentValue===650,'Пополнение не увеличило стоимость актива');
+ assert(api.investmentProfit(created.id)===50,'Пополнение исказило финансовый результат');
+ const withdrawn=api.withdrawInvestment({id:created.id,amount:150,date:'2026-05-10',accountId:'cash'});
+ assert(withdrawn.ok&&api.balance('cash')===baseline-450,'Вывод не вернулся в кассу');
+ assert(api.investmentProfit(created.id)===50,'Вывод исказил доходность инвестиции');
+ const blocked=api.closeInvestment(created.id);assert(!blocked.ok,'Инвестиция закрыта при ненулевой оценке');
+ const rest=api.withdrawInvestment({id:created.id,amount:500,date:'2026-05-11',accountId:'cash'});
+ assert(rest.ok&&rest.currentValue===0,'Не удалось вывести остаток оценки');
+ const closed=api.closeInvestment(created.id);
+ assert(closed.ok&&api.getInvestments().find(x=>x.id===created.id).status==='closed','Инвестиция не закрылась после полного вывода');
+ assert(api.balance('cash')===baseline+50,'Итоговое движение денежных средств не совпало с результатом инвестиции');
+});
+await test('Движения по долгам и инвестициям нельзя удалить отдельно от истории актива',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Связанный долг',principal:100,date:'2026-05-01',accountId:'cash'});
+ const transaction=api.getState().tx.find(x=>x.debtId===debt.id);
+ const before=api.getState().tx.length;api.action('td',transaction.id);
+ assert(api.getState().tx.length===before,'Связанная операция долга была удалена отдельно');
+ const investment=api.createInvestment({name:'Связанная инвестиция',amount:50,currentValue:50,date:'2026-05-01',accountId:'cash'});
+ const invTx=api.getState().tx.find(x=>x.investmentId===investment.id);
+ api.action('td',invTx.id);
+ assert(api.getState().tx.some(x=>x.id===invTx.id),'Связанное движение инвестиции было удалено отдельно');
+});
+await test('Резервная копия объединяет долги, инвестиции и связи с операциями',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Должник для копии',principal:200,date:'2026-05-01',accountId:'cash'});
+ api.repayDebt({id:debt.id,amount:50,date:'2026-05-02',accountId:'cash'});
+ const investment=api.createInvestment({name:'Актив для копии',amount:80,currentValue:90,date:'2026-05-03',accountId:'cash'});
+ const backup=api.getState();
+ api.setState(fixture());
+ const result=api.restoreBackup(backup,'add',false);
+ assert(result.debts===1&&result.investments===1,'Отчёт объединения не включил новые разделы');
+ const restoredDebt=api.getDebts().find(x=>x.id===debt.id),restoredInvestment=api.getInvestments().find(x=>x.id===investment.id);
+ assert(restoredDebt&&restoredDebt.payments.length===1&&restoredDebt.originTxId,'Не восстановлен долг и история платежей');
+ assert(restoredInvestment&&restoredInvestment.events.length===1,'Не восстановлена история инвестиции');
+ assert(api.getState().tx.some(x=>x.debtId===debt.id)&&api.getState().tx.some(x=>x.investmentId===investment.id),'Потеряны связи операций с активами');
+});
+await test('Полная XLSX-выгрузка включает листы долгов и инвестиций',()=>{
+ api.setState(fixture());const wb=api.xlsxWorkbook('all');
+ assert(wb.SheetNames.includes('Долги')&&wb.SheetNames.includes('Инвестиции'),'В XLSX не включены новые разделы');
+});
+await test('CSV-импорт долгов и инвестиций сохраняет реквизиты и истории JSON',()=>{
+ api.setState(fixture());
+ const debtCsv='ID;Направление;Кому / от кого;Сумма;Дата;Срок возврата;ID кассы;Комментарий;Статус;ID исходной операции;Платежи JSON\ncsv-debt;given;Пётр;200;2026-05-01;2026-05-20;cash;Долг CSV;active;;[]';
+ const debt=api.importCsv(debtCsv,'debts',{id:0,direction:1,person:2,principal:3,date:4,dueDate:5,accountId:6,note:7,status:8,originTxId:9,paymentsJson:10});
+ assert(debt.added===1&&debt.skipped===0,'Долг CSV не импортирован');
+ const investmentCsv='ID;Название;Тип актива;Площадка / брокер;Дата;Текущая оценка;ID кассы;Комментарий;Статус;Движения JSON\ncsv-investment;ETF;funds;Брокер;2026-05-02;120;cash;Актив CSV;active;[]';
+ const inv=api.importCsv(investmentCsv,'investments',{id:0,name:1,type:2,platform:3,date:4,currentValue:5,accountId:6,note:7,status:8,eventsJson:9});
+ assert(inv.added===1&&inv.skipped===0,'Инвестиция CSV не импортирована');
+ const s=api.getState();
+ assert(s.debts[0].id==='csv-debt'&&s.debts[0].principal===200,'Не восстановлены поля долга');
+ assert(s.investments[0].id==='csv-investment'&&s.investments[0].currentValue===120,'Не восстановлены поля инвестиции');
+ assert(api.exportRows('debts')[0].includes('Платежи JSON'),'Экспорт строк долга не содержит историю платежей');
+ assert(api.exportRows('investments')[0].includes('Движения JSON'),'Экспорт строк инвестиции не содержит историю движений');
+});
+await test('XLSX round-trip сохраняет долги, инвестиции и связанные движения',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Должник XLSX',principal:300,date:'2026-05-01',dueDate:'2026-05-30',accountId:'cash',note:'XLSX'});
+ assert(debt.ok,'Не создан тестовый долг');
+ const payment=api.repayDebt({id:debt.id,amount:75,date:'2026-05-05',accountId:'cash',note:'Возврат XLSX'});
+ assert(payment.ok,'Не добавлен платёж долга');
+ const investment=api.createInvestment({name:'Фонд XLSX',type:'funds',platform:'Broker',date:'2026-05-02',amount:200,currentValue:225,accountId:'cash',note:'XLSX'});
+ assert(investment.ok,'Не создана тестовая инвестиция');
+ const wb=api.xlsxWorkbook('all'),buffer=w.XLSX.write(wb,{bookType:'xlsx',type:'array'});
+ api.setState(fixture());
+ const imported=api.importXlsx(buffer);
+ assert(imported.sheets.some(x=>x.kind==='debts'&&x.added===1),'Лист долгов не импортирован из XLSX');
+ assert(imported.sheets.some(x=>x.kind==='investments'&&x.added===1),'Лист инвестиций не импортирован из XLSX');
+ const restoredDebt=api.getDebts().find(x=>x.id===debt.id),restoredInvestment=api.getInvestments().find(x=>x.id===investment.id);
+ assert(restoredDebt&&restoredDebt.payments.length===1&&api.debtOutstanding(debt.id)===225,'Не восстановлены реквизиты или платежи долга');
+ assert(restoredInvestment&&restoredInvestment.events.length===1&&api.investmentProfit(investment.id)===25,'Не восстановлены история или результат инвестиции');
+ assert(api.getState().tx.some(x=>x.debtId===debt.id&&x.debtRole==='payment'),'Потеряна связь платежа долга с операцией');
+ assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }

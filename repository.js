@@ -44,6 +44,59 @@ function create(databaseName){
   return promise;
  }
 
+ function readBlobAsArrayBuffer(blob){
+  return new Promise((resolve,reject)=>{
+   if(typeof global.FileReader!=='function'){
+    if(typeof blob.arrayBuffer==='function'){
+     blob.arrayBuffer().then(resolve,reject);
+     return;
+    }
+    reject(new Error('Браузер не поддерживает чтение содержимого фотографии.'));
+    return;
+   }
+   let reader;
+   try{reader=new global.FileReader()}
+   catch(error){reject(error);return}
+   reader.onload=()=>reader.result instanceof ArrayBuffer
+    ?resolve(reader.result)
+    :reject(new Error('Не удалось прочитать бинарные данные фотографии.'));
+   reader.onerror=()=>reject(reader.error||new Error('Ошибка чтения фотографии.'));
+   reader.onabort=()=>reject(new Error('Чтение фотографии было прервано.'));
+   try{reader.readAsArrayBuffer(blob)}catch(error){reject(error)}
+  });
+ }
+
+ async function encodePhotoPayload(value){
+  if(value&&value.__buildbookBlob===1&&value.bytes instanceof ArrayBuffer)return value;
+  if(typeof global.Blob==='function'&&value instanceof global.Blob){
+   return {__buildbookBlob:1,type:value.type||'',bytes:await readBlobAsArrayBuffer(value)};
+  }
+  if(Array.isArray(value))return Promise.all(value.map(encodePhotoPayload));
+  if(value&&typeof value==='object'){
+   const prototype=Object.getPrototypeOf(value);
+   if(prototype===Object.prototype||prototype===null){
+    const result={};
+    for(const [key,item] of Object.entries(value))result[key]=await encodePhotoPayload(item);
+    return result;
+   }
+  }
+  return value;
+ }
+
+ async function decodePhotoPayload(value){
+  if(Array.isArray(value))return Promise.all(value.map(decodePhotoPayload));
+  if(value&&typeof value==='object'){
+   if(value.__buildbookBlob===1&&value.bytes instanceof ArrayBuffer)return value;
+   const prototype=Object.getPrototypeOf(value);
+   if(prototype===Object.prototype||prototype===null){
+    const result={};
+    for(const [key,item] of Object.entries(value))result[key]=await decodePhotoPayload(item);
+    return result;
+   }
+  }
+  return value;
+ }
+
  function read(key){
   if(!PROFILE_KEYS.includes(key))return Promise.reject(new Error('Недопустимый ключ локального хранилища.'));
   return open().then(database=>new Promise((resolve,reject)=>{
@@ -61,8 +114,16 @@ function create(databaseName){
    }catch(error){fail(error);return}
    transaction.oncomplete=()=>{
     if(settled)return;
-    settled=true;
-    resolve(value);
+    if(key==='p'){
+     decodePhotoPayload(value).then(decoded=>{
+      if(settled)return;
+      settled=true;
+      resolve(decoded);
+     },fail);
+    }else{
+     settled=true;
+     resolve(value);
+    }
    };
    transaction.onerror=()=>fail(transaction.error||new Error('Ошибка чтения локальной базы.'));
    transaction.onabort=()=>fail(transaction.error||new Error('Чтение локальной базы было отменено.'));
@@ -89,8 +150,11 @@ function create(databaseName){
    }catch(error){fail(error);return}
    transaction.oncomplete=()=>{
     if(settled)return;
-    settled=true;
-    resolve({state:values.s,logs:values.l,photos:values.p,revision:Number.isSafeInteger(values.r)&&values.r>=0?values.r:0});
+    decodePhotoPayload(values.p).then(photos=>{
+     if(settled)return;
+     settled=true;
+     resolve({state:values.s,logs:values.l,photos,revision:Number.isSafeInteger(values.r)&&values.r>=0?values.r:0});
+    },fail);
    };
    transaction.onerror=()=>fail(transaction.error||new Error('Ошибка чтения локальной базы.'));
    transaction.onabort=()=>fail(transaction.error||new Error('Чтение локальной базы было отменено.'));
@@ -99,7 +163,9 @@ function create(databaseName){
 
  function writeProfile(state,logs,photos,expectedRevision){
   if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)return Promise.reject(new Error('Не задана корректная версия профиля для сохранения.'));
-  return open().then(database=>new Promise((resolve,reject)=>{
+  // WebKit may stall when a Blob is written directly into IndexedDB. Persist photo bytes
+  // as ArrayBuffer descriptors; the app converts them to displayable data URLs after reading.
+  return encodePhotoPayload(photos).then(encodedPhotos=>open().then(database=>new Promise((resolve,reject)=>{
    let transaction,settled=false,nextRevision=0;
    const fail=error=>{
     if(settled)return;
@@ -133,7 +199,7 @@ function create(databaseName){
      try{
       store.put(state,'s');
       store.put(logs,'l');
-      store.put(photos,'p');
+      store.put(encodedPhotos,'p');
       store.put(nextRevision,'r');
      }catch(error){
       fail(error);
@@ -145,7 +211,7 @@ function create(databaseName){
     if(transaction){try{transaction.abort()}catch(_){}}
     fail(error);
    }
-  }));
+  })));
  }
 
  function close(){
