@@ -186,7 +186,7 @@ await test('Старые данные автоматически мигриру�
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
 assert(result.migrated,'Миграция старой версии не запущена');
-assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===3,'Не записана текущая версия схемы 2');
+assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===4,'Не записана текущая версия схемы 4');
 assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
 assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
 assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
@@ -918,15 +918,15 @@ assert(entry&&entry.record.deletedAt===entry.at,'Пункт не попал в �
 api.action('trrestore',entry.id);
 assert(state().checklist.some(x=>x.id==='metadata-check'&&x.deletedAt===null),'Пункт не восстановлен');
 });
-await test('Схема 1 мигрирует на схему 3 без потери существующих данных',()=>{
+await test('Схема 1 мигрирует на схему 4 без потери существующих данных',()=>{
 const source={schemaVersion:1,batches:[{id:'v1-batch',qty:3,price:40}],builds:[],tx:[],tasks:[],trash:[],notes:'Из схемы 1'};
 const result=api.migrateState(source),migrated=result.state;
-assert(result.migrated&&migrated.schemaVersion===3,'Не выполнена миграция на схему 3');
+assert(result.migrated&&migrated.schemaVersion===4,'Не выполнена миграция на схему 4');
 assert(Array.isArray(migrated.checklist)&&migrated.checklist.length===0,'Не добавлен пустой чек-лист');
 assert(migrated.batches[0].id==='v1-batch'&&migrated.batches[0].qty===3,'Изменились данные схемы 1');
 assert(migrated.notes==='Из схемы 1','Потеряны заметки при миграции');
 const repeated=api.migrateState(migrated);
-assert(!repeated.migrated&&repeated.state.schemaVersion===3,'Повторная миграция не должна запускаться');
+assert(!repeated.migrated&&repeated.state.schemaVersion===4,'Повторная миграция не должна запускаться');
 });
 await test('Чек-лист можно добавлять, отмечать и удалять',()=>{
 api.setState(fixture());prompts.push('Проверить комплектующие перед тестом');api.action('ckadd');
@@ -1136,6 +1136,103 @@ const file=api.installInstructions('Chrome','file:',false);
 assert(file.includes('HTTPS')||file.includes('localhost'),'Не объяснено ограничение file://');
 const desktop=api.installInstructions('Chrome','https:',false);
 assert(desktop.includes('меню браузера'),'Не показан запасной путь установки для браузера без prompt API');
+});
+await test('Миграция схемы 3 добавляет долги и инвестиции без потери прежних данных',()=>{
+ const source={schemaVersion:3,accounts:[{id:'cash-v3',name:'Касса',open:100}],batches:[{id:'v3-batch',qty:2,price:50}],builds:[],tx:[],stockEvents:[],tasks:[],trash:[],checklist:[],set:{theme:'dark'}};
+ const result=api.migrateState(source),state=result.state;
+ assert(result.migrated&&state.schemaVersion===4,'Профиль не мигрировал на схему 4');
+ assert(Array.isArray(state.debts)&&state.debts.length===0,'Не создан список долгов');
+ assert(Array.isArray(state.investments)&&state.investments.length===0,'Не создан список инвестиций');
+ assert(state.set.debtsInvestments===true&&state.set.theme==='dark','Миграция не включила новый раздел или изменила существующие настройки');
+ assert(state.batches[0].id==='v3-batch'&&state.accounts[0].open===100,'Существующие данные схемы 3 изменились');
+ assert(source.schemaVersion===3&&!source.debts&&!source.investments,'Миграция изменила исходный объект');
+});
+await test('Выданный долг уменьшает кассу, частичный возврат увеличивает её и не считается доходом',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createDebt({direction:'given',person:'Алексей',principal:500,date:'2026-05-01',dueDate:'2026-05-20',accountId:'cash',note:'Тестовый долг'});
+ assert(created.ok,'Не удалось создать долг: '+created.error);
+ assert(api.balance('cash')===baseline-500,'Выдача долга не уменьшила кассу');
+ const debt=api.getDebts().find(x=>x.id===created.id);
+ assert(debt&&debt.direction==='given'&&api.debtOutstanding(created.id)===500,'Не сохранён выданный долг');
+ const paid=api.repayDebt({id:created.id,amount:125,date:'2026-05-10',accountId:'cash',note:'Частичный возврат'});
+ assert(paid.ok&&api.debtOutstanding(created.id)===375,'Частичный возврат не уменьшил остаток долга');
+ assert(api.balance('cash')===baseline-375,'Возврат долга не увеличил кассу');
+ const state=api.getState(),cashIncome=state.tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0);
+ assert(!state.tx.some(x=>x.kind==='i'&&x.debtId===created.id),'Возврат долга попал в обычные доходы');
+ const tooMuch=api.repayDebt({id:created.id,amount:400,date:'2026-05-11',accountId:'cash'});
+ assert(!tooMuch.ok&&api.debtOutstanding(created.id)===375,'Система допустила возврат больше остатка');
+ assert(api.balance('cash')===baseline-375,'Отклонённый платёж изменил кассу');
+ const done=api.repayDebt({id:created.id,amount:375,date:'2026-05-12',accountId:'cash'});
+ assert(done.ok&&api.debtOutstanding(created.id)===0,'Полный возврат не закрыл долг');
+ assert(api.balance('cash')===baseline,'После полного возврата баланс не восстановился');
+ assert(api.getState().tx.filter(x=>x.kind==='i').reduce((n,x)=>n+x.amount,0)===cashIncome,'Возвраты долга изменили отчётные доходы');
+});
+await test('Полученный заём увеличивает кассу, погашение уменьшает её',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createDebt({direction:'received',person:'Поставщик',principal:300,date:'2026-05-02',accountId:'cash'});
+ assert(created.ok&&api.balance('cash')===baseline+300,'Получение займа не увеличило кассу');
+ const paid=api.repayDebt({id:created.id,amount:100,date:'2026-05-15',accountId:'cash'});
+ assert(paid.ok&&api.balance('cash')===baseline+200,'Погашение займа не уменьшило кассу');
+ assert(api.debtOutstanding(created.id)===200,'Неверно рассчитан остаток полученного займа');
+ assert(!api.getState().tx.some(x=>x.kind==='e'&&x.debtId===created.id),'Погашение долга попало в обычные расходы');
+});
+await test('Архивирование долга сохраняет историю и блокирует новые платежи',()=>{
+ api.setState(fixture());
+ const created=api.createDebt({direction:'given',person:'Контрагент',principal:100,date:'2026-05-01',accountId:'cash'});
+ const archived=api.archiveDebt(created.id);
+ assert(archived.ok&&archived.status==='archived','Долг не перемещён в архив');
+ const before=api.balance('cash'),payment=api.repayDebt({id:created.id,amount:20,date:'2026-05-02',accountId:'cash'});
+ assert(!payment.ok&&api.balance('cash')===before,'Архивный долг разрешил платёж');
+ assert(api.getDebts().some(x=>x.id===created.id),'Архивирование удалило запись долга');
+});
+await test('Инвестиция учитывает вложения, пополнения, выводы и результат',()=>{
+ api.setState(fixture());const baseline=api.balance('cash');
+ const created=api.createInvestment({name:'Тестовый актив',type:'funds',platform:'Брокер',date:'2026-05-01',amount:500,currentValue:550,accountId:'cash',note:'Тест'});
+ assert(created.ok,'Не удалось создать инвестицию: '+created.error);
+ assert(api.balance('cash')===baseline-500,'Первоначальное вложение не списано с кассы');
+ assert(api.investmentProfit(created.id)===50,'Неверно рассчитан начальный результат');
+ const added=api.contributeInvestment({id:created.id,amount:100,date:'2026-05-05',accountId:'cash'});
+ assert(added.ok&&api.balance('cash')===baseline-600,'Пополнение не списано с кассы');
+ assert(api.getInvestments().find(x=>x.id===created.id).currentValue===650,'Пополнение не увеличило стоимость актива');
+ assert(api.investmentProfit(created.id)===50,'Пополнение исказило финансовый результат');
+ const withdrawn=api.withdrawInvestment({id:created.id,amount:150,date:'2026-05-10',accountId:'cash'});
+ assert(withdrawn.ok&&api.balance('cash')===baseline-450,'Вывод не вернулся в кассу');
+ assert(api.investmentProfit(created.id)===50,'Вывод исказил доходность инвестиции');
+ const blocked=api.closeInvestment(created.id);assert(!blocked.ok,'Инвестиция закрыта при ненулевой оценке');
+ const rest=api.withdrawInvestment({id:created.id,amount:500,date:'2026-05-11',accountId:'cash'});
+ assert(rest.ok&&rest.currentValue===0,'Не удалось вывести остаток оценки');
+ const closed=api.closeInvestment(created.id);
+ assert(closed.ok&&api.getInvestments().find(x=>x.id===created.id).status==='closed','Инвестиция не закрылась после полного вывода');
+ assert(api.balance('cash')===baseline+50,'Итоговое движение денежных средств не совпало с результатом инвестиции');
+});
+await test('Движения по долгам и инвестициям нельзя удалить отдельно от истории актива',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Связанный долг',principal:100,date:'2026-05-01',accountId:'cash'});
+ const transaction=api.getState().tx.find(x=>x.debtId===debt.id);
+ const before=api.getState().tx.length;api.action('td',transaction.id);
+ assert(api.getState().tx.length===before,'Связанная операция долга была удалена отдельно');
+ const investment=api.createInvestment({name:'Связанная инвестиция',amount:50,currentValue:50,date:'2026-05-01',accountId:'cash'});
+ const invTx=api.getState().tx.find(x=>x.investmentId===investment.id);
+ api.action('td',invTx.id);
+ assert(api.getState().tx.some(x=>x.id===invTx.id),'Связанное движение инвестиции было удалено отдельно');
+});
+await test('Резервная копия объединяет долги, инвестиции и связи с операциями',()=>{
+ api.setState(fixture());
+ const debt=api.createDebt({direction:'given',person:'Должник для копии',principal:200,date:'2026-05-01',accountId:'cash'});
+ api.repayDebt({id:debt.id,amount:50,date:'2026-05-02',accountId:'cash'});
+ const investment=api.createInvestment({name:'Актив для копии',amount:80,currentValue:90,date:'2026-05-03',accountId:'cash'});
+ const backup=api.getState();
+ api.setState(fixture());
+ const result=api.restoreBackup(backup,'add',false);
+ assert(result.debts===1&&result.investments===1,'Отчёт объединения не включил новые разделы');
+ const restoredDebt=api.getDebts().find(x=>x.id===debt.id),restoredInvestment=api.getInvestments().find(x=>x.id===investment.id);
+ assert(restoredDebt&&restoredDebt.payments.length===1&&restoredDebt.originTxId,'Не восстановлен долг и история платежей');
+ assert(restoredInvestment&&restoredInvestment.events.length===1,'Не восстановлена история инвестиции');
+ assert(api.getState().tx.some(x=>x.debtId===debt.id)&&api.getState().tx.some(x=>x.investmentId===investment.id),'Потеряны связи операций с активами');
+});
+await test('Полная XLSX-выгрузка включает листы долгов и инвестиций',()=>{
+ api.setState(fixture());const wb=api.xlsxWorkbook('all');
+ assert(wb.SheetNames.includes('Долги')&&wb.SheetNames.includes('Инвестиции'),'В XLSX не включены новые разделы');
 });
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
