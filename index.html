@@ -267,6 +267,7 @@ function collectProtectedFields(state,groups){
  const add=(collection,id,path,value)=>{if(value!==undefined&&value!==null)result.push({collection,id:String(id||''),path,value})};
  const addProps=(collection,record,props)=>props.forEach(key=>add(collection,record.id,[key],record[key]));
  if(personal)add('$root','',['notes'],state.notes);
+ if(financial||personal)add('$root','',['trash'],state.trash);
  if(personal)(state.accounts||[]).forEach(x=>addProps('accounts',x,['name']));
  if(financial)(state.accounts||[]).forEach(x=>addProps('accounts',x,['open']));
  (state.batches||[]).forEach(x=>{if(financial)addProps('batches',x,['price']);if(personal)addProps('batches',x,['desc','supplier','note'])});
