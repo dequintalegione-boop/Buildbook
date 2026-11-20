@@ -785,7 +785,7 @@ function buildDetails(id){
  const lines=(b.lines||[]).map((line,index)=>{
   const part=find('batches',line.batchId),unit=part?Number(part.price)||0:0;
   return '<tr><td>'+(index+1)+'</td><td>'+esc(part&&part.type||'—')+'</td><td>'+esc(part&&part.desc||('Не найдена партия '+line.batchId))+(line.problem?' <span class="bd bad">проблемная</span>':'')+'</td><td class="r">'+line.qty+' шт.</td><td class="r">'+(part?R(unit):'—')+'</td><td class="r">'+(part?R(unit*(+line.qty||0)):'—')+'</td></tr>';
- }).join('');
+ });
  const sold=b.status===ST[3],revenue=sale(b),buildProfit=profit(b),photos=Array.isArray(PH[b.id])?PH[b.id]:[];
  const detail='<div class="build-detail-toolbar"><span class="mu">Полная карточка сборки и её комплектующих</span><button type="button" class="btn p" data-build-edit>Режим редактирования</button></div>'+
   '<div class="build-detail-grid">'+
