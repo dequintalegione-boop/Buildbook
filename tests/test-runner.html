@@ -2095,8 +2095,8 @@ await test('Система блокирует конфликты, комбина
  assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&!item.combo),'Конфликтное назначение было принято');
  w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,altKey:true,shiftKey:true,bubbles:true,cancelable:true}));
  assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&!item.combo),'Комбинация из четырёх клавиш была принята');
- w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
- assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&item.combo==='Ctrl+Shift+M'),'После отклонения некорректных комбинаций нельзя было сохранить валидную');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'N',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&item.combo==='Ctrl+Shift+N'),'После отклонения некорректных комбинаций нельзя было сохранить валидную');
  api.action('nav','set');
  const input=w.document.createElement('input');w.document.body.append(input);input.focus();
  input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
