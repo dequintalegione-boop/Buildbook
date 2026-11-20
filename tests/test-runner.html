@@ -1536,6 +1536,17 @@ const result=api.undoEntry(index);
 assert(!result.ok,'Отмена дохода была разрешена при наличии последующего расхода');
 assert(api.balance('cash')===50,'Отмена записи журнала привела к отрицательному балансу');
 });
+
+await test('Восстановление и объединение бэкапа блокирует отрицательный баланс',()=>{
+api.setState(fixture());
+const bad=fixture();bad.tx.push({id:'backup-negative-expense',kind:'e',date:'2026-05-11',amount:1500,desc:'Недопустимый расход из бэкапа',cat:'Бензин',grp:'Транспорт',qty:1,acc:'cash'});
+let mergeError=null;try{api.restoreBackup(bad,'add',false)}catch(error){mergeError=String(error.message||error)}
+assert(!!mergeError&&mergeError.includes('отрицательный баланс'),'Объединение бэкапа не выявило отрицательный остаток');
+assert(api.balance('cash')===1000&&!state().tx.some(tx=>tx.id==='backup-negative-expense'),'Объединение бэкапа частично изменило данные');
+let replaceError=null;try{api.restoreBackup(bad,'replace',false)}catch(error){replaceError=String(error.message||error)}
+assert(!!replaceError&&replaceError.includes('отрицательный баланс'),'Замена профиля не выявила отрицательный остаток');
+assert(api.balance('cash')===1000&&!state().tx.some(tx=>tx.id==='backup-negative-expense'),'Неудачное восстановление изменило текущий профиль');
+});
 await test('Графики дашборда показывают шкалу значений',()=>{
 const data=fixture();
 data.set.per='all';

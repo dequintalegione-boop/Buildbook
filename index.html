@@ -2299,6 +2299,7 @@ function downloadBackup(filename,markDate){
 }
 function mergeBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
+ const beforeState=JSON.parse(JSON.stringify(S)),beforePhotos=JSON.parse(JSON.stringify(PH));
  data=migrateState(data).state;
  const stats={accounts:0,batches:0,builds:0,tx:0,debts:0,investments:0,salesPlans:0,tasks:0,checklist:0,stockEvents:0,trash:0,skipped:0};
  const accountMap={},batchMap={},buildMap={},txMap={},debtMap={},investmentMap={};
@@ -2415,6 +2416,8 @@ function mergeBackupData(data){
  (Array.isArray(data.trash)?data.trash:[]).forEach(source=>{const item=trashClone(source),old=String(item.id||'');if(old&&S.trash.some(x=>x.id===old)){stats.skipped++;return}item.id=old||uid();if(S.trash.some(x=>x.id===item.id))item.id=uid();S.trash.push(item);stats.trash++});
  (Array.isArray(data.checklist)?data.checklist:[]).forEach(source=>{const item=trashClone(source),old=String(item.id||'');if(old&&S.checklist.some(x=>x.id===old)){stats.skipped++;return}item.id=old||uid();if(S.checklist.some(x=>x.id===item.id))item.id=uid();item.text=String(item.text||'').trim();if(!item.text){stats.skipped++;return}item.done=item.done?1:0;S.checklist.push(item);stats.checklist++});
  S.seq=Math.max(+S.seq||0,+data.seq||0);
+ const negative=negativeCashBalance(S);
+ if(negative){S=beforeState;PH=beforePhotos;EXP=S.categories.e;INC=S.categories.i;syncCategories();throw new Error('Объединение резервной копии создаёт отрицательный баланс кассы «'+negative.account.name+'» ('+R(negative.balance)+'). Данные не добавлены.')}
  normalizeStock();syncCategories();ensureProfileMetadata(S,new Date().toISOString());save();render();
  return stats;
 }
