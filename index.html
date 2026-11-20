@@ -519,7 +519,7 @@ function normalizeStock(){
  (S.builds||[]).forEach(build=>(build.lines||[]).forEach(line=>{line.problem=!!line.problem}));
 }
 const live=x=>x.lines.reduce((n,l)=>{const b=S.batches.find(b=>b.id==l.batchId);return n+(b?b.price*l.qty:0)},0),cost=x=>x.status==ST[3]&&x.cost!=null?x.cost:live(x);
-const sale=b=>b.price||b.planned||0,profit=b=>sale(b)-cost(b),bal=a=>a.open+S.tx.reduce((n,t)=>n+(t.acc==a.id?(t.kind=='i'?t.amount:t.kind=='e'?-t.amount:0):0)+(t.kind=='transfer'&&t.toAcc==a.id?+t.amount:0)-(t.kind=='transfer'&&t.fromAcc==a.id?+t.amount:0),0);
+const sale=b=>b.price||b.planned||0,profit=b=>sale(b)-cost(b),txCashDelta=t=>t.kind==='i'||t.kind==='loan_in'||t.kind==='loan_repayment_in'||t.kind==='investment_in'?+t.amount:t.kind==='e'||t.kind==='loan_out'||t.kind==='loan_repayment_out'||t.kind==='investment_out'?-+t.amount:0,bal=a=>a.open+S.tx.reduce((n,t)=>n+(t.acc==a.id?txCashDelta(t):0)+(t.kind=='transfer'&&t.toAcc==a.id?+t.amount:0)-(t.kind=='transfer'&&t.fromAcc==a.id?+t.amount:0),0);
 /* помощники интерфейса */
 const opt=(a,v)=>a.map(o=>{const[x,l]=Array.isArray(o)?o:[o,o];return`<option value="${esc(x)}"${x==v?' selected':''}>${esc(l)}</option>`}).join(''),catOpt=(k,v)=>Object.entries(k=='e'?EXP:INC).filter(([g,a])=>!(S.hiddenGroups[k]||[]).includes(g)||a.includes(v)).map(([g,a])=>{const items=a.filter(n=>!(S.hiddenCategories[k]||[]).includes(g+'::'+n)||n==v);return items.length?`<optgroup label="${esc(g)}">${opt(items,v)}</optgroup>`:''}).join(''),accOpt=v=>opt(S.accounts.map(a=>[a.id,a.name]),v);
 const syncCategories=()=>{S.categories={e:EXP,i:INC};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое')};
@@ -676,6 +676,194 @@ function builds(){const f=V.b,q=f.q.toLowerCase(),rows=S.builds.filter(b=>(!f.st
 return head('Сборки','<button class="btn" data-a="calc">Расчёт</button> <label class="btn" style="display:inline-block;cursor:pointer">Импорт ZIP-карточки<input type="file" accept=".zip,application/zip" data-buildzip hidden></label> <button class="btn p" data-a="badd">+ Сборка</button>')+`<div class="k">${kpi('Заработок с проданных',R(done.reduce((n,b)=>n+profit(b),0)),'ok')}${kpi('В работе',S.builds.filter(b=>b.status==ST[0]).length)}${kpi('Готовы к продаже',S.builds.filter(b=>b.status==ST[1]||b.status==ST[2]).length)}${kpi('Продано',done.length)}</div><div class="fl"><select data-f="b.st">${opt([['','Все статусы'],...ST],f.st)}</select><input data-f="b.q" placeholder="Поиск по названию, сборщику, покупателю" value="${esc(f.q)}" style="min-width:220px"><label>С даты<input type="date" data-f="b.from" value="${esc(f.from)}"></label><label>По дату<input type="date" data-f="b.to" value="${esc(f.to)}"></label></div>`+table(['№','Название','Статус','Сборщик','Себестоимость','Цена','Заработок','Маржа',''],rows.map(b=>{const p=profit(b),s=sale(b);return`<tr><td>${b.num}</td><td>${esc(b.name||'Без названия')}</td><td><span class="bd ${b.status==ST[3]?'ok':''}">${b.status}</span></td><td>${esc(b.builder)}</td><td class="r">${R(cost(b))}</td><td class="r">${R(s)}${b.price?'':' <small>план</small>'}</td><td class="r ${b.status==ST[3]?(p>=0?'ok':'bad'):'mu'}">${R(p)}</td><td class="r">${s?Math.round(p/s*100)+'%':''}</td>${btns('b',b.id).replace('<td class="r">','<td class="r"><button class="btn ic" data-a="btxt" data-id="'+b.id+'" title="Скачать карточку TXT">TXT</button> <button class="btn ic" data-a="bprint" data-id="'+b.id+'" title="Открыть системную печать">⎙</button> <button class="btn ic" data-a="bdoc" data-id="'+b.id+'" title="Экспорт карточки и фото в ZIP">ZIP</button> ')}</tr>`}),'Сборок нет. Нажмите «+ Сборка», выберите детали со склада, и себестоимость посчитается сама.')}
 /* деньги */
 function tform(id,k0){const o=id&&S.tx.find(t=>t.id==id),k=o?o.kind:k0||'e';const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',`<div class="g2">${fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))}${fld('date','Дата','date',o?o.date:today())}</div><div class="g2">${fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')}${fld('qty','Количество','number',o?o.qty:1,'min=1')}</div>${fld('cat','Категория','select','',catOpt(k,o&&o.cat))}${fld('desc','Описание','text',o?o.desc:'')}${fld('acc','Касса','select','',accOpt(o&&o.acc))}${fld('note','Комментарий (для «Проебы» обязателен)','area',o?o.note:'')}`,f=>{const d=fd(f);if(d.cat=='Проебы'&&!d.note.trim()){alert('Для категории «Проебы» напишите комментарий');return false}const v={grp:f.elements.cat.selectedOptions[0].parentNode.label,kind:d.kind,date:d.date,amount:+d.amount,qty:+d.qty||1,cat:d.cat,desc:d.desc,acc:d.acc,note:d.note};o?Object.assign(o,v):S.tx.push({id:uid(),...v});save();render()});f.elements.kind.onchange=e=>f.elements.cat.innerHTML=catOpt(e.target.value)}
+
+const debtPayments=d=>(Array.isArray(d&&d.payments)?d.payments:[]).reduce((n,p)=>n+Math.max(0,Number(p.amount)||0),0);
+const debtOutstanding=d=>Math.max(0,(Number(d&&d.principal)||0)-debtPayments(d));
+const debtDirectionLabel=d=>d.direction==='given'?'Мне должны':'Я должен';
+const debtDueLabel=d=>debtOutstanding(d)<=0.005?'Погашен':d.status==='archived'?'В архиве':d.dueDate&&d.dueDate<today()?'Просрочен':'Активен';
+function createDebtRecord(data){
+ const direction=data.direction==='received'?'received':'given',person=String(data.person||'').trim(),principal=Number(data.principal),date=String(data.date||today()),dueDate=String(data.dueDate||''),accountId=String(data.accountId||'');
+ if(!person)return {ok:false,error:'Укажите человека или организацию.'};
+ if(!Number.isFinite(principal)||principal<=0)return {ok:false,error:'Сумма долга должна быть больше нуля.'};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return {ok:false,error:'Укажите корректную дату.'};
+ if(dueDate&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))return {ok:false,error:'Укажите корректный срок возврата.'};
+ if(!S.accounts.some(a=>a.id===accountId))return {ok:false,error:'Выберите существующую кассу.'};
+ const existing=data.id&&S.debts.find(x=>x.id===data.id);
+ if(existing){
+  if(existing.direction!==direction)return {ok:false,error:'Направление существующего долга нельзя изменить.'};
+  if(principal+0.000001<debtPayments(existing))return {ok:false,error:'Сумма долга не может быть меньше уже возвращённой суммы.'};
+  const tx=S.tx.find(t=>t.id===existing.originTxId);
+  if(!tx)return {ok:false,error:'Не найдена исходная операция долга. Изменение отменено.'};
+  existing.person=person;existing.principal=principal;existing.date=date;existing.dueDate=dueDate;existing.accountId=accountId;existing.note=String(data.note||'');
+  tx.amount=principal;tx.date=date;tx.acc=accountId;tx.desc=(direction==='given'?'Выдан долг: ':'Получен заём: ')+person;tx.note=existing.note;
+  existing.updatedAt=new Date().toISOString();
+  save();render();return {ok:true,id:existing.id,updated:true};
+ }
+ const id=uid(),originTxId=uid(),kind=direction==='given'?'loan_out':'loan_in';
+ const record={id,direction,person,principal,date,dueDate,accountId,note:String(data.note||''),originTxId,payments:[],status:'active'};
+ const transaction={id:originTxId,kind,date,amount:principal,desc:(direction==='given'?'Выдан долг: ':'Получен заём: ')+person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note:record.note,debtId:id,debtRole:'origin'};
+ S.debts.push(record);S.tx.push(transaction);save();render();
+ return {ok:true,id,updated:false};
+}
+function repayDebtRecord(data){
+ const debt=S.debts.find(x=>x.id===data.id),amount=Number(data.amount),date=String(data.date||today()),accountId=String(data.accountId||'');
+ if(!debt)return {ok:false,error:'Долг не найден.'};
+ if(debt.status==='archived')return {ok:false,error:'Долг находится в архиве.'};
+ if(!Number.isFinite(amount)||amount<=0)return {ok:false,error:'Сумма платежа должна быть больше нуля.'};
+ const outstanding=debtOutstanding(debt);
+ if(amount>outstanding+0.000001)return {ok:false,error:'Платёж превышает остаток долга ('+R(outstanding)+').'};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return {ok:false,error:'Укажите корректную дату платежа.'};
+ if(!S.accounts.some(a=>a.id===accountId))return {ok:false,error:'Выберите существующую кассу.'};
+ const paymentId=uid(),txId=uid(),incoming=debt.direction==='given';
+ const payment={id:paymentId,amount,date,accountId,note:String(data.note||''),txId};
+ const transaction={id:txId,kind:incoming?'loan_repayment_in':'loan_repayment_out',date,amount,desc:(incoming?'Возврат долга от ':'Погашение долга: ')+debt.person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note:payment.note,debtId:debt.id,debtPaymentId:paymentId,debtRole:'payment'};
+ debt.payments=Array.isArray(debt.payments)?debt.payments:[];
+ debt.payments.push(payment);S.tx.push(transaction);debt.updatedAt=new Date().toISOString();
+ save();render();return {ok:true,id:paymentId,transactionId:txId,outstanding:debtOutstanding(debt)};
+}
+function archiveDebtRecord(id){
+ const debt=S.debts.find(x=>x.id===id);if(!debt)return {ok:false,error:'Долг не найден.'};
+ debt.status=debt.status==='archived'?'active':'archived';debt.updatedAt=new Date().toISOString();save();render();return {ok:true,status:debt.status};
+}
+const investmentEvents=i=>Array.isArray(i&&i.events)?i.events:[];
+const investmentInvested=i=>investmentEvents(i).filter(e=>e.type==='contribution').reduce((n,e)=>n+Math.max(0,Number(e.amount)||0),0);
+const investmentWithdrawn=i=>investmentEvents(i).filter(e=>e.type==='withdrawal').reduce((n,e)=>n+Math.max(0,Number(e.amount)||0),0);
+const investmentProfit=i=>(Number(i&&i.currentValue)||0)+investmentWithdrawn(i)-investmentInvested(i);
+function addInvestmentEvent(investment,type,amount,date,accountId,note){
+ const eventId=uid(),txId=uid(),incoming=type==='withdrawal';
+ const event={id:eventId,type,amount,date,accountId,note:String(note||''),txId};
+ const transaction={id:txId,kind:incoming?'investment_in':'investment_out',date,amount,desc:(incoming?'Вывод из инвестиции: ':'Вложение в инвестицию: ')+investment.name,cat:'Инвестиции',grp:'Инвестиции',qty:1,acc:accountId,note:event.note,investmentId:investment.id,investmentEventId:eventId,investmentRole:type};
+ investment.events=Array.isArray(investment.events)?investment.events:[];
+ investment.events.push(event);S.tx.push(transaction);investment.updatedAt=new Date().toISOString();
+ return event;
+}
+function createInvestmentRecord(data){
+ const name=String(data.name||'').trim(),type=String(data.type||'Другое'),platform=String(data.platform||'').trim(),date=String(data.date||today()),amount=Number(data.amount),currentValue=data.currentValue===''||data.currentValue==null?amount:Number(data.currentValue),accountId=String(data.accountId||'');
+ if(!name)return {ok:false,error:'Укажите название инвестиции.'};
+ if(!Number.isFinite(amount)||amount<=0)return {ok:false,error:'Сумма первоначального вложения должна быть больше нуля.'};
+ if(!Number.isFinite(currentValue)||currentValue<0)return {ok:false,error:'Текущая оценка не может быть отрицательной.'};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return {ok:false,error:'Укажите корректную дату.'};
+ if(!S.accounts.some(a=>a.id===accountId))return {ok:false,error:'Выберите существующую кассу.'};
+ const id=uid(),record={id,name,type,platform,date,accountId,currentValue,note:String(data.note||''),events:[],status:'active'};
+ addInvestmentEvent(record,'contribution',amount,date,accountId,'Первоначальное вложение');
+ S.investments.push(record);save();render();return {ok:true,id};
+}
+function updateInvestmentRecord(data){
+ const item=S.investments.find(x=>x.id===data.id);if(!item)return {ok:false,error:'Инвестиция не найдена.'};
+ if(item.status==='closed')return {ok:false,error:'Закрытую инвестицию нельзя редактировать.'};
+ const name=String(data.name||'').trim(),currentValue=Number(data.currentValue);
+ if(!name)return {ok:false,error:'Укажите название инвестиции.'};
+ if(!Number.isFinite(currentValue)||currentValue<0)return {ok:false,error:'Текущая оценка не может быть отрицательной.'};
+ item.name=name;item.type=String(data.type||item.type);item.platform=String(data.platform||'').trim();item.note=String(data.note||'');item.currentValue=currentValue;item.updatedAt=new Date().toISOString();
+ save();render();return {ok:true,id:item.id};
+}
+function contributeInvestmentRecord(data){
+ const item=S.investments.find(x=>x.id===data.id),amount=Number(data.amount),date=String(data.date||today()),accountId=String(data.accountId||'');
+ if(!item)return {ok:false,error:'Инвестиция не найдена.'};
+ if(item.status==='closed')return {ok:false,error:'Нельзя пополнять закрытую инвестицию.'};
+ if(!Number.isFinite(amount)||amount<=0)return {ok:false,error:'Сумма пополнения должна быть больше нуля.'};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!S.accounts.some(a=>a.id===accountId))return {ok:false,error:'Проверьте дату и кассу.'};
+ addInvestmentEvent(item,'contribution',amount,date,accountId,String(data.note||''));save();render();return {ok:true,id:item.id};
+}
+function withdrawInvestmentRecord(data){
+ const item=S.investments.find(x=>x.id===data.id),amount=Number(data.amount),date=String(data.date||today()),accountId=String(data.accountId||'');
+ if(!item)return {ok:false,error:'Инвестиция не найдена.'};
+ if(item.status==='closed')return {ok:false,error:'Инвестиция уже закрыта.'};
+ if(!Number.isFinite(amount)||amount<=0)return {ok:false,error:'Сумма вывода должна быть больше нуля.'};
+ if(amount>(Number(item.currentValue)||0)+0.000001)return {ok:false,error:'Вывод превышает текущую оценку инвестиции.'};
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!S.accounts.some(a=>a.id===accountId))return {ok:false,error:'Проверьте дату и кассу.'};
+ item.currentValue=Math.max(0,(Number(item.currentValue)||0)-amount);
+ addInvestmentEvent(item,'withdrawal',amount,date,accountId,String(data.note||''));if(item.currentValue<=0.000001)item.currentValue=0;
+ save();render();return {ok:true,id:item.id,currentValue:item.currentValue};
+}
+function closeInvestmentRecord(id){
+ const item=S.investments.find(x=>x.id===id);if(!item)return {ok:false,error:'Инвестиция не найдена.'};
+ if((Number(item.currentValue)||0)>0.000001)return {ok:false,error:'Перед закрытием выведите или спишите текущую оценку инвестиции.'};
+ item.currentValue=0;item.status='closed';item.updatedAt=new Date().toISOString();save();render();return {ok:true};
+}
+function debtForm(id){
+ const o=id&&S.debts.find(x=>x.id===id);
+ const body=(o?'':'<div class="g2">'+fld('direction','Тип долга','select','',opt([['given','Мне должны (я выдал деньги)'],['received','Я должен (взял деньги)']],'given'))+'</div>')+
+  '<div class="g2">'+fld('person','Кому / от кого','text',o?o.person:'','required')+fld('principal','Сумма, ₽','number',o?o.principal:'','required min=0.01 step=0.01')+'</div>'+
+  '<div class="g2">'+fld('date','Дата','date',o?o.date:today(),'required')+fld('dueDate','Вернуть до','date',o?o.dueDate:'')+'</div>'+
+  '<div class="g2">'+fld('accountId','Касса','select','',accOpt(o?o.accountId:S.accounts[0]?.id))+'</div>'+
+  fld('note','Комментарий','area',o?o.note:'');
+ const f=modal(o?'Изменить долг':'Новый долг',body,form=>{
+  const d=fd(form),result=createDebtRecord({...d,id:o&&o.id,direction:o?o.direction:d.direction});
+  if(!result.ok){alert(result.error);return false}
+ },false,'Сохранить');
+ return f;
+}
+function debtPaymentForm(id){
+ const debt=S.debts.find(x=>x.id===id);if(!debt)return;
+ const remaining=debtOutstanding(debt),incoming=debt.direction==='given';
+ const body='<p class="mu">'+(incoming?'Приём возврата от ':'Погашение долга перед ')+esc(debt.person)+'. Осталось: <b>'+R(remaining)+'</b>.</p>'+
+  '<div class="g2">'+fld('amount','Сумма платежа, ₽','number','','required min=0.01 max='+remaining+' step=0.01')+fld('date','Дата','date',today(),'required')+'</div>'+
+  fld('accountId','Касса','select','',accOpt(debt.accountId||S.accounts[0]?.id))+fld('note','Комментарий','area','');
+ modal(incoming?'Зафиксировать возврат':'Погасить долг',body,form=>{
+  const result=repayDebtRecord({...fd(form),id});
+  if(!result.ok){alert(result.error);return false}
+ },false,'Записать платёж');
+}
+function investmentForm(id){
+ const o=id&&S.investments.find(x=>x.id===id);
+ const types=[['stocks','Акции'],['bonds','Облигации'],['funds','Фонды'],['currency','Валюта'],['crypto','Криптоактивы'],['property','Недвижимость'],['other','Другое']];
+ const body=o?
+  '<div class="g2">'+fld('name','Название','text',o.name,'required')+fld('type','Тип','select','',opt(types,o.type))+'</div>'+
+  fld('platform','Площадка / брокер','text',o.platform)+
+  '<div class="g2">'+fld('currentValue','Текущая оценка, ₽','number',o.currentValue,'required min=0 step=0.01')+fld('note','Комментарий','area',o.note)+'</div>':
+  '<div class="g2">'+fld('name','Название','text','','required')+fld('type','Тип','select','',''+opt(types,'other'))+'</div>'+
+  fld('platform','Площадка / брокер','text','')+
+  '<div class="g2">'+fld('amount','Первоначальное вложение, ₽','number','','required min=0.01 step=0.01')+fld('currentValue','Текущая оценка, ₽','number','','min=0 step=0.01')+'</div>'+
+  '<div class="g2">'+fld('date','Дата вложения','date',today(),'required')+fld('accountId','Списать из кассы','select','',accOpt(S.accounts[0]?.id))+'</div>'+
+  fld('note','Комментарий','area','');
+ const f=modal(o?'Изменить инвестицию':'Новая инвестиция',body,form=>{
+  const d=fd(form),result=o?updateInvestmentRecord({...d,id:o.id}):createInvestmentRecord(d);
+  if(!result.ok){alert(result.error);return false}
+ },false,'Сохранить');
+ return f;
+}
+function investmentMovementForm(id,type){
+ const item=S.investments.find(x=>x.id===id);if(!item)return;
+ const withdrawal=type==='withdrawal',max=Number(item.currentValue)||0;
+ const body='<p class="mu">'+(withdrawal?'Вывод доступен в пределах текущей оценки: ':'Пополнение инвестиции: ')+(withdrawal?R(max):esc(item.name))+'.</p>'+
+  '<div class="g2">'+fld('amount','Сумма, ₽','number','','required min=0.01 '+(withdrawal?'max='+max+' ':'')+'step=0.01')+fld('date','Дата','date',today(),'required')+'</div>'+
+  fld('accountId','Касса','select','',accOpt(S.accounts[0]?.id))+fld('note','Комментарий','area','');
+ modal(withdrawal?'Вывести средства':'Пополнить инвестицию',body,form=>{
+  const result=withdrawal?withdrawInvestmentRecord({...fd(form),id}):contributeInvestmentRecord({...fd(form),id});
+  if(!result.ok){alert(result.error);return false}
+ },false,withdrawal?'Вывести':'Пополнить');
+}
+function assetTabs(active){
+ return '<div class="fl" style="margin-bottom:14px"><button class="btn '+(active==='debts'?'p':'')+'" data-a="assets-tab" data-id="debts">Долги</button><button class="btn '+(active==='investments'?'p':'')+'" data-a="assets-tab" data-id="investments">Инвестиции</button><button class="btn" data-a="assets-archive">'+(V.showArchivedAssets?'Скрыть архив':'Показать архив')+'</button></div>';
+}
+function assets(){
+ const tab=V.assetsTab==='investments'?'investments':'debts';
+ if(!S.set.debtsInvestments)return head('Долги и инвестиции')+'<p class="mu">Раздел выключен в настройках. Данные сохранены.</p>';
+ if(tab==='debts'){
+  const rows=S.debts.filter(d=>V.showArchivedAssets?d.status==='archived':d.status!=='archived').sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(d=>{
+   const rest=debtOutstanding(d),status=debtDueLabel(d),payments=debtPayments(d);
+   const history=(d.payments||[]).slice().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>'<tr><td>'+D(p.date)+'</td><td>'+R(p.amount)+'</td><td>'+esc((S.accounts.find(a=>a.id===p.accountId)||{}).name||'—')+'</td><td>'+esc(p.note||'')+'</td></tr>').join('');
+   return '<tr><td>'+esc(d.person)+'</td><td>'+debtDirectionLabel(d)+'</td><td class="r">'+R(d.principal)+'</td><td class="r">'+R(rest)+'</td><td>'+D(d.dueDate||'')+'</td><td><span class="'+(status==='Просрочен'?'bad':status==='Погашен'?'ok':'')+'">'+status+'</span></td><td>'+payments.toFixed(2)+'</td><td class="r"><button class="btn ic" data-a="debt-pay" data-id="'+d.id+'" '+(rest<=0.005||d.status==='archived'?'disabled':'')+' title="Платёж">₽</button> <button class="btn ic" data-a="debt-edit" data-id="'+d.id+'" title="Изменить">✎</button> <button class="btn ic" data-a="debt-archive" data-id="'+d.id+'" title="В архив / вернуть">'+(d.status==='archived'?'↩':'▣')+'</button></td></tr>'+
+   (history?'<tr><td colspan="8"><details><summary>История платежей ('+(d.payments||[]).length+')</summary><table><thead><tr><th>Дата</th><th>Сумма</th><th>Касса</th><th>Комментарий</th></tr></thead><tbody>'+history+'</tbody></table></details></td></tr>':'');
+  });
+  const active=S.debts.filter(d=>d.status!=='archived'),given=active.filter(d=>d.direction==='given').reduce((n,d)=>n+debtOutstanding(d),0),received=active.filter(d=>d.direction==='received').reduce((n,d)=>n+debtOutstanding(d),0),overdue=active.filter(d=>debtOutstanding(d)>0.005&&d.dueDate&&d.dueDate<today()).length;
+  return head('Долги','<button class="btn p" data-a="debt-add">+ Новый долг</button>')+assetTabs('debts')+
+   '<div class="k">'+kpi('Мне должны',R(given),'ok')+kpi('Я должен',R(received),'bad')+kpi('Просрочено',overdue)+'</div>'+
+   table(['Человек','Направление','Сумма','Остаток','Срок','Статус','Платежей',''],rows,'Долгов пока нет. Добавьте выданный или полученный долг.');
+ }
+ const items=S.investments.filter(i=>V.showArchivedAssets?i.status==='closed':i.status!=='closed').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+ const invested=items.reduce((n,i)=>n+investmentInvested(i),0),withdrawn=items.reduce((n,i)=>n+investmentWithdrawn(i),0),current=items.reduce((n,i)=>n+(Number(i.currentValue)||0),0),gain=items.reduce((n,i)=>n+investmentProfit(i),0);
+ const rows=items.map(i=>{
+  const p=investmentProfit(i),events=investmentEvents(i).slice().sort((a,b)=>b.date.localeCompare(a.date)).map(e=>'<tr><td>'+D(e.date)+'</td><td>'+(e.type==='withdrawal'?'Вывод':'Вложение')+'</td><td class="r">'+R(e.amount)+'</td><td>'+esc((S.accounts.find(a=>a.id===e.accountId)||{}).name||'—')+'</td><td>'+esc(e.note||'')+'</td></tr>').join('');
+  return '<tr><td>'+esc(i.name)+'</td><td>'+esc(i.type)+'</td><td>'+esc(i.platform||'—')+'</td><td class="r">'+R(investmentInvested(i))+'</td><td class="r">'+R(i.currentValue)+'</td><td class="r '+(p>=0?'ok':'bad')+'">'+R(p)+'</td><td>'+(i.status==='closed'?'Закрыта':'Активна')+'</td><td class="r"><button class="btn ic" data-a="investment-add" data-id="'+i.id+'" '+(i.status==='closed'?'disabled':'')+' title="Пополнить">+</button> <button class="btn ic" data-a="investment-withdraw" data-id="'+i.id+'" '+(i.status==='closed'||!(+i.currentValue>0)?'disabled':'')+' title="Вывести">↓</button> <button class="btn ic" data-a="investment-edit" data-id="'+i.id+'" '+(i.status==='closed'?'disabled':'')+' title="Изменить / оценка">✎</button> <button class="btn ic" data-a="investment-close" data-id="'+i.id+'" '+((+i.currentValue>0||i.status==='closed')?'disabled':'')+' title="Закрыть">✓</button></td></tr>'+
+  (events?'<tr><td colspan="8"><details><summary>Движения ('+investmentEvents(i).length+')</summary><table><thead><tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Касса</th><th>Комментарий</th></tr></thead><tbody>'+events+'</tbody></table></details></td></tr>':'');
+ });
+ return head('Инвестиции','<button class="btn p" data-a="investment-add-new">+ Новая инвестиция</button>')+assetTabs('investments')+
+  '<div class="k">'+kpi('Вложено',R(invested))+kpi('Выведено',R(withdrawn))+kpi('Текущая оценка',R(current))+kpi('Результат',R(gain),gain>=0?'ok':'bad')+'</div>'+
+  table(['Актив','Тип','Площадка','Всего вложено','Оценка','Результат','Статус',''],rows,'Инвестиций пока нет. Добавьте первое вложение.');
+}
+
 function money(){const f=V.t,q=f.q.toLowerCase(),rows=S.tx.filter(t=>(!f.k||t.kind==f.k)&&(!f.m||t.date.startsWith(f.m))&&(!f.cat||t.cat==f.cat)&&(!f.acc||t.acc==f.acc||t.fromAcc==f.acc||t.toAcc==f.acc)&&(!q||(t.desc+' '+t.cat+' '+t.note).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)),sm=k=>rows.filter(t=>t.kind==k).reduce((n,t)=>n+t.amount,0),an=id=>(S.accounts.find(a=>a.id==id)||{name:'—'}).name,ps=S.tx.filter(t=>t.partSale&&(!f.m||t.date.startsWith(f.m))),psRevenue=ps.reduce((n,t)=>n+t.amount,0),psCost=ps.reduce((n,t)=>n+(t.costAmount||0),0),psProfit=ps.reduce((n,t)=>n+(t.grossProfit||0),0);
 return head('Деньги','<button class="btn" data-a="sellParts">Продать детали</button> <button class="btn" data-a="xfer">Перевод между кассами</button> <button class="btn" data-a="tadd" data-id="i">+ Доход</button> <button class="btn p" data-a="tadd" data-id="e">+ Расход</button>')+'<div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+' <button class="btn ic g" data-a="aedit" data-id="'+a.id+'" title="Изменить кассу">✎</button></span><b>'+R(bal(a))+'</b></div>').join('')+'<button class="btn g" data-a="aadd">+ Касса</button></div><div class="k">'+kpi('Выручка от деталей',R(psRevenue))+kpi('Себестоимость деталей',R(psCost))+kpi('Валовая прибыль',R(psProfit),psProfit>=0?'ok':'bad')+'</div><div class="fl"><select data-f="t.k">'+opt([['','Все операции'],['e','Расходы'],['i','Доходы'],['transfer','Переводы между кассами']],f.k)+'</select><input type="month" data-f="t.m" value="'+f.m+'"><input data-f="t.q" placeholder="Поиск" value="'+esc(f.q)+'"><select data-f="t.cat">'+opt([["","Все категории"],...Array.from(new Set(S.tx.map(t=>t.cat).filter(Boolean))).sort().map(x=>[x,x])],f.cat)+'</select><select data-f="t.acc">'+opt([["","Все кассы"],...S.accounts.map(x=>[x.id,x.name])],f.acc)+'</select><span class="mu">Доходы <b class="ok">'+R(sm('i'))+'</b>, расходы <b class="bad">'+R(sm('e'))+'</b></span></div>'+table(['Дата','Категория','Описание','Касса / перевод','Сумма',''],rows.map(t=>'<tr><td>'+D(t.date)+'</td><td>'+esc(t.cat)+'</td><td>'+esc(t.desc)+(t.partSale?'<br><small>Количество: '+t.qty+' шт. · Цена за шт.: '+R(t.unitPrice)+' · Себестоимость: '+R(t.costAmount)+' · Валовая прибыль: <b class="'+((t.grossProfit||0)>=0?'ok':'bad')+'">'+R(t.grossProfit)+'</b></small>':'')+(t.note?' <small>'+esc(t.note)+'</small>':'')+ '</td><td>'+(t.kind=='transfer'?esc(an(t.fromAcc))+' → '+esc(an(t.toAcc)):esc(an(t.acc)))+'</td><td class="r '+(t.kind=='transfer'?'':t.kind=='i'?'ok':'bad')+'">'+(t.kind=='transfer'?'↔':t.kind=='i'?'+':'−')+R(t.amount)+'</td>'+btns('t',t.id)+'</tr>'),'Операций нет. Закупки и продажи попадают сюда автоматически, остальное добавьте кнопками выше.')}
 function transferForm(id){
