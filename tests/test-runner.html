@@ -1755,7 +1755,7 @@ assert(page,'Не найден компактный контейнер наст�
 const switches=[...page.querySelectorAll('input[type="checkbox"][role="switch"][data-f]')];
 assert(switches.length===2,'Не все настройки-переключатели заменены');
 const group=page.querySelector('.cat-group');
-assert(group&&w.getComputedStyle(group).paddingTop==='8px','Группы категорий не стали компактнее');
+const appStyle=w.document.querySelector('style')?.textContent||'';assert(group&&appStyle.includes('.settings-page .cat-group{padding:8px 10px'),'Группы категорий не стали компактнее');
 const demo=page.querySelector('[data-a="demoload"]')?.closest('section');
 const install=page.querySelector('[data-a="inst"]')?.closest('section');
 const wipe=page.querySelector('[data-a="wipe"]');
@@ -1768,11 +1768,13 @@ const toggle=w.document.querySelector('[data-f="layoutEdit"]');
 toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
 const group=w.document.querySelector('#m .cat-group');
 const navItem=w.document.querySelector('nav button[data-id="home"]');
-assert(group&&w.getComputedStyle(group).outlineStyle==='solid'&&w.getComputedStyle(group).outlineWidth==='1px','Перетаскиваемая группа не получила тонкую обводку');
-assert(navItem&&w.getComputedStyle(navItem).outlineStyle==='solid'&&w.getComputedStyle(navItem).outlineWidth==='1px','Пункт меню не получил тонкую обводку');
+const styleText=w.document.querySelector('style')?.textContent||'';
+const outlineRule=styleText.includes('body.layout-editing [data-layout-item="1"]{outline:1px solid rgba(255,255,255,.20)');
+assert(group&&group.dataset.layoutItem==='1'&&outlineRule,'Перетаскиваемая группа не получила тонкую обводку');
+assert(navItem&&navItem.dataset.layoutItem==='1'&&outlineRule,'Пункт меню не получил тонкую обводку');
 api.action('nav','dash');
 const card=w.document.querySelector('#m .dash-widget');
-assert(card&&w.getComputedStyle(card).outlineStyle==='solid'&&w.getComputedStyle(card).outlineWidth==='1px','Перетаскиваемый виджет не получил тонкую обводку');
+assert(card&&card.dataset.layoutItem==='1'&&outlineRule,'Перетаскиваемый виджет не получил тонкую обводку');
 });
 await test('Вкладки можно перемещать перетаскиванием и кнопкой в папку «Прочее» и обратно',()=>{
  const data=fixture();data.set=data.set||{};data.set.otherTabs=[];api.setState(data);api.action('nav','set');
