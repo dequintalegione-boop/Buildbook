@@ -1379,6 +1379,51 @@ api.migrateLegacyLogs(records);
 prompts.push('Тестовая запись после 1105 событий');api.action('ckadd');
 assert(api.getLogs().length===1106,'Журнал сократился до фиксированного лимита: '+api.getLogs().length);
 });
+await test('Отключение долгов и инвестиций сразу скрывает пункт бокового меню',()=>{
+api.setState(fixture());api.action('nav','set');
+let toggle=click('[data-f="debtsInvestments"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+const nav=w.document.querySelector('nav button[data-id="assets"]');
+assert(state().set.debtsInvestments===false,'Настройка раздела не сохранилась');
+assert(nav&&nav.hidden&&nav.style.display==='none','Раздел остался видимым в боковой панели');
+toggle=w.document.querySelector('[data-f="debtsInvestments"]');toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+assert(!w.document.querySelector('nav button[data-id="assets"]').hidden,'Включённый раздел не вернулся в меню');
+});
+await test('Редактирование категорий в настройках использует выпадающий список',()=>{
+api.setState(fixture());api.action('nav','set');
+const select=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.parse(decodeURIComponent(x.dataset.catGroup))[1]==='Транспорт');
+assert(select,'Для группы категорий не создан выпадающий список');
+assert([...select.options].some(x=>x.value==='Бензин'),'Существующие категории не попали в список');
+prompts.push('Бензин для теста');api.action('cceditpick',select.dataset.catGroup);
+assert(state().categories.e['Транспорт'].includes('Бензин для теста'),'Переименование выбранной категории не сохранилось');
+assert(!state().categories.e['Транспорт'].includes('Бензин'),'Старое название категории осталось после переименования');
+const current=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.parse(decodeURIComponent(x.dataset.catGroup))[1]==='Транспорт');
+current.value='Бензин для теста';api.action('cchidepick',current.dataset.catGroup);
+assert(state().hiddenCategories.e.includes('Транспорт::Бензин для теста'),'Скрытие выбранной категории не сработало');
+});
+await test('Общий режим позволяет менять порядок меню и разделов, а затем отключается',()=>{
+api.setState(fixture());api.action('nav','set');
+let toggle=click('[data-f="layoutEdit"]');toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+let home=w.document.querySelector('nav button[data-id="home"]'),dash=w.document.querySelector('nav button[data-id="dash"]');
+assert(home&&dash&&home.draggable&&dash.draggable,'Пункты бокового меню не стали перетаскиваемыми');
+const transfer={setData(){},getData(){return''}};
+const start=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(start,'dataTransfer',{value:transfer});home.dispatchEvent(start);
+const drop=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:transfer});dash.dispatchEvent(drop);
+assert(state().set.navOrder[0]==='nav:dash'&&state().set.navOrder[1]==='nav:home','Порядок пунктов меню не сохранился');
+const groups=[...w.document.querySelectorAll('#m .cat-group')].filter(x=>x.draggable);
+assert(groups.length>=2,'Разделы настроек не стали перетаскиваемыми');
+const source=groups[0],target=groups[1];
+const startGroup=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(startGroup,'dataTransfer',{value:transfer});source.dispatchEvent(startGroup);
+const dropGroup=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(dropGroup,'dataTransfer',{value:transfer});target.dispatchEvent(dropGroup);
+assert(Object.keys(state().set.layoutOrders||{}).length>0,'Порядок блоков страницы не был сохранён');
+api.action('nav','dash');assert([...w.document.querySelectorAll('#m .dash-widget')].every(x=>x.draggable),'Глобальный режим не включил перетаскивание графиков');
+api.action('nav','set');toggle=w.document.querySelector('[data-f="layoutEdit"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+assert(![...w.document.querySelectorAll('nav button[data-id]')].some(x=>x.draggable),'Перетаскивание не отключилось после выключения режима');
+});
+await test('Интерфейс использует локальный современный шрифт без внешнего запроса',()=>{
+const style=w.document.querySelector('style')?.textContent||'';
+assert(style.includes('Bahnschrift'),'Новый шрифт не задан');
+assert(!/fonts\.googleapis\.com|use\.typekit\.net/.test(style),'Шрифт требует внешней загрузки');
+});
 await test('Готовые и протестированные ПК отображаются на складе',()=>{
 api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
 assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
