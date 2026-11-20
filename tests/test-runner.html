@@ -186,7 +186,7 @@ await test('Старые данные автоматически мигриру�
 const legacy={batches:[{id:'legacy-batch',qty:7,price:120}],builds:[],tx:[],notes:'Сохранённая заметка',categories:{e:{'Склад':['Видеокарта']},i:{'Продажи':['Комплектующие']}}};
 const result=api.migrateState(legacy),migrated=result.state;
 assert(result.migrated,'Миграция старой версии не запущена');
-assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===4,'Не записана текущая версия схемы 4');
+assert(migrated.schemaVersion===api.schemaVersion&&api.schemaVersion===5,'Не записана текущая версия схемы 5');
 assert(migrated.batches.length===1&&migrated.batches[0].id==='legacy-batch','Потеряна существующая складская партия');
 assert(migrated.batches[0].qty===7&&migrated.batches[0].price===120,'Изменились исходные значения партии');
 assert(migrated.notes==='Сохранённая заметка','Потеряны заметки');
@@ -964,15 +964,15 @@ assert(entry&&entry.record.deletedAt===entry.at,'Пункт не попал в �
 api.action('trrestore',entry.id);
 assert(state().checklist.some(x=>x.id==='metadata-check'&&x.deletedAt===null),'Пункт не восстановлен');
 });
-await test('Схема 1 мигрирует на схему 4 без потери существующих данных',()=>{
+await test('Схема 1 мигрирует на схему 5 без потери существующих данных',()=>{
 const source={schemaVersion:1,batches:[{id:'v1-batch',qty:3,price:40}],builds:[],tx:[],tasks:[],trash:[],notes:'Из схемы 1'};
 const result=api.migrateState(source),migrated=result.state;
-assert(result.migrated&&migrated.schemaVersion===4,'Не выполнена миграция на схему 4');
+assert(result.migrated&&migrated.schemaVersion===5,'Не выполнена миграция на схему 5');
 assert(Array.isArray(migrated.checklist)&&migrated.checklist.length===0,'Не добавлен пустой чек-лист');
 assert(migrated.batches[0].id==='v1-batch'&&migrated.batches[0].qty===3,'Изменились данные схемы 1');
 assert(migrated.notes==='Из схемы 1','Потеряны заметки при миграции');
 const repeated=api.migrateState(migrated);
-assert(!repeated.migrated&&repeated.state.schemaVersion===4,'Повторная миграция не должна запускаться');
+assert(!repeated.migrated&&repeated.state.schemaVersion===5,'Повторная миграция не должна запускаться');
 });
 await test('Чек-лист можно добавлять, отмечать и удалять',()=>{
 api.setState(fixture());prompts.push('Проверить комплектующие перед тестом');api.action('ckadd');
@@ -1186,7 +1186,7 @@ assert(desktop.includes('меню браузера'),'Не показан зап
 await test('Миграция схемы 3 добавляет долги и инвестиции без потери прежних данных',()=>{
  const source={schemaVersion:3,accounts:[{id:'cash-v3',name:'Касса',open:100}],batches:[{id:'v3-batch',qty:2,price:50}],builds:[],tx:[],stockEvents:[],tasks:[],trash:[],checklist:[],set:{theme:'dark'}};
  const result=api.migrateState(source),state=result.state;
- assert(result.migrated&&state.schemaVersion===4,'Профиль не мигрировал на схему 4');
+ assert(result.migrated&&state.schemaVersion===5,'Профиль не мигрировал на схему 5');
  assert(Array.isArray(state.debts)&&state.debts.length===0,'Не создан список долгов');
  assert(Array.isArray(state.investments)&&state.investments.length===0,'Не создан список инвестиций');
  assert(state.set.debtsInvestments===true&&state.set.theme==='dark','Миграция не включила новый раздел или изменила существующие настройки');
@@ -1314,6 +1314,71 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
  assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
 
+await test('Сводка заменяет старое название вкладки «Обзор»',()=>{
+api.action('nav','home');
+const tab=[...w.document.querySelectorAll('nav button')].find(x=>x.dataset.id==='home');
+assert(tab&&tab.textContent.trim()==='Сводка','Основная вкладка по-прежнему называется «Обзор»');
+assert(w.document.querySelector('#m h1')?.textContent==='Сводка','Заголовок страницы не переименован');
+});
+await test('Настройка дашборда поддерживает перетаскивание и удаление блоков',()=>{
+api.setState(fixture());api.action('nav','dash');api.action('dcfg');
+let cards=[...w.document.querySelectorAll('#m .dash-widget')];
+assert(cards.length>=2,'Не найдены графики дашборда');
+assert(cards.every(x=>x.getAttribute('draggable')==='true'),'Карточки нельзя перетаскивать в режиме настройки');
+const firstId=cards[0].dataset.widgetId,secondId=cards[1].dataset.widgetId;
+const data={values:{},effectAllowed:'',setData(k,v){this.values[k]=v},getData(k){return this.values[k]||''}};
+const start=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(start,'dataTransfer',{value:data});cards[0].dispatchEvent(start);
+const drop=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:data});cards[1].dispatchEvent(drop);
+assert(state().set.dash[0].id===secondId&&state().set.dash[1].id===firstId,'Перетаскивание не изменило порядок блоков');
+const before=state().set.dash.length;api.action('drm','0');
+assert(state().set.dash.length===before-1,'Кнопка удаления не убрала лишний график');
+api.action('dcfg');cards=[...w.document.querySelectorAll('#m .dash-widget')];
+assert(cards.every(x=>x.getAttribute('draggable')==='false'),'Перетаскивание не отключилось после выхода из настройки');
+});
+await test('Планирование считает месячную цель по фактическим продажам категории',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7);
+d.tx=[{id:'planned-sale',kind:'i',date:month+'-10',amount:450,desc:'Продажа тестовых видеокарт',cat:'Комплектующие',grp:'Продажи',qty:3,acc:'cash',partSale:true,saleId:'planned-sale',batchId:'gpu-batch',batchDesc:'Тестовая видеокарта',batchType:'Видеокарты',unitCost:100,unitPrice:150,costAmount:300,grossProfit:150}];
+api.setState(d);api.action('nav','planning');api.action('planadd');const f=form();
+setv(f,'month',month);setv(f,'targetQty','10');setv(f,'scope','parts_category');f.elements.scope.dispatchEvent(new w.Event('change',{bubbles:true}));setv(f,'category','Видеокарты');submit(f);
+const plan=state().salesPlans[0];assert(plan&&plan.scope==='parts_category'&&plan.targetQty===10,'Цель категории не сохранена');
+assert(w.document.querySelector('#m').textContent.includes('3 шт.'),'Факт 3 проданных единиц не попал в план');
+assert(w.document.querySelector('#m').textContent.includes('7 шт.'),'Остаток до целевого количества рассчитан неверно');
+});
+await test('Добавление и редактирование кассы открывает внутреннее окно приложения',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('aadd');let f=form();
+assert(f&&f.elements.name&&f.elements.open,'Вместо формы приложения не открылось окно кассы');
+setv(f,'name','Новая касса теста');setv(f,'open','250');submit(f);
+let account=state().accounts.find(x=>x.name==='Новая касса теста');assert(account&&account.open===250,'Новая касса не сохранилась');
+api.action('aedit',account.id);f=form();assert(f&&f.elements.name.value==='Новая касса теста','Форма редактирования кассы не открылась');
+setv(f,'name','Касса после переименования');setv(f,'open','400');submit(f);
+account=state().accounts.find(x=>x.id===account.id);assert(account.name==='Касса после переименования'&&account.open===400,'Изменения кассы не сохранились');
+});
+await test('Выбор категории открывает операции только выбранной группы и категории',()=>{
+const d=fixture();d.tx=[
+{id:'category-test-1',kind:'e',date:'2026-05-01',amount:100,cat:'Бензин',grp:'Транспорт',desc:'Заправка',acc:'cash'},
+{id:'category-test-2',kind:'e',date:'2026-05-02',amount:200,cat:'Еда',grp:'Общие расходы',desc:'Обед',acc:'cash'},
+{id:'category-test-3',kind:'i',date:'2026-05-03',amount:500,cat:'Комплектующие',grp:'Продажи',desc:'Доход',acc:'cash'}
+];api.setState(d);api.action('nav','tx');api.action('catbrowse');
+const choice=[...w.document.querySelectorAll('.ov [data-a="txcat"]')].find(x=>decodeURIComponent(x.dataset.id).includes('Бензин'));
+assert(choice,'В окне не отображаются категории операций');api.action('txcat',choice.dataset.id);
+const rows=[...w.document.querySelectorAll('#m tbody tr')];
+assert(rows.some(x=>x.textContent.includes('Заправка')),'Не показана выбранная операция');
+assert(!rows.some(x=>x.textContent.includes('Обед')),'В фильтр попала посторонняя категория');
+});
+await test('Заработная плата удалена из категорий, но старая операция остаётся в истории',()=>{
+const d=fixture();d.categories.i={'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']};
+d.tx=[{id:'legacy-salary',kind:'i',date:'2026-01-01',amount:1000,cat:'Заработная плата',grp:'Заработок',desc:'Старый доход',acc:'cash'}];
+api.setState(d);const stateAfter=state();
+assert(!Object.values(stateAfter.categories.i).flat().includes('Заработная плата'),'Категория осталась доступна для новых операций');
+assert(stateAfter.tx.some(x=>x.id==='legacy-salary'&&x.cat==='Заработная плата'),'Историческая операция была удалена');
+});
+await test('Журнал хранит более 1000 записей без автоматического ограничения',()=>{
+api.setState(fixture());
+const records=Array.from({length:1105},(_,i)=>({t:'20.11.2026 12:00:00',l:'Старая тестовая запись '+i,changes:[]}));
+api.migrateLegacyLogs(records);
+prompts.push('Тестовая запись после 1105 событий');api.action('ckadd');
+assert(api.getLogs().length===1106,'Журнал сократился до фиксированного лимита: '+api.getLogs().length);
+});
 await test('Готовые и протестированные ПК отображаются на складе',()=>{
 api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
 assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
