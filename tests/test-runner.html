@@ -235,7 +235,7 @@ await test('Модальное окно продажи показывает св
 api.action('nav','stock');api.openSale();const f=form();assert(f,'Окно продажи не открылось');assert(f.querySelectorAll('.sell-item').length===3,'Должно быть 3 карточки продажи');assert(f.textContent.includes('Из сборки №1'),'Не помечена деталь из сборки');
 });
 await test('Продажа не принимает количество больше доступного',()=>{
-const f=form();f.querySelector('[name="pick-0"]').checked=true;setv(f,'qty-0','99');setv(f,'price-0','150');submit(f);assert(alerts.some(x=>x.includes('Проверьте количество')),'Не показана ошибка количества');assert(form()===f,'Форма закрылась после ошибочной продажи');assert(api.getState().batches[0].qty===10,'Склад изменился при ошибке');
+api.openSale();const f=form();f.querySelector('[name="pick-0"]').checked=true;setv(f,'qty-0','99');setv(f,'price-0','150');submit(f);assert(alerts.some(x=>x.includes('Проверьте количество')),'Не показана ошибка количества');assert(form()===f,'Форма закрылась после ошибочной продажи');assert(api.getState().batches[0].qty===10,'Склад изменился при ошибке');
 f.closest('.ov').remove();
 });
 await test('Множественная продажа записывает индивидуальные цены и себестоимость',()=>{
@@ -1863,13 +1863,13 @@ assert(style.includes('Bahnschrift'),'Новый шрифт не задан');
 assert(!/fonts\.googleapis\.com|use\.typekit\.net/.test(style),'Шрифт требует внешней загрузки');
 });
 await test('Готовые и протестированные ПК отображаются на складе',()=>{
-api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
+const data=fixture();data.builds[0].status='Собрана';api.setState(data);api.action('nav','stock');
 assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
 assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе: status='+JSON.stringify(state().builds[0]?.status)+'; rows='+JSON.stringify([...w.document.querySelectorAll('#m tbody tr')].map(x=>x.textContent)));
 const detailsRow=w.document.querySelector('#m tr[data-a="bview"]');assert(detailsRow,'У готового ПК нет строки с подробностями');detailsRow.click();const details=w.document.querySelector('.ov .md');assert(details&&details.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан во всплывающей карточке');
 });
 await test('Продажа ПК из вкладки «Расходы» закрывает сборку и записывает покупателя',()=>{
-api.setState(fixture());const b=state().builds[0];b.status='Протестирована';b.planned=850;api.setState(state());
+const data=fixture();data.builds[0].status='Протестирована';data.builds[0].planned=850;api.setState(data);
 const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','i');const f=form();
 setv(f,'kind','i');setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
 setv(f,'buildId','build-open');f.elements.buildId.onchange();setv(f,'date','2026-05-20');setv(f,'amount','900');setv(f,'buyer','Покупатель ПК');setv(f,'acc','cash');setv(f,'note','Продажа через деньги');submit(f);
