@@ -1384,6 +1384,56 @@ const plans=state().salesPlans;assert(plans.length===2,'Цели по колич
 assert(plans.some(p=>p.metric!=='revenue'&&p.targetQty===10)&&plans.some(p=>p.metric==='revenue'&&p.targetAmount===5000),'Один из типов цели потерялся при сохранении');
 });
 
+await test('Календарь показывает дневное движение денег и тепловую окраску',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7),day1=month+'-05',day2=month+'-10',day3=month+'-15',day4=month+'-20';
+d.tx=[
+{id:'calendar-income',kind:'i',date:day1,amount:20000,acc:'cash',desc:'Продажа на двадцать тысяч',cat:'Продажи'},
+{id:'calendar-expense',kind:'e',date:day2,amount:5000,acc:'cash',desc:'Закупка',cat:'Сборка ПК'},
+{id:'calendar-zero-income',kind:'i',date:day3,amount:3500,acc:'cash',desc:'Поступление',cat:'Продажи'},
+{id:'calendar-zero-expense',kind:'e',date:day3,amount:3500,acc:'cash',desc:'Списание',cat:'Расходы'},
+{id:'calendar-transfer',kind:'transfer',date:day4,amount:900,fromAcc:'cash',toAcc:'card',desc:'Перевод'}
+];
+api.setState(d);api.action('nav','calendar');
+const positive=w.document.querySelector('[data-calendar-date="'+day1+'"]'),negative=w.document.querySelector('[data-calendar-date="'+day2+'"]'),zero=w.document.querySelector('[data-calendar-date="'+day3+'"]'),transfer=w.document.querySelector('[data-calendar-date="'+day4+'"]');
+const normalize=value=>String(value||'').replace(/\s+/g,' ');
+assert(positive&&positive.dataset.net==='20000'&&normalize(positive.textContent).includes('+20 000'),'Положительный дневной итог не отображается');
+assert(negative&&negative.dataset.net==='-5000'&&normalize(negative.textContent).includes('5 000'),'Отрицательный дневной итог не отображается');
+assert(positive.classList.contains('has-activity')&&positive.dataset.tone==='positive'&&negative.dataset.tone==='negative','Положительные и отрицательные дни не различаются цветом');
+assert(zero&&zero.dataset.net==='0'&&zero.classList.contains('has-activity'),'День с операциями и нулевым итогом не выделяется');
+assert(transfer&&!transfer.classList.contains('has-activity'),'Внутренний перевод ошибочно влияет на общий денежный итог');
+});
+await test('Календарь считает месячные суммы и количество активных дней',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7),a=month+'-03',b=month+'-04',c=month+'-05';
+d.tx=[
+{id:'calendar-kpi-i1',kind:'i',date:a,amount:20000,acc:'cash',desc:'Доход'},
+{id:'calendar-kpi-e1',kind:'e',date:b,amount:5000,acc:'cash',desc:'Расход'},
+{id:'calendar-kpi-i2',kind:'i',date:c,amount:3000,acc:'cash',desc:'Доход 2'},
+{id:'calendar-kpi-e2',kind:'e',date:c,amount:1000,acc:'cash',desc:'Расход 2'}
+];
+api.setState(d);api.action('nav','calendar');
+const textContent=w.document.querySelector('#m').textContent,normalize=value=>String(value||'').replace(/\s+/g,' ');
+assert(normalize(textContent).includes('23 000 ₽')&&normalize(textContent).includes('6 000 ₽')&&normalize(textContent).includes('+17 000 ₽'),'Месячные суммы поступлений, списаний или чистого итога рассчитаны неверно: '+normalize(textContent).slice(0,500));
+assert(normalize(textContent).includes('3 · 4 оп.'),'Неверно посчитано количество активных дней и операций');
+});
+await test('Нажатие на день календаря показывает все операции выбранной даты',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7),date=month+'-08';
+d.tx=[
+{id:'calendar-detail-one',kind:'i',date,amount:12000,acc:'cash',desc:'Продажа видеокарты',cat:'Комплектующие'},
+{id:'calendar-detail-two',kind:'e',date,amount:2000,acc:'cash',desc:'Закупка SSD',cat:'Сборка ПК'}
+];
+api.setState(d);api.action('nav','calendar');api.action('calday',date);
+const overlay=w.document.querySelector('.ov'),normalize=value=>String(value||'').replace(/\s+/g,' ');
+assert(overlay&&overlay.textContent.includes('Операции за '+date),'Не открылось окно операций выбранного дня');
+assert(overlay.textContent.includes('Продажа видеокарты')&&overlay.textContent.includes('Закупка SSD'),'В окне не показаны все сделки за день');
+assert(normalize(overlay.textContent).includes('+12 000')&&normalize(overlay.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
+});
+await test('Календарь переключает месяцы и возвращается к текущему месяцу',()=>{
+api.setState(fixture());api.action('nav','calendar');
+const current=api.localDateISO(new w.Date()).slice(0,7),[year,month]=current.split('-').map(Number),previous=new w.Date(year,month-2,1),previousKey=api.localDateISO(previous).slice(0,7);
+api.action('calprev');assert(w.document.querySelector('.calendar-shell')?.dataset.calendarMonth===previousKey,'Кнопка предыдущего месяца переключает неверный месяц');
+api.action('calnext');assert(w.document.querySelector('.calendar-shell')?.dataset.calendarMonth===current,'Кнопка следующего месяца не возвращает календарь');
+api.action('calprev');api.action('calnow');assert(w.document.querySelector('.calendar-shell')?.dataset.calendarMonth===current,'Кнопка «Сегодня» не возвращает текущий месяц');
+});
 await test('Добавление и редактирование кассы открывает внутреннее окно приложения',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('aadd');let f=form();
 assert(f&&f.elements.name&&f.elements.open,'Вместо формы приложения не открылось окно кассы');
