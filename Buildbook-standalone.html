@@ -792,9 +792,9 @@ const body='<div class="g2">'+fld('kind','Тип','select','',opt([['e','Рас�
 '<div class="g2">'+fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')+fld('qty','Количество','number',o?o.qty:1,'min=1')+'</div>'+
 fld('cat','Категория','select','',catOpt(k,o&&o.cat))+
 '<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст партию на складе. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
-fld('desc','Описание','text',o?o.desc:'')+
+fld('desc','Описание','text',linkedBatch?linkedBatch.desc:o?o.desc:'')+
 fld('acc','Касса','select','',accOpt(o&&o.acc))+
-fld('note','Комментарий (для «Проебы» обязателен)','area',o?o.note:'');
+fld('note','Комментарий (для «Проебы» обязателен)','area',linkedBatch?linkedBatch.note:o?o.note:'');
 const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',body,form=>{
 const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,stockType=d.kind==='e'&&stockExpenseType(d.cat),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
 if(d.cat==='Проебы'&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
