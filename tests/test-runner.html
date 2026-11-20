@@ -267,6 +267,44 @@ const b=state().batches.find(x=>x.id==='gpu-batch');b.price=250;api.setState(sta
 await test('Закупка создаёт партию и связанный расход',()=>{
 api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','ССД');setv(f,'date','2026-03-01');setv(f,'desc','Новый SSD');setv(f,'price','500');setv(f,'qty','2');setv(f,'acc','cash');submit(f);const s=state(),b=s.batches.find(x=>x.desc==='Новый SSD');assert(b&&b.qty===2,'Партия закупки не создана');assert(s.tx.some(t=>t.batchId===b.id&&t.kind==='e'&&t.amount===1000),'Расход закупки не создан');
 });
+
+await test('Расход из вкладки «Деньги» автоматически добавляет комплектующее на склад',()=>{
+api.action('nav','tx');api.action('tadd','e');const f=form();
+setv(f,'kind','e');setv(f,'date','2026-04-02');setv(f,'amount','1200');setv(f,'qty','2');setv(f,'cat','ССД');setv(f,'desc','SSD из финансового расхода');setv(f,'acc','cash');submit(f);
+const s=state(),tx=s.tx.find(x=>x.desc==='SSD из финансового расхода'),batch=tx&&s.batches.find(x=>x.id===tx.batchId);
+assert(tx&&tx.kind==='e','Финансовый расход не создан');
+assert(batch&&batch.txId===tx.id,'Складская партия не связана с расходом');
+assert(batch.type==='ССД'&&batch.desc===tx.desc&&batch.qty===2,'Реквизиты партии не соответствуют расходу');
+assert(batch.price===600,'Цена за штуку должна рассчитываться из общей суммы и количества');
+assert(tx.grp==='Сборка ПК','Не сохранена группа категории комплектующих');
+assert(api.balance('cash')===-1200,'Расход не уменьшил баланс кассы на полную сумму');
+});
+await test('Редактирование расхода закупки синхронно обновляет связанную партию',()=>{
+const tx=state().tx.find(x=>x.desc==='SSD из финансового расхода'),batchId=tx&&tx.batchId;assert(batchId,'У расхода нет связи с партией');
+api.action('te',tx.id);let f=form();setv(f,'cat','Бензин');submit(f);
+assert(form()===f,'Разрешено отвязать уже используемую форму закупки от категории склада');
+assert(alerts.some(x=>x.includes('связана со складской партией')),'Не показано предупреждение о связи с партией');
+f.closest('.ov').remove();api.action('te',tx.id);f=form();setv(f,'date','2026-04-03');setv(f,'amount','1500');setv(f,'qty','3');setv(f,'cat','ССД');setv(f,'desc','SSD обновлённый');setv(f,'note','Проверка синхронизации');submit(f);
+const updated=state().tx.find(x=>x.id===tx.id),batch=state().batches.find(x=>x.id===batchId);
+assert(updated&&updated.batchId===batchId,'ID партии изменился при редактировании');
+assert(batch&&batch.desc==='SSD обновлённый'&&batch.date==='2026-04-03'&&batch.qty===3,'Поля партии не обновились вслед за расходом');
+assert(batch.price===500&&batch.note==='Проверка синхронизации','Цена или комментарий партии не синхронизированы');
+assert(updated.amount===1500&&api.balance('cash')===-1500,'Сумма операции или баланс кассы рассчитаны неверно');
+});
+await test('Удаление расхода из «Денег» корректно удаляет связанную закупку со склада',()=>{
+const tx=state().tx.find(x=>x.desc==='SSD обновлённый');assert(tx&&tx.batchId,'Не найдена тестовая закупка');
+w.confirm=()=>true;api.action('td',tx.id);
+assert(!state().tx.some(x=>x.id===tx.id),'Финансовая операция осталась после удаления');
+assert(!state().batches.some(x=>x.id===tx.batchId),'Связанная партия осталась на складе после подтверждённого удаления');
+assert(state().trash.some(x=>x.type==='batch'&&x.record.id===tx.batchId),'Удалённая партия не помещена в корзину');
+assert(api.balance('cash')===0,'После удаления расхода баланс кассы не восстановился');
+});
+await test('Категория «Компы и другое» остаётся обычным расходом, а не складской партией',()=>{
+api.action('nav','tx');api.action('tadd','e');const f=form();
+setv(f,'kind','e');setv(f,'date','2026-04-04');setv(f,'amount','3000');setv(f,'qty','1');setv(f,'cat','Компы и другое');setv(f,'desc','Прочие расходы на ПК');setv(f,'acc','cash');submit(f);
+assert(state().tx.some(x=>x.desc==='Прочие расходы на ПК'&&x.kind==='e'),'Обычный расход не сохранился');
+assert(!state().batches.some(x=>x.desc==='Прочие расходы на ПК'),'Неспецифическая категория ошибочно создала складскую партию');
+});
 await test('Редактирование партии не позволяет уменьшить количество ниже занятого',()=>{
 const b=state().batches.find(x=>x.id==='gpu-batch');api.action('pe',b.id);const f=form();setv(f,'qty','3');submit(f);assert(alerts.some(x=>x.includes('Нельзя уменьшить количество ниже')),'Не выдано предупреждение о занятом, проблемном или списанном остатке');assert(form()===f,'Форма закрылась при недопустимом количестве');f.closest('.ov').remove();
 });
