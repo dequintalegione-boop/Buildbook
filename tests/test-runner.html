@@ -1813,6 +1813,14 @@ await test('Продажа деталей доступна из меню «Тр�
  assert(!popup.querySelector('.sell-scroll table'),'Старый широкоформатный список с горизонтальной прокруткой остался в продаже деталей');
  assert(popup.querySelector('[name="qty-0"]')&&popup.querySelector('[name="price-0"]'),'В карточке продажи не отображаются количество и цена');
 });
+await test('Вкладка «Деньги» переименована в «Расходы»',()=>{
+ api.setState(fixture());api.action('nav','tx');
+ const nav=w.document.querySelector('nav button[data-id="tx"]');
+ const heading=w.document.querySelector('#m h1');
+ assert(nav&&nav.textContent.trim()==='Расходы','Название вкладки в боковом меню не обновлено');
+ assert(heading&&heading.textContent.trim()==='Расходы','Заголовок страницы не обновлён');
+ assert(!w.document.querySelector('#m [data-a="sellParts"]'),'Отдельная кнопка продажи деталей всё ещё находится на странице расходов');
+});
 await test('Интерфейс использует локальный современный шрифт без внешнего запроса',()=>{
 const style=w.document.querySelector('style')?.textContent||'';
 assert(style.includes('Bahnschrift'),'Новый шрифт не задан');
