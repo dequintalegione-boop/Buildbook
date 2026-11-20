@@ -1446,6 +1446,7 @@ function planning(){
 const calendarPad=n=>String(n).padStart(2,'0');
 const calendarDateKey=(year,month,day)=>String(year)+'-'+calendarPad(month+1)+'-'+calendarPad(day);
 const calendarEntries=date=>S.tx.filter(t=>(t.date||'')===date&&Math.abs(Number(txCashDelta(t))||0)>0.000001).map(t=>({transaction:t,delta:Number(txCashDelta(t))}));
+const calendarTasks=date=>S.tasks.filter(task=>!!task.done&&taskCompletedDate(task)===date);
 const calendarSigned=value=>value>0?'+'+R(value):R(value);
 const calendarTransactionType=t=>({
  i:'Доход',e:'Расход',loan_in:'Полученный заём',loan_out:'Выданный долг',
@@ -1453,17 +1454,18 @@ const calendarTransactionType=t=>({
  investment_in:'Пополнение инвестиции',investment_out:'Вывод из инвестиции'
 }[t.kind]||'Операция');
 function calendarDay(date){
- if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||!calendarEntries(date).length)return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||(!calendarEntries(date).length&&!calendarTasks(date).length))return;
  V.calendar=Object.assign({},V.calendar||{}, {selectedDate:date});
  render();
 }
 function calendarDayPanel(date){
- const entries=calendarEntries(date),incoming=entries.reduce((n,x)=>n+(x.delta>0?x.delta:0),0),outgoing=entries.reduce((n,x)=>n+(x.delta<0?-x.delta:0),0),net=incoming-outgoing;
+ const entries=calendarEntries(date),tasks=calendarTasks(date),incoming=entries.reduce((n,x)=>n+(x.delta>0?x.delta:0),0),outgoing=entries.reduce((n,x)=>n+(x.delta<0?-x.delta:0),0),net=incoming-outgoing;
  const rows=entries.map(x=>{
   const t=x.transaction,amount=calendarSigned(x.delta),label=calendarTransactionType(t);
   return '<tr><td>'+esc(label)+'</td><td>'+esc(t.cat||'—')+'</td><td>'+esc(t.desc||t.note||'Без описания')+'</td><td class="r '+(x.delta>0?'ok':'bad')+'">'+amount+'</td></tr>';
  });
- return '<section class="calendar-day-details"><div class="hd"><h2>Операции за '+D(date)+'</h2><button class="btn" data-a="caldayclear">Скрыть</button></div><div class="k">'+kpi('Поступило',R(incoming),'ok')+kpi('Выбыло',R(outgoing),'bad')+kpi('Итог за день',calendarSigned(net),net>=0?'ok':'bad')+'</div>'+table(['Тип','Категория','Описание','Сумма'],rows,'За этот день нет денежных операций.')+'</section>';
+ tasks.forEach(task=>rows.push('<tr><td>Задача выполнена</td><td>Задачи</td><td>'+esc(task.text||'Без названия')+'</td><td class="r ok">✓</td></tr>'));
+ return '<section class="calendar-day-details"><div class="hd"><h2>Действия за '+D(date)+'</h2><button class="btn" data-a="caldayclear">Скрыть</button></div><div class="k">'+kpi('Поступило',R(incoming),'ok')+kpi('Выбыло',R(outgoing),'bad')+kpi('Итог за день',calendarSigned(net),net>=0?'ok':'bad')+kpi('Задач выполнено',tasks.length,'ok')+'</div>'+table(['Тип','Категория','Действие','Сумма / отметка'],rows,'В этот день не было операций или выполненных задач.')+'</section>';
 }
 function calendarShift(delta){
  const current=V.calendar||{year:new Date().getFullYear(),month:new Date().getMonth()},date=new Date(current.year,current.month+delta,1);
@@ -1472,36 +1474,50 @@ function calendarShift(delta){
 function calendar(){
  const now=new Date(),current=V.calendar||{year:now.getFullYear(),month:now.getMonth()},year=Number(current.year),month=Number(current.month),first=new Date(year,month,1),monthKey=calendarDateKey(year,month,1).slice(0,7),daysInMonth=new Date(year,month+1,0).getDate(),offset=(first.getDay()+6)%7;
  const daily={};
+ const dayItem=date=>daily[date]||(daily[date]={net:0,count:0,incoming:0,outgoing:0,taskCount:0});
  S.tx.forEach(t=>{
   if(!(t.date||'').startsWith(monthKey))return;
   const delta=Number(txCashDelta(t));
   if(!Number.isFinite(delta)||Math.abs(delta)<0.000001)return;
-  const item=daily[t.date]||(daily[t.date]={net:0,count:0,incoming:0,outgoing:0});
+  const item=dayItem(t.date);
   item.net+=delta;item.count++;
   if(delta>0)item.incoming+=delta;else item.outgoing+=-delta;
  });
+ S.tasks.forEach(task=>{
+  if(!task.done)return;
+  const date=taskCompletedDate(task);if(!date.startsWith(monthKey))return;
+  dayItem(date).taskCount++;
+ });
  const values=Object.values(daily),maxMagnitude=Math.max(1,...values.map(x=>Math.abs(x.net)));
- const totals={incoming:values.reduce((n,x)=>n+x.incoming,0),outgoing:values.reduce((n,x)=>n+x.outgoing,0),net:values.reduce((n,x)=>n+x.net,0),days:values.length,operations:values.reduce((n,x)=>n+x.count,0)};
+ const totals={
+  incoming:values.reduce((n,x)=>n+x.incoming,0),
+  outgoing:values.reduce((n,x)=>n+x.outgoing,0),
+  net:values.reduce((n,x)=>n+x.net,0),
+  days:values.filter(x=>x.count||x.taskCount).length,
+  operations:values.reduce((n,x)=>n+x.count,0),
+  tasks:values.reduce((n,x)=>n+x.taskCount,0)
+ };
  const weekdays=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
  const weekdayHtml=weekdays.map(day=>'<div class="calendar-weekday">'+day+'</div>').join('');
  const blanks=Array.from({length:offset},()=>'<div class="calendar-empty" aria-hidden="true"></div>').join('');
  const todayKey=today();
  const dayHtml=Array.from({length:daysInMonth},(_,index)=>{
-  const day=index+1,date=calendarDateKey(year,month,day),item=daily[date],active=!!item;
-  const tone=!active?'':Math.abs(item.net)<0.000001?'neutral':item.net>0?'positive':'negative';
-  const heat=active?Math.round(12+Math.abs(item.net)/maxMagnitude*38):0;
-  const amount=active?calendarSigned(item.net):'';
+  const day=index+1,date=calendarDateKey(year,month,day),item=daily[date],active=!!item&&((item.count||0)>0||(item.taskCount||0)>0),hasMoney=!!item&&(item.count||0)>0,taskCount=item?item.taskCount||0:0;
+  const tone=!active?'':!hasMoney?'neutral':Math.abs(item.net)<0.000001?'neutral':item.net>0?'positive':'negative';
+  const heat=active?Math.round(12+(hasMoney?Math.abs(item.net)/maxMagnitude*38:0)):0;
+  const amount=hasMoney?calendarSigned(item.net):'';
+  const activityLabel=[hasMoney?item.count+' оп.':'',taskCount?taskCount+' задач':''].filter(Boolean).join(' · ');
   const classes='calendar-day'+(active?' has-activity':'')+(date===todayKey?' is-today':'');
-  const title=active?date+' · '+item.count+' операций · итог '+calendarSigned(item.net):date+' · операций нет';
-  return '<button type="button" class="'+classes+'" data-a="calday" data-id="'+date+'" data-calendar-date="'+date+'" data-net="'+(active?item.net:'')+'" data-count="'+(active?item.count:0)+'" data-tone="'+tone+'" style="--calendar-heat:'+heat+'%" title="'+esc(title)+'" aria-label="'+esc(title)+'" '+(active?'':'disabled')+'><span class="calendar-day-number">'+day+'</span><span class="calendar-day-amount '+(active?(item.net>0?'ok':item.net<0?'bad':''):'')+'">'+amount+'</span><span class="calendar-day-count">'+(active?item.count+' оп.':'')+'</span></button>';
+  const title=active?date+' · '+(hasMoney?item.count+' операций':'без денежных операций')+(taskCount?' · выполнено задач: '+taskCount:'')+(hasMoney?' · итог '+calendarSigned(item.net):''):date+' · активности нет';
+  return '<button type="button" class="'+classes+'" data-a="calday" data-id="'+date+'" data-calendar-date="'+date+'" data-net="'+(hasMoney?item.net:'')+'" data-count="'+(item?item.count||0:0)+'" data-task-count="'+taskCount+'" data-tone="'+tone+'" style="--calendar-heat:'+heat+'%" title="'+esc(title)+'" aria-label="'+esc(title)+'" '+(active?'':'disabled')+'><span class="calendar-day-number">'+day+'</span><span class="calendar-day-amount '+(hasMoney?(item.net>0?'ok':item.net<0?'bad':''):'')+'">'+amount+'</span><span class="calendar-day-count">'+activityLabel+'</span></button>';
  }).join('');
  const monthName=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric'}).format(first);
  return head('Календарь')+
- '<div class="k">'+kpi('Поступило за месяц',R(totals.incoming),'ok')+kpi('Выбыло за месяц',R(totals.outgoing),'bad')+kpi('Чистый итог',calendarSigned(totals.net),totals.net>=0?'ok':'bad')+kpi('Дней с операциями',totals.days+' · '+totals.operations+' оп.')+'</div>'+
+ '<div class="k">'+kpi('Поступило за месяц',R(totals.incoming),'ok')+kpi('Выбыло за месяц',R(totals.outgoing),'bad')+kpi('Чистый итог',calendarSigned(totals.net),totals.net>=0?'ok':'bad')+kpi('Дней с активностью',totals.days+' · '+totals.operations+' оп. · '+totals.tasks+' задач')+'</div>'+
  '<section class="calendar-shell" data-calendar-month="'+monthKey+'"><div class="calendar-toolbar"><button class="btn" data-a="calprev" aria-label="Предыдущий месяц">←</button><strong class="calendar-month-title">'+esc(monthName)+'</strong><div><button class="btn" data-a="calnow">Сегодня</button> <button class="btn" data-a="calnext" aria-label="Следующий месяц">→</button></div></div>'+
  '<div class="calendar-grid">'+weekdayHtml+blanks+dayHtml+'</div>'+
  '<div class="calendar-legend"><span><i style="background:var(--ok)"></i>Положительный итог</span><span><i style="background:var(--bad)"></i>Отрицательный итог</span><span><i style="background:var(--a)"></i>Активность с нулевым итогом</span></div>'+
- '<p class="calendar-note">В ячейке показано чистое движение денег за день: поступления минус списания. Чем насыщеннее цвет, тем больше сумма относительно других дней месяца. Внутренние переводы между кассами исключены. Нажмите на день с операциями, чтобы открыть подробности.</p></section>'+((V.calendar&&V.calendar.selectedDate||'').startsWith(monthKey)?calendarDayPanel(V.calendar.selectedDate):'');
+ '<p class="calendar-note">В ячейке показано движение денег за день и количество выполненных задач. Чем насыщеннее цвет, тем больше сумма относительно других дней месяца. Внутренние переводы между кассами исключены. Нажмите на день с операциями или выполненными задачами, чтобы открыть подробности.</p></section>'+((V.calendar&&V.calendar.selectedDate||'').startsWith(monthKey)?calendarDayPanel(V.calendar.selectedDate):'');
 }
 function money(){const f=V.t,q=f.q.toLowerCase(),matchesKind=t=>!f.k||(f.k==='loans'?String(t.kind).startsWith('loan_'):f.k==='investments'?String(t.kind).startsWith('investment_'):t.kind===f.k),rows=S.tx.filter(t=>matchesKind(t)&&(!f.m||t.date.startsWith(f.m))&&(!f.cat||t.cat==f.cat)&&(!f.grp||(t.grp||categoryGroup(t.kind,t.cat)||'Без группы')===f.grp)&&(!f.acc||t.acc==f.acc||t.fromAcc==f.acc||t.toAcc==f.acc)&&(!q||(t.desc+' '+t.cat+' '+t.note).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date)),sm=k=>rows.filter(t=>t.kind==k).reduce((n,t)=>n+t.amount,0),an=id=>(S.accounts.find(a=>a.id==id)||{name:'—'}).name,ps=S.tx.filter(t=>t.partSale&&(!f.m||t.date.startsWith(f.m))),psRevenue=ps.reduce((n,t)=>n+t.amount,0),psCost=ps.reduce((n,t)=>n+(t.costAmount||0),0),psProfit=ps.reduce((n,t)=>n+(t.grossProfit||0),0);
 return head('Расходы','<div class="money-actions"><button class="btn" data-a="catbrowse">Выбрать категорию</button><div class="tx-action-split"><button class="btn p" data-a="tadd">Транзакция</button><div class="tx-action-dropdown"><button type="button" class="btn p tx-action-menu-toggle" data-a="txmenu-toggle" aria-label="Дополнительные действия с транзакциями" aria-expanded="'+(V.txMenuOpen?'true':'false')+'">▾</button><div class="tx-action-menu" '+(V.txMenuOpen?'':'hidden')+'><button type="button" data-a="taddincome">Добавить доход</button><button type="button" data-a="sellParts">Продать детали</button><button type="button" data-a="xfer">Перевод между кассами</button></div></div></div></div>')+'<div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+' <button class="btn ic g" data-a="aedit" data-id="'+a.id+'" title="Изменить кассу">✎</button></span><b>'+R(bal(a))+'</b></div>').join('')+'<button class="btn g" data-a="aadd">+ Касса</button></div><div class="k">'+kpi('Выручка от деталей',R(psRevenue))+kpi('Себестоимость деталей',R(psCost))+kpi('Валовая прибыль',R(psProfit),psProfit>=0?'ok':'bad')+'</div><div class="fl"><select data-f="t.k">'+opt([['','Все операции'],['e','Расходы'],['i','Доходы'],['transfer','Переводы между кассами'],['loans','Долги'],['investments','Инвестиции']],f.k)+'</select><input type="month" data-f="t.m" value="'+f.m+'"><input data-f="t.q" placeholder="Поиск" value="'+esc(f.q)+'"><select data-f="t.cat">'+opt([["","Все категории"],...Array.from(new Set(S.tx.map(t=>t.cat).filter(Boolean))).sort().map(x=>[x,x])],f.cat)+'</select><select data-f="t.acc">'+opt([["","Все кассы"],...S.accounts.map(x=>[x.id,x.name])],f.acc)+'</select><span class="money-totals"><strong>Доходы</strong> <b class="ok">'+R(sm('i'))+'</b><strong>Расходы</strong> <b class="bad">'+R(sm('e'))+'</b></span></div>'+table(['Дата','Категория','Описание','Касса / перевод','Сумма',''],rows.map(t=>'<tr><td>'+D(t.date)+'</td><td>'+esc(t.cat)+'</td><td>'+esc(t.desc)+(t.partSale?'<br><small>Количество: '+t.qty+' шт. · Цена за шт.: '+R(t.unitPrice)+' · Себестоимость: '+R(t.costAmount)+' · Валовая прибыль: <b class="'+((t.grossProfit||0)>=0?'ok':'bad')+'">'+R(t.grossProfit)+'</b></small>':'')+(t.note?' <small>'+esc(t.note)+'</small>':'')+ '</td><td>'+(t.kind=='transfer'?esc(an(t.fromAcc))+' → '+esc(an(t.toAcc)):esc(an(t.acc)))+'</td><td class="r '+(t.kind=='transfer'?'':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'ok':'bad'))+'">'+(t.kind=='transfer'?'↔':(['i','loan_in','loan_repayment_in','investment_in'].includes(t.kind)?'+':'−'))+R(t.amount)+'</td>'+btns('t',t.id)+'</tr>'),'Операций нет. Закупки и продажи попадают сюда автоматически, остальное добавьте кнопками выше.')}
@@ -2189,10 +2205,33 @@ const c=L.reduce((n,l)=>{const b=l.b&&find('batches',l.b);return n+(b?b.price:+l
 f.addEventListener('change',e=>{const t=e.target,i=t.dataset.i;if(i!=null){L[i][t.dataset.k]=t.dataset.k=='q'?Math.max(1,+t.value||1):t.value;draw()}});f.querySelector('[data-add]').onclick=()=>{L.push({b:'',q:1,n:'',p:''});draw()};f.querySelector('#cl').onclick=e=>{if(e.target.dataset.r!=null){L.splice(+e.target.dataset.r,1);draw()}};f.elements.plan.oninput=draw;draw()}
 /* задачи и журнал */
 const QN=['Важно и срочно','Важно, но не срочно','Срочно, но не важно','Не важно и не срочно','По желанию'];
+const taskCompletedDate=task=>{
+ const raw=task&&(task.doneAt||task.updatedAt||task.createdAt);
+ const value=typeof raw==='string'?raw.slice(0,10):'';
+ return /^\d{4}-\d{2}-\d{2}$/.test(value)?value:today();
+};
+const taskDateAge=completedDate=>{
+ const parse=value=>{const parts=String(value||'').split('-').map(Number);return parts.length===3&&parts.every(Number.isFinite)?Date.UTC(parts[0],parts[1]-1,parts[2]):NaN};
+ const end=parse(today()),start=parse(completedDate);
+ return Number.isFinite(start)&&Number.isFinite(end)?Math.floor((end-start)/86400000):0;
+};
+function archiveOldCompletedTasks(){
+ let changed=false;
+ (Array.isArray(S.tasks)?S.tasks:[]).forEach(task=>{
+  if(!task.done){
+   if(task.archivedAt){delete task.archivedAt;changed=true}
+   return;
+  }
+  if(task.archivedAt)return;
+  if(taskDateAge(taskCompletedDate(task))>2){task.archivedAt=today();changed=true}
+ });
+ if(changed){save.skip=1;save()}
+ return changed;
+}
 function kform(id,q){const o=id&&find('tasks',id);modal(o?'Задача':'Новая задача',`${fld('text','Что сделать','text',o?o.text:'','required')}<div class="g2">${fld('q','Квадрант','select','',opt(QN.map((n,i)=>[i,n]),o?o.q:q))}${fld('due','Срок','date',o?o.due:'')}</div><div class="g2">${fld('who','Исполнитель','text',o?o.who:'')}${fld('build','Сборка','select','',opt([['','Без привязки'],...S.builds.map(b=>[b.id,'№'+b.num+' '+(b.name||'')])],o&&o.build))}</div>`,f=>{const d=fd(f),v={text:d.text,q:+d.q,due:d.due,who:d.who,build:d.build};o?Object.assign(o,v):S.tasks.push({id:uid(),done:0,...v});save();render()})}
 function tasks(){
  const card=(n,i)=>{
-  const items=S.tasks.filter(t=>t.q==i).sort((a,b)=>a.done-b.done).map(t=>{
+  const items=S.tasks.filter(t=>!t.archivedAt&&t.q==i).sort((a,b)=>a.done-b.done).map(t=>{
    const build=t.build&&S.builds.find(x=>x.id==t.build);
    return '<div class="tk task-priority-'+Math.max(0,Math.min(QN.length-1,+t.q||0))+(t.done?' dn':'')+'" draggable="true" data-id="'+esc(t.id)+'">'+
     '<input type="checkbox" data-a="kdone" data-id="'+esc(t.id)+'" '+(t.done?'checked':'')+' aria-label="Выполнено">'+
@@ -2209,18 +2248,20 @@ function tasks(){
   '<div class="tk'+(item.done?' dn':'')+'"><input type="checkbox" data-a="ckdone" data-id="'+esc(item.id)+'" '+(item.done?'checked':'')+' aria-label="Выполнено">'+
   '<span>'+esc(item.text)+'</span><button class="btn ic g" data-a="ckdel" data-id="'+esc(item.id)+'" title="Удалить пункт">✕</button></div>'
  ).join('');
+ const archived=S.tasks.filter(task=>!!task.archivedAt).sort((a,b)=>taskCompletedDate(b).localeCompare(taskCompletedDate(a)));
+ const archiveRows=archived.map(task=>'<div class="task-archive-item" data-id="'+esc(task.id)+'"><span><b>'+esc(task.text||'Без названия')+'</b><br><small class="mu">Выполнена '+D(taskCompletedDate(task))+'</small></span><span class="task-archive-actions"><button class="btn" data-a="krestore" data-id="'+esc(task.id)+'">Вернуть в задачи</button><button class="btn ic g" data-a="kd" data-id="'+esc(task.id)+'" title="Удалить">✕</button></span></div>').join('');
  const notesHidden=!!S.set.hideTaskNotes;
  return head('Задачи','<button class="btn p" data-a="kadd" data-id="0">+ Задача</button>')+
   '<div class="qg">'+QN.map(card).join('')+'</div>'+
+  '<section class="task-archive tw"><details><summary>Архив выполненных задач <span class="bd">'+archived.length+'</span></summary><p class="mu">Выполненные задачи автоматически попадают сюда через два полных дня после отметки выполнения. Задача сохраняет дату завершения и продолжает отображаться в календаре.</p><div class="task-archive-list">'+(archiveRows||'<p class="mu">Архив пока пуст.</p>')+'</div></details></section>'+
   '<section class="tw" style="padding:16px;margin-top:16px"><div class="hd"><h2>Чек-лист</h2><button class="btn" data-a="ckadd">+ Пункт</button></div>'+
   '<p class="mu">Короткие пункты без срока и привязки к сборке.</p>'+
   (checklistRows||'<p class="mu">Пока нет пунктов. Добавьте первый пункт кнопкой выше.</p>')+'</section>'+
   '<section class="tw" style="padding:16px;margin-top:16px"><div class="hd"><h2>Примечания</h2><button class="btn" data-a="knote">'+(notesHidden?'Показать примечание':'Скрыть примечание')+'</button></div>'+
   (notesHidden?'<p class="mu">Блок примечаний скрыт. Нажмите «Показать примечание», чтобы открыть его.</p>':'<textarea data-n rows="5" placeholder="Заметки команды">'+esc(S.notes)+'</textarea>')+'</section>';
 }
-
 const JOURNAL_COLLECTION_LABELS={accounts:'Кассы',batches:'Склад',builds:'Сборки',tx:'Операции',tasks:'Задачи',checklist:'Чек-лист',debts:'Долги',investments:'Инвестиции',salesPlans:'Планы продаж',stockEvents:'События склада',trash:'Корзина',categories:'Категории',hiddenCategories:'Скрытые категории',hiddenGroups:'Скрытые группы'};
-const JOURNAL_FIELD_LABELS={name:'Название',status:'Статус',builder:'Сборщик',buyer:'Покупатель',date:'Дата',sold:'Дата продажи',planned:'Плановая цена',price:'Цена',cost:'Себестоимость',lines:'Комплектующие',qty:'Количество',type:'Тип',desc:'Описание',supplier:'Поставщик',link:'Ссылка',note:'Комментарий',problemQty:'Проблемные единицы',writtenOffQty:'Списано единиц',problemReason:'Причина проблемы',text:'Текст задачи',q:'Приоритет',due:'Срок',dueDate:'Срок возврата',who:'Исполнитель',build:'Связанная сборка',buildId:'ID сборки',done:'Выполнено',amount:'Сумма',cat:'Категория',grp:'Группа',acc:'Касса',fromAcc:'Касса отправления',toAcc:'Касса получения',open:'Начальный остаток',currentValue:'Текущая оценка',principal:'Сумма долга',platform:'Площадка / брокер',direction:'Направление',person:'Контрагент',accountId:'Касса',targetQty:'Плановое количество',targetAmount:'Плановая выручка',month:'Месяц',metric:'Показатель',scope:'Область плана',category:'Категория',product:'Модель',kind:'Тип операции',unitCost:'Себестоимость за штуку',unitPrice:'Цена за штуку',grossProfit:'Валовая прибыль',costAmount:'Себестоимость продажи'};
+const JOURNAL_FIELD_LABELS={name:'Название',status:'Статус',builder:'Сборщик',buyer:'Покупатель',date:'Дата',sold:'Дата продажи',planned:'Плановая цена',price:'Цена',cost:'Себестоимость',lines:'Комплектующие',qty:'Количество',type:'Тип',desc:'Описание',supplier:'Поставщик',link:'Ссылка',note:'Комментарий',problemQty:'Проблемные единицы',writtenOffQty:'Списано единиц',problemReason:'Причина проблемы',text:'Текст задачи',q:'Приоритет',due:'Срок',dueDate:'Срок возврата',who:'Исполнитель',build:'Связанная сборка',buildId:'ID сборки',done:'Выполнено',doneAt:'Дата выполнения',archivedAt:'Дата архивации',amount:'Сумма',cat:'Категория',grp:'Группа',acc:'Касса',fromAcc:'Касса отправления',toAcc:'Касса получения',open:'Начальный остаток',currentValue:'Текущая оценка',principal:'Сумма долга',platform:'Площадка / брокер',direction:'Направление',person:'Контрагент',accountId:'Касса',targetQty:'Плановое количество',targetAmount:'Плановая выручка',month:'Месяц',metric:'Показатель',scope:'Область плана',category:'Категория',product:'Модель',kind:'Тип операции',unitCost:'Себестоимость за штуку',unitPrice:'Цена за штуку',grossProfit:'Валовая прибыль',costAmount:'Себестоимость продажи'};
 const JOURNAL_META_FIELDS=new Set(['createdAt','updatedAt','deletedAt','schemaVersion']);
 function journalEntityCaption(collection,record,selector){
  if(collection==='lines'){
@@ -3324,6 +3365,7 @@ function render(){
  const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=false;
  if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Не удалось открыть Buildbook</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Данные не были заменены пустой базой. Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p></section>';return}
  const conflictBanner=storageConflict?'<section class="tw" style="padding:16px;margin-bottom:14px;border:1px solid var(--bad)"><b>Данные изменены в другой вкладке</b><p class="mu">Сохранение в этой вкладке остановлено, чтобы не перезаписать более свежий профиль. Изменения, сделанные здесь после конфликта, пока остаются только в памяти этой вкладки. Скачайте отдельную копию, затем перезагрузите приложение и при необходимости объедините резервную копию.</p><button class="btn p" data-a="expzip">Скачать полный бэкап этой вкладки</button> <button class="btn" data-a="reload">Перезагрузить Buildbook</button></section>':'';
+ archiveOldCompletedTasks();
  if(V.tab==='assets'&&!S.set.debtsInvestments)V.tab='set';
  $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
@@ -3459,7 +3501,7 @@ ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
 exp:()=>{if(downloadBackup('buildbook-'+today()+'.json',true)){render();toast('Копия скачана')}},expzip:()=>downloadZipBackup(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
-kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift(makeTrashEntry('task',task));S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},knote:()=>{S.set.hideTaskNotes=!S.set.hideTaskNotes;save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item||!confirm('Переместить пункт чек-листа в корзину?'))return;S.trash.unshift(makeTrashEntry('checklist',item));S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);t.done=t.done?0:1;save();render()},
+kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift(makeTrashEntry('task',task));S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},knote:()=>{S.set.hideTaskNotes=!S.set.hideTaskNotes;save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item||!confirm('Переместить пункт чек-листа в корзину?'))return;S.trash.unshift(makeTrashEntry('checklist',item));S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);if(!t)return;t.done=t.done?0:1;if(t.done){t.doneAt=today();delete t.archivedAt}else{delete t.doneAt;delete t.archivedAt}save();render()},krestore:()=>{const t=find('tasks',id);if(!t)return;delete t.archivedAt;delete t.doneAt;t.done=0;save();render();toast('Задача возвращена в работу.')},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e)return;if(!Array.isArray(e.changes)||!e.changes.length){alert('Для этой записи нет безопасного набора изменений.');return}if(!confirm('Отменить только действие «'+e.l+'»? Более поздние независимые действия сохранятся. Если изменённые поля уже затронуты последующими операциями, отмена будет заблокирована.'))return;const result=undoJournalEntry(+id);if(!result.ok){alert(result.message);return}toast('Действие отменено. Более поздние операции сохранены.')},
 bdoc:()=>downloadBuildCardZip(id),btxt:()=>downloadBuildCardText(id),bprint:()=>printBuildCard(id),csv:()=>{const E={batches:[['ID','Тип','Описание','Дата','Цена','Кол-во','Поставщик','Ссылка','Комментарий','Нормальные остатки','Проблемные остатки','Списано','Причина проблемы'],b=>[b.id,b.type,b.desc,b.date,b.price,b.qty,b.supplier,b.link,b.note,goodAvailable(b),problemAvailable(b),writtenOff(b),b.problemReason]],builds:[['ID','Номер сборки','Название','Статус','Сборщик','Покупатель','Дата сборки','Дата продажи','Плановая цена','Себестоимость','Цена продажи','Комплектующие','Комментарий'],b=>[b.id,b.num,b.name,b.status,b.builder,b.buyer,b.date,b.sold,b.planned,cost(b),b.price,(b.lines||[]).map(l=>l.batchId+':'+l.qty+(l.problem?':problem':'')).join('|'),b.note]],tx:[['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||'']],accounts:[['ID','Название кассы','Начальный остаток','Текущий баланс'],x=>[x.id,x.name,x.open,bal(x)]],tasks:[['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],x=>[x.id,x.text,x.q,x.done?'Да':'Нет',x.due,x.who,x.build]]}[id],q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',c=[E[0],...S[id].map(E[1])].map(r=>r.map(q).join(';')).join('\n'),l=document.createElement('a');l.href=URL.createObjectURL(new Blob(['\ufeff'+c],{type:'text/csv'}));l.download=id+'.csv';l.click()},
