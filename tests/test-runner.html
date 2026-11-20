@@ -1502,7 +1502,7 @@ if(originalHit)w.document.elementFromPoint=originalHit;else delete w.document.el
 assert(state().set.navOrder?.[0]==='nav:dash'&&state().set.navOrder?.[1]==='nav:home','Порядок пунктов меню не сохранился: '+JSON.stringify(state().set.navOrder||null));
 const groups=[...w.document.querySelectorAll('#m .cat-group')].filter(x=>x.draggable);
 assert(groups.length>=2,'Разделы настроек не стали перетаскиваемыми');
-const source=groups[0],target=groups[1];
+const source=groups[0],target=groups[1],transfer={setData(){},getData(){return''}};
 const startGroup=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(startGroup,'dataTransfer',{value:transfer});source.dispatchEvent(startGroup);
 const dropGroup=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(dropGroup,'dataTransfer',{value:transfer});target.dispatchEvent(dropGroup);
 assert(Object.keys(state().set.layoutOrders||{}).length>0,'Порядок блоков страницы не был сохранён');
