@@ -1389,6 +1389,8 @@ function bytesToDataUrl(bytes,mime){
 }
 function createZipBackupBlob(stateSource=S,photoSource=PH){
  const snapshot=JSON.parse(JSON.stringify(stateSource||S)),photos=photoSource||PH,manifest=[],files=[];
+ delete snapshot._fieldVault;
+ if(snapshot.set){delete snapshot.set.fieldProtection;delete snapshot.set.protectionDraftGroups}
  let index=0;
  const addPhoto=(owner,id,photo)=>{
   const parsed=dataUrlToBytes(photo),ext=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif' })[parsed.mime]||'bin';
@@ -2062,6 +2064,8 @@ function validBackup(data){
 function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,debts:(data.debts||[]).length,investments:(data.investments||[]).length,tasks:(data.tasks||[]).length,checklist:(data.checklist||[]).length}}
 function createBackupSnapshot(backupAt){
  const snapshot=JSON.parse(JSON.stringify(S));
+ delete snapshot._fieldVault;
+ if(snapshot.set){delete snapshot.set.fieldProtection;delete snapshot.set.protectionDraftGroups}
  if(backupAt)snapshot.set.backup=backupAt;
  snapshot.photos=JSON.parse(JSON.stringify(PH));
  return snapshot;
@@ -2234,6 +2238,7 @@ function replaceBackupData(data){
  S.categories=S.categories||base.categories;S.categories.e=S.categories.e||JSON.parse(JSON.stringify(DEFAULT_EXP));S.categories.i=S.categories.i||JSON.parse(JSON.stringify(DEFAULT_INC));
  S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};S.set=S.set||base.set;
  PH=data.photos&&typeof data.photos==='object'?JSON.parse(JSON.stringify(data.photos)):{};
+ FIELD_PROTECTION_KEY=null;
  EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();ensureProfileMetadata(S,new Date().toISOString());
  LOG=[];last=JSON.stringify(S);save.skip=1;save();theme();render();
  return backupCounts(data);
