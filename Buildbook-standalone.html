@@ -2175,14 +2175,15 @@ function journalReadablePath(change){
  }
  return parts.join(' → ')||'Данные профиля';
 }
+function journalNumber(value){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(value)}
 function journalFormatValue(value,key){
  if(value===undefined||value===null||value==='')return '—';
  if(typeof value==='boolean')return value?'Да':'Нет';
  if(typeof value==='number'){
   if(['amount','price','planned','cost','open','currentValue','principal','targetAmount','grossProfit','unitCost','unitPrice','costAmount'].includes(key))return R(value);
-  if(['qty','problemQty','writtenOffQty','targetQty'].includes(key))return N(value)+' шт.';
+  if(['qty','problemQty','writtenOffQty','targetQty'].includes(key))return journalNumber(value)+' шт.';
   if(key==='q')return QN[+value]||String(value);
-  return N(value);
+  return journalNumber(value);
  }
  if(key==='q'&&Number.isInteger(+value))return QN[+value]||String(value);
  if(key==='kind'){
