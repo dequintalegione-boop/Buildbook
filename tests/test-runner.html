@@ -269,6 +269,7 @@ api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','СС�
 });
 
 await test('Расход из вкладки «Деньги» автоматически добавляет комплектующее на склад',()=>{
+const funded=state(),cash=funded.accounts.find(account=>account.id==='cash');cash.open+=10000;api.setState(funded);
 moneyStockBaseline=api.balance('cash');api.action('nav','tx');api.action('tadd','e');const f=form();
 setv(f,'kind','e');setv(f,'date','2026-04-02');setv(f,'amount','1200');setv(f,'qty','2');setv(f,'cat','ССД');setv(f,'desc','SSD из финансового расхода');setv(f,'acc','cash');submit(f);
 const s=state(),tx=s.tx.find(x=>x.desc==='SSD из финансового расхода'),batch=tx&&s.batches.find(x=>x.id===tx.batchId);
@@ -578,13 +579,13 @@ assert(result.errors[0].row===4,'Не указан номер ошибочной
 assert(!s.batches.some(x=>x.desc==='Broken'),'Ошибочная строка попала в склад');
 });
 await test('Импорт CSV операций корректно обрабатывает доходы, расходы и переводы',()=>{
-api.setState(fixture());
+const importState=fixture();importState.accounts.find(account=>account.id==='card').open=75;api.setState(importState);
 const raw='Дата;Тип;Сумма;Описание;Категория;Касса;Откуда;Куда\n2026-05-02;Доход;650;Продажа;Другое;Наличные;;\n02.05.2026;Расход;75;Кабель;Другое;Карта;;\n2026-05-03;Перевод;125;Перевод тест;Переводы;;Наличные;Карта\n2026-05-03;Расход;ошибка;Сломано;Другое;Карта;;';
 const map={date:0,kind:1,amount:2,desc:3,cat:4,acc:5,fromAcc:6,toAcc:7};
 const result=api.importCsv(raw,'tx',map,'e');
 assert(result.added===3&&result.skipped===1,'Ожидалось 3 операции и 1 ошибка');
 assert(api.balance('cash')===1525,'Баланс наличных неверен после дохода и перевода');
-assert(api.balance('card')===50,'Баланс карты неверен после расхода и перевода');
+assert(api.balance('card')===125,'Баланс карты неверен после расхода и перевода с учётом начального остатка');
 const s=state();assert(s.tx.some(t=>t.kind==='transfer'&&t.amount===125),'Перевод не импортирован отдельным типом');
 assert(!s.tx.some(t=>t.desc==='Сломано'),'Ошибочная операция импортирована');
 });
@@ -1469,7 +1470,7 @@ const f=form(),beforeAlerts=alerts.length;
 setv(f,'kind','e');setv(f,'date','2026-04-04');setv(f,'amount','1200');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Расход сверх остатка');setv(f,'acc','cash');submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Расход сверх остатка'),'Расход с отрицательным итоговым балансом был сохранён');
 assert(api.balance('cash')===1000,'Баланс изменился после отклонённого расхода');
-assert(alerts.length>beforeAlerts&&alerts[alerts.length-1].includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств');
+assert(alerts.length>beforeAlerts&&alerts[alerts.length-1].includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств: '+alerts.slice(beforeAlerts).join(' | '));
 });
 
 await test('Перевод не может списать больше доступного остатка',()=>{
@@ -1502,7 +1503,7 @@ const tx=state().tx.find(item=>item.desc==='Редактируемый расх�
 api.action('te',tx.id);f=form();const beforeAlerts=alerts.length;setv(f,'amount','1200');submit(f);
 assert(state().tx.find(item=>item.id===tx.id).amount===800,'Редактирование позволило уйти балансу в минус');
 assert(api.balance('cash')===200,'Баланс изменился после отклонённого редактирования');
-assert(alerts.length>beforeAlerts,'Не показано предупреждение при редактировании');
+assert(alerts.length>beforeAlerts,'Не показано предупреждение при редактировании: '+alerts.slice(beforeAlerts).join(' | '));
 });
 
 await test('Удаление дохода не может сделать баланс отрицательным',()=>{
