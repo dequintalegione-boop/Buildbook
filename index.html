@@ -581,6 +581,8 @@ function undoJournalEntry(index){
   if(!journalWrite(restored,change.path,change.beforeExists,change.beforeValue))return {ok:false,message:'Не удалось безопасно восстановить одно из затронутых полей. Данные не изменены.'};
  }
  restored.schemaVersion=DATA_SCHEMA_VERSION;
+ const negative=negativeCashBalance(restored);
+ if(negative)return {ok:false,message:'Отмена приведёт к отрицательному балансу кассы «'+negative.account.name+'» ('+R(negative.balance)+'). Действие не отменено.'};
  S=restored;
  EXP=S.categories.e;INC=S.categories.i;
  syncCategories();normalizeStock();
@@ -650,6 +652,14 @@ const checkTransactionBalance=(next,previous=null)=>{
   }
  }
  return {ok:true};
+};
+const negativeCashBalance=state=>{
+ const accounts=Array.isArray(state&&state.accounts)?state.accounts:[],transactions=Array.isArray(state&&state.tx)?state.tx:[];
+ for(const account of accounts){
+  const balance=(Number(account.open)||0)+transactions.reduce((total,transaction)=>total+txAccountDelta(transaction,account.id),0);
+  if(!Number.isFinite(balance)||balance<-.000001)return {account,balance};
+ }
+ return null;
 };
 /* помощники интерфейса */
 const opt=(a,v)=>a.map(o=>{const[x,l]=Array.isArray(o)?o:[o,o];return`<option value="${esc(x)}"${x==v?' selected':''}>${esc(l)}</option>`}).join(''),catOpt=(k,v)=>Object.entries(k=='e'?EXP:INC).filter(([g,a])=>!(S.hiddenGroups[k]||[]).includes(g)||a.includes(v)).map(([g,a])=>{const items=a.filter(n=>!(S.hiddenCategories[k]||[]).includes(g+'::'+n)||n==v);return items.length?`<optgroup label="${esc(g)}">${opt(items,v)}</optgroup>`:''}).join(''),accOpt=v=>opt(S.accounts.map(a=>[a.id,a.name]),v);
@@ -1860,6 +1870,8 @@ function loadDemoData(){
  if(S.set.demoLoaded){alert('Демо-данные уже загружены. Сначала удалите их, чтобы загрузить заново.');return}
  const account=S.accounts[0];if(!account){alert('Сначала создайте кассу.');return}
  const types=[['Видеокарты','RTX 4070 Super',3,28000],['Процессоры','Ryzen 7 7700',3,12000],['Оперативка','DDR5 32 ГБ',6,5000],['ССД','NVMe 1 ТБ',3,6000]];
+ const requiredCash=types.reduce((total,item)=>total+item[2]*item[3],0);
+ if(bal(account)<requiredCash-.000001){alert('Для загрузки демо-данных в кассе «'+account.name+'» должно быть не менее '+R(requiredCash)+' свободных средств на закупки. Сейчас доступно '+R(Math.max(0,bal(account)))+'.');return}
  const batches=types.map(([type,desc,qty,price])=>({id:uid(),type,desc,qty,price,date:demoDate(20),supplier:'Демо-поставщик',link:'',note:'Демонстрационная партия',problemQty:0,writtenOffQty:0,problemReason:'',demo:true}));
  S.batches.push(...batches);
  batches.forEach(batch=>{const tx={id:uid(),kind:'e',date:batch.date,amount:batch.qty*batch.price,desc:'Закупка '+batch.desc,cat:batch.type,grp:S.stockGroup,qty:batch.qty,acc:account.id,note:'Демо-операция закупки',batchId:batch.id,demo:true};batch.txId=tx.id;S.tx.push(tx)});
@@ -2100,7 +2112,7 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     S.builds.push(x);S.seq=Math.max(S.seq,+num||0);stats.added++;
    }else if(kind=='accounts'){
     const sourceId=value(row,'id'),name=value(row,'name'),openRaw=value(row,'open'),open=openRaw===''?0:csvNumber(openRaw);
-    if(!name||!Number.isFinite(open))throw new Error('Нужны название кассы и корректный начальный остаток.');
+    if(!name||!Number.isFinite(open)||open<0)throw new Error('Нужны название кассы и неотрицательный начальный остаток.');
     if(sourceId&&S.accounts.some(a=>a.id==sourceId))throw new Error('Касса с таким ID уже существует.');
     if(S.accounts.some(a=>csvHeaderNorm(a.name)===csvHeaderNorm(name)))throw new Error('Касса с таким названием уже существует.');
     S.accounts.push({id:sourceId||uid(),name,open});stats.added++;
@@ -2417,7 +2429,9 @@ function replaceBackupData(data){
   hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
   set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false}
  };
- const incoming=JSON.parse(JSON.stringify(data));delete incoming.photos;S=migrateState(Object.assign(base,incoming)).state;
+ const incoming=JSON.parse(JSON.stringify(data));delete incoming.photos;const restored=migrateState(Object.assign(base,incoming)).state;
+ const negative=negativeCashBalance(restored);if(negative)throw new Error('Резервная копия содержит отрицательный баланс кассы «'+negative.account.name+'» ('+R(negative.balance)+'). Восстановление отменено.');
+ S=restored;
  S.accounts=Array.isArray(S.accounts)?S.accounts:base.accounts;
  S.trash=Array.isArray(S.trash)?S.trash:[];S.checklist=Array.isArray(S.checklist)?S.checklist:[];
  S.stockEvents=Array.isArray(S.stockEvents)?S.stockEvents:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];

@@ -1515,6 +1515,26 @@ assert(state().tx.some(tx=>tx.id===income.id),'Удаление дохода с 
 assert(api.balance('cash')===50,'Удаление дохода привело к отрицательному балансу');
 });
 
+
+await test('Демо-данные не загружаются, если закупки делают кассу отрицательной',()=>{
+api.setState(fixture());const before=state().batches.length,alertsBefore=alerts.length;
+api.action('demoload');
+assert(state().batches.length===before,'Демо-партии были добавлены при недостатке денег');
+assert(!state().tx.some(tx=>tx.demo),'Демо-расходы были созданы при недостатке средств');
+assert(api.balance('cash')===1000,'Баланс изменился после отклонённой загрузки демо-данных');
+assert(alerts.length>alertsBefore&&alerts[alerts.length-1].includes('не менее'),'Не показано требование к минимальному остатку для демо-загрузки');
+});
+
+await test('Отмена записи журнала не может сделать баланс отрицательным',()=>{
+api.setState(fixture());
+const add=(kind,amount,desc)=>{api.action('nav','tx');api.action('tadd',kind);const f=form();setv(f,'kind',kind);setv(f,'date','2026-04-10');setv(f,'amount',String(amount));setv(f,'qty','1');setv(f,'cat',kind==='i'?'Другое':'Бензин');setv(f,'desc',desc);setv(f,'acc','cash');submit(f)};
+add('e',1000,'Журнал: обнуление');add('i',100,'Журнал: доход');add('e',50,'Журнал: расход');
+const logs=api.getLogs(),index=logs.findIndex(entry=>String(entry.l||'').includes('Журнал: доход'));
+assert(index>=0,'Не найдена запись журнала о доходе');
+const result=api.undoEntry(index);
+assert(!result.ok,'Отмена дохода была разрешена при наличии последующего расхода');
+assert(api.balance('cash')===50,'Отмена записи журнала привела к отрицательному балансу');
+});
 await test('Графики дашборда показывают шкалу значений',()=>{
 const data=fixture();
 data.set.per='all';
