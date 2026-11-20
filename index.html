@@ -47,7 +47,7 @@ const defaultState=()=>({
  stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
  categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
  hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
- set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true}
+ set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,protectionDraftGroups:['financial','personal']}
 });
 let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',acc:''},report:'expenses'},dip;
 const DATA_SCHEMA_VERSION=4;
@@ -55,7 +55,7 @@ let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const repository=window.BuildbookRepository.create(DB_NAME);
 let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='',storageRevision=0,storageConflict=false,remoteStorageRevision=0;
-let storageChannel=null;
+let storageChannel=null,FIELD_PROTECTION_KEY=null,APP_LOCKED=false,LOCKED_PROFILE=null,FIELD_UNLOCK_RESOLVE=null,FIELD_UNLOCK_MESSAGE='';
 try{if(typeof BroadcastChannel==='function')storageChannel=new BroadcastChannel('buildbook-profile:'+DB_NAME)}
 catch(error){console.warn('Buildbook: уведомления между вкладками недоступны; проверка ревизии IndexedDB продолжит защищать данные.',error)}
 function markStorageConflict(revision){
@@ -225,6 +225,139 @@ async function photosAsBinary(photos){
   }
  }
  return stored;
+}
+
+const FIELD_PROTECTION_ITERATIONS=310000,FIELD_PROTECTION_MARKER='Buildbook field protection v1';
+function protectionBytesToBase64(bytes){
+ let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(bytes.length,i+0x8000)));
+ return btoa(binary);
+}
+function protectionBase64ToBytes(value){
+ const binary=atob(String(value||'')),bytes=new Uint8Array(binary.length);
+ for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+ return bytes;
+}
+async function deriveFieldProtectionKey(password,salt,iterations=FIELD_PROTECTION_ITERATIONS){
+ if(!window.crypto||!window.crypto.subtle)throw new Error('Этот браузер не поддерживает шифрование выбранных полей.');
+ const material=await window.crypto.subtle.importKey('raw',new TextEncoder().encode(String(password)),'PBKDF2',false,['deriveKey']);
+ return window.crypto.subtle.deriveKey({name:'PBKDF2',salt:protectionBase64ToBytes(salt),iterations,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function encryptProtectedValue(key,value){
+ const iv=new Uint8Array(12);window.crypto.getRandomValues(iv);
+ const plain=new TextEncoder().encode(JSON.stringify(value));
+ const cipher=await window.crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
+ return {iv:protectionBytesToBase64(iv),cipher:protectionBytesToBase64(new Uint8Array(cipher))};
+}
+async function decryptProtectedValue(key,payload){
+ const plain=await window.crypto.subtle.decrypt({name:'AES-GCM',iv:protectionBase64ToBytes(payload.iv)},key,protectionBase64ToBytes(payload.cipher));
+ return JSON.parse(new TextDecoder().decode(plain));
+}
+async function createFieldProtectionConfig(password,groups){
+ const pass=String(password||''),selected=[...new Set((groups||[]).filter(x=>x==='financial'||x==='personal'))];
+ if(pass.length<10)throw new Error('Пароль должен содержать не менее 10 символов.');
+ if(!selected.length)throw new Error('Выберите хотя бы одну группу полей.');
+ const salt=new Uint8Array(16);window.crypto.getRandomValues(salt);
+ const config={enabled:true,version:1,groups:selected,salt:protectionBytesToBase64(salt),iterations:FIELD_PROTECTION_ITERATIONS};
+ const key=await deriveFieldProtectionKey(pass,config.salt,config.iterations);
+ config.check=await encryptProtectedValue(key,FIELD_PROTECTION_MARKER);
+ return {config,key};
+}
+function collectProtectedFields(state,groups){
+ const result=[],financial=groups.includes('financial'),personal=groups.includes('personal');
+ const add=(collection,id,path,value)=>{if(value!==undefined&&value!==null)result.push({collection,id:String(id||''),path,value})};
+ const addProps=(collection,record,props)=>props.forEach(key=>add(collection,record.id,[key],record[key]));
+ if(personal)add('$root','',['notes'],state.notes);
+ if(personal)(state.accounts||[]).forEach(x=>addProps('accounts',x,['name']));
+ if(financial)(state.accounts||[]).forEach(x=>addProps('accounts',x,['open']));
+ (state.batches||[]).forEach(x=>{if(financial)addProps('batches',x,['price']);if(personal)addProps('batches',x,['desc','supplier','note'])});
+ (state.builds||[]).forEach(x=>{if(financial)addProps('builds',x,['planned','price','cost']);if(personal)addProps('builds',x,['name','builder','buyer','note'])});
+ (state.tx||[]).forEach(x=>{if(financial)addProps('tx',x,['amount','costAmount','grossProfit','unitCost','unitPrice']);if(personal)addProps('tx',x,['desc','cat','grp','note'])});
+ if(personal)(state.tasks||[]).forEach(x=>addProps('tasks',x,['text','who']));
+ (state.debts||[]).forEach(x=>{
+  if(personal)addProps('debts',x,['person','note']);
+  if(financial)addProps('debts',x,['principal']);
+  if(financial)(x.payments||[]).forEach((p,i)=>add('debts',x.id,['payments',i,'amount'],p.amount));
+ });
+ (state.investments||[]).forEach(x=>{
+  if(personal)addProps('investments',x,['name','platform','note']);
+  if(financial)addProps('investments',x,['currentValue']);
+  if(financial)(x.events||[]).forEach((e,i)=>add('investments',x.id,['events',i,'amount'],e.amount));
+ });
+ if(financial)(state.stockEvents||[]).forEach(x=>addProps('stockEvents',x,['amount','price','cost']));
+ return result;
+}
+function setProtectedField(state,entry,value){
+ let target;
+ if(entry.collection==='$root')target=state;
+ else target=(Array.isArray(state[entry.collection])?state[entry.collection]:[]).find(x=>String(x.id)===entry.id);
+ if(!target)throw new Error('В защищённой копии не найдена запись '+entry.collection+'/'+entry.id+'.');
+ let parent=target;
+ for(const segment of entry.path.slice(0,-1)){
+  if(parent==null||parent[segment]===undefined)throw new Error('Структура защищённого поля повреждена.');
+  parent=parent[segment];
+ }
+ const last=entry.path[entry.path.length-1];
+ if(parent==null||!Object.prototype.hasOwnProperty.call(parent,last))throw new Error('В защищённой копии отсутствует поле '+entry.path.join('.')+'.');
+ parent[last]=value;
+}
+async function protectProfileForStorage(stateSource,logsSource,key){
+ const state=JSON.parse(JSON.stringify(stateSource)),config=state.set&&state.set.fieldProtection;
+ if(!config||!config.enabled)return {state,logs:logsSource};
+ if(!key)throw new Error('Профиль защищён, но ключ шифрования недоступен. Разблокируйте профиль повторно.');
+ const fields=[];
+ for(const entry of collectProtectedFields(state,config.groups||[])){
+  const encrypted=await encryptProtectedValue(key,entry.value);
+  fields.push({collection:entry.collection,id:entry.id,path:entry.path,iv:encrypted.iv,cipher:encrypted.cipher});
+  setProtectedField(state,entry,null);
+ }
+ const logs=await encryptProtectedValue(key,logsSource||[]);
+ state._fieldVault={version:1,fields,logs};
+ return {state,logs:[]};
+}
+async function unprotectProfileFromStorage(storedState,password){
+ if(!storedState||!storedState.set||!storedState.set.fieldProtection||!storedState.set.fieldProtection.enabled)throw new Error('В профиле не включена защита полей.');
+ const config=storedState.set.fieldProtection,vault=storedState._fieldVault;
+ if(!vault||vault.version!==1||!Array.isArray(vault.fields)||!vault.logs)throw new Error('Защищённое хранилище повреждено или имеет неизвестную версию.');
+ const key=await deriveFieldProtectionKey(password,config.salt,config.iterations);
+ const marker=await decryptProtectedValue(key,config.check);
+ if(marker!==FIELD_PROTECTION_MARKER)throw new Error('Пароль неверный либо контрольная запись повреждена.');
+ const state=JSON.parse(JSON.stringify(storedState));
+ for(const entry of vault.fields){
+  const value=await decryptProtectedValue(key,{iv:entry.iv,cipher:entry.cipher});
+  setProtectedField(state,entry,value);
+ }
+ const logs=await decryptProtectedValue(key,vault.logs);
+ delete state._fieldVault;
+ return {state,logs,key};
+}
+function waitForFieldUnlock(profile){
+ return new Promise(resolve=>{
+  LOCKED_PROFILE=profile;FIELD_UNLOCK_RESOLVE=resolve;APP_LOCKED=true;FIELD_UNLOCK_MESSAGE='';render();
+ });
+}
+function renderFieldUnlockScreen(){
+ const main=$('#m');if(!main)return;
+ const nav=document.querySelector('nav');if(nav)nav.hidden=true;
+ main.innerHTML='<section class="tw" style="max-width:520px;margin:8vh auto;padding:26px"><h1>Профиль защищён паролем</h1><p class="mu">Введите пароль, чтобы расшифровать выбранные поля и открыть Buildbook. Данные в локальном хранилище остаются зашифрованными до разблокировки.</p><form id="field-unlock-form"><label>Пароль<input name="password" type="password" required autocomplete="current-password" autofocus></label><button class="btn p" type="submit">Разблокировать</button><p id="field-unlock-error" class="bad" role="alert">'+esc(FIELD_UNLOCK_MESSAGE)+'</p></form></section>';
+ const form=main.querySelector('#field-unlock-form'),input=form&&form.elements.password,button=form&&form.querySelector('button');
+ if(input)input.focus();
+ if(form)form.addEventListener('submit',async e=>{
+  e.preventDefault();if(button)button.disabled=true;
+  const password=String(input&&input.value||'');
+  try{
+   if(!LOCKED_PROFILE)throw new Error('Защищённый профиль недоступен.');
+   const unlocked=await unprotectProfileFromStorage(LOCKED_PROFILE.state,password);
+   FIELD_PROTECTION_KEY=unlocked.key;
+   const resolve=FIELD_UNLOCK_RESOLVE;
+   APP_LOCKED=false;LOCKED_PROFILE=null;FIELD_UNLOCK_RESOLVE=null;FIELD_UNLOCK_MESSAGE='';
+   if(resolve)resolve({state:unlocked.state,logs:unlocked.logs});
+  }catch(error){
+   FIELD_UNLOCK_MESSAGE=error&&error.message||'Не удалось разблокировать профиль.';
+   const output=main.querySelector('#field-unlock-error');if(output)output.textContent=FIELD_UNLOCK_MESSAGE;
+   if(button)button.disabled=false;
+   if(input){input.value='';input.focus()}
+  }
+ });
 }
 
 async function load(){
@@ -2084,7 +2217,7 @@ function replaceBackupData(data){
   stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
   categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
   hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
-  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true}
+  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,protectionDraftGroups:['financial','personal']}
  };
  const incoming=JSON.parse(JSON.stringify(data));delete incoming.photos;S=migrateState(Object.assign(base,incoming)).state;
  S.accounts=Array.isArray(S.accounts)?S.accounts:base.accounts;
