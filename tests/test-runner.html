@@ -580,6 +580,26 @@ await test('Автоопределение CSV распознаёт выгруз
 assert(api.guessCsvKind(['ID','Название кассы','Начальный остаток','Текущий баланс'])==='accounts','CSV касс распознан как другой тип');
 assert(api.guessCsvKind(['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'])==='tasks','CSV задач распознан как другой тип');
 });
+await test('Отклонённый CSV-перевод не оставляет созданную кассу',()=>{
+api.setState(fixture());
+const before=state().accounts.length;
+const stats=api.importCsv('ID;Тип операции;Дата;Сумма;Описание;Касса отправления;Касса получения\nbad-transfer;Перевод;2026-05-12;100;Невалидный перевод;Новая касса;','tx',{id:0,kind:1,date:2,amount:3,desc:4,fromAcc:5,toAcc:6},'e');
+assert(stats.added===0&&stats.skipped===1,'Некорректный перевод не был отклонён');
+assert(state().accounts.length===before&&!state().accounts.some(a=>a.name==='Новая касса'),'Отклонённая строка оставила новую кассу в профиле');
+});
+await test('Импортированная продажа комплектующего не меняет склад повторно при удалении',()=>{
+api.setState(fixture());
+const beforeBatch=state().batches.find(b=>b.id==='gpu-batch').qty,beforeAvailable=api.available('gpu-batch');
+const raw='ID;Тип операции;Дата;Сумма;Описание;Категория;Касса;Количество;Продажа комплектующего;ID партии;Себестоимость продажи;Валовая прибыль;Себестоимость за штуку;Цена за штуку\nimported-part-sale;Доход;2026-05-13;200;Импортированная продажа;Комплектующие;cash;1;Да;gpu-batch;100;100;100;200';
+const stats=api.importCsv(raw,'tx',{id:0,kind:1,date:2,amount:3,desc:4,cat:5,acc:6,qty:7,partSale:8,batchId:9,costAmount:10,grossProfit:11,unitCost:12,unitPrice:13},'e');
+assert(stats.added===1&&stats.skipped===0,'Историческая продажа не импортирована');
+const imported=state().tx.find(x=>x.id==='imported-part-sale');
+assert(imported&&imported.partSale&&imported.partSaleImportedSnapshot,'Импортированная продажа не помечена как снимок учёта');
+assert(state().batches.find(b=>b.id==='gpu-batch').qty===beforeBatch&&api.available('gpu-batch')===beforeAvailable,'Импорт операции повторно изменил склад');
+api.action('td','imported-part-sale');
+assert(!state().tx.some(x=>x.id==='imported-part-sale'),'Удаление импортированной операции не сработало');
+assert(state().batches.find(b=>b.id==='gpu-batch').qty===beforeBatch&&api.available('gpu-batch')===beforeAvailable,'Удаление импортированной продажи повторно вернуло деталь на склад');
+});
 await test('Сжатие фото уменьшает большие изображения и возвращает JPEG',async()=>{
 const canvas=w.document.createElement('canvas');
 canvas.width=2400;canvas.height=1600;
