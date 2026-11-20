@@ -602,7 +602,7 @@ function normalizeStock(){
  (S.builds||[]).forEach(build=>(build.lines||[]).forEach(line=>{line.problem=!!line.problem}));
 }
 const live=x=>x.lines.reduce((n,l)=>{const b=S.batches.find(b=>b.id==l.batchId);return n+(b?b.price*l.qty:0)},0),cost=x=>x.status==ST[3]&&x.cost!=null?x.cost:live(x);
-const sale=b=>b.price||b.planned||0,profit=b=>sale(b)-cost(b),txCashDelta=t=>t.kind==='i'||t.kind==='loan_in'||t.kind==='loan_repayment_in'||t.kind==='investment_in'?+t.amount:t.kind==='e'||t.kind==='loan_out'||t.kind==='loan_repayment_out'||t.kind==='investment_out'?-+t.amount:0,bal=a=>a.open+S.tx.reduce((n,t)=>n+(t.acc==a.id?txCashDelta(t):0)+(t.kind=='transfer'&&t.toAcc==a.id?+t.amount:0)-(t.kind=='transfer'&&t.fromAcc==a.id?+t.amount:0),0);
+const sale=b=>{const linked=S.tx.find(t=>t.buildId===b.id&&t.kind==='i');if(linked&&Number.isFinite(Number(linked.amount)))return Math.max(0,Number(linked.amount));const price=Number(b.price);if(b.status===ST[3])return Number.isFinite(price)?Math.max(0,price):0;return Math.max(0,Number.isFinite(price)&&price>0?price:Number(b.planned)||0)},profit=b=>sale(b)-cost(b),txCashDelta=t=>t.kind==='i'||t.kind==='loan_in'||t.kind==='loan_repayment_in'||t.kind==='investment_in'?+t.amount:t.kind==='e'||t.kind==='loan_out'||t.kind==='loan_repayment_out'||t.kind==='investment_out'?-+t.amount:0,bal=a=>a.open+S.tx.reduce((n,t)=>n+(t.acc==a.id?txCashDelta(t):0)+(t.kind=='transfer'&&t.toAcc==a.id?+t.amount:0)-(t.kind=='transfer'&&t.fromAcc==a.id?+t.amount:0),0);
 /* помощники интерфейса */
 const opt=(a,v)=>a.map(o=>{const[x,l]=Array.isArray(o)?o:[o,o];return`<option value="${esc(x)}"${x==v?' selected':''}>${esc(l)}</option>`}).join(''),catOpt=(k,v)=>Object.entries(k=='e'?EXP:INC).filter(([g,a])=>!(S.hiddenGroups[k]||[]).includes(g)||a.includes(v)).map(([g,a])=>{const items=a.filter(n=>!(S.hiddenCategories[k]||[]).includes(g+'::'+n)||n==v);return items.length?`<optgroup label="${esc(g)}">${opt(items,v)}</optgroup>`:''}).join(''),accOpt=v=>opt(S.accounts.map(a=>[a.id,a.name]),v);
 const syncCategories=()=>{S.categories={e:EXP,i:INC};S.hiddenCategories=S.hiddenCategories||{e:[],i:[]};S.hiddenGroups=S.hiddenGroups||{e:[],i:[]};T=(EXP[S.stockGroup]||[]).filter(x=>x!=='Компы и другое')};
@@ -727,9 +727,9 @@ function bform(id){const o=id&&S.builds.find(b=>b.id==id),x=o?{...o}:{id:uid(),n
 const freeGood=b=>goodAvailable(b,x.id),freeProblem=b=>problemAvailable(b,x.id);
 const f=modal(o?'Сборка №'+x.num:'Новая сборка',`<div class="g2">${fld('name','Название','text',x.name)}${fld('status','Статус','select','',opt(ST,x.status))}</div><div class="g2">${fld('builder','Сборщик','text',x.builder)}${fld('buyer','Кому продали (необязательно)','text',x.buyer)}</div><div class="g2">${fld('date','Дата сборки','date',x.date)}${fld('sold','Дата продажи','date',x.sold)}</div><div class="g2">${fld('planned','Плановая цена продажи, ₽','number',x.planned||'','min=0 step=any')}${fld('price','Цена продажи, ₽','number',x.price||'','min=0 step=any')}</div><div><b>Комплектующие</b><div id="ln" style="margin-top:8px"></div><button type="button" class="btn" data-add>+ Деталь</button></div><div class="sm" id="sm"></div><div class="g2">${fld('acc','Касса для продажи','select','',accOpt())}<label class="ck"><input type="checkbox" name="stx" checked> Записать доход при продаже</label></div><label>Фото тестов (необязательно)<input type="file" name="pf" accept="image/*" multiple></label><div id="ph"></div>${fld('note','Комментарий','area',x.note)}`,f=>{const d=fd(f),ls=L.filter(l=>l.batchId),sum={};
 for(const l of ls){const key=l.batchId+'|'+(l.problem?'problem':'normal');sum[key]=(sum[key]||0)+l.qty}for(const key in sum){const parts=key.split('|'),b=S.batches.find(b=>b.id==parts[0]),limit=parts[1]=='problem'?freeProblem(b):freeGood(b);if(!b||sum[key]>limit){alert('На складе не хватает '+(parts[1]=='problem'?'проблемных':'нормальных')+' единиц: '+(b?b.desc:parts[0]));return false}}
-const was=o&&o.status==ST[3];Object.assign(x,{name:d.name,status:d.status,builder:d.builder,buyer:d.buyer,date:d.date,sold:d.sold,planned:+d.planned||0,price:+d.price||0,note:d.note,lines:ls});const sold=x.status==ST[3];
-if(sold){if(!x.sold)x.sold=today();if(!was)x.cost=live(x)}else x.cost=null;
-const t=x.txId&&S.tx.find(t=>t.id==x.txId);if(sold){if(t){t.amount=x.price;t.date=x.sold}else if(d.stx&&x.price){const n={id:uid(),kind:'i',date:x.sold,amount:x.price,desc:'Продажа ПК №'+x.num,cat:'Сборка ПК',qty:1,acc:d.acc,note:'',buildId:x.id};S.tx.push(n);x.txId=n.id}}else if(t&&confirm('Статус изменён. Удалить связанный доход от продажи?')){S.tx=S.tx.filter(z=>z!=t);x.txId=''}
+const was=o&&o.status==ST[3],storedCost=x.cost;Object.assign(x,{name:d.name,status:d.status,builder:d.builder,buyer:d.buyer,date:d.date,sold:d.sold,planned:+d.planned||0,price:+d.price||0,note:d.note,lines:ls});const sold=x.status==ST[3];
+if(sold){if(!x.sold)x.sold=today();x.cost=was&&storedCost!=null&&Number.isFinite(Number(storedCost))?Number(storedCost):live(x)}else x.cost=null;
+const t=x.txId&&S.tx.find(t=>t.id==x.txId);if(sold){if(t){Object.assign(t,{kind:'i',date:x.sold,amount:x.price,acc:d.acc,buyer:x.buyer,desc:'Продажа ПК №'+x.num+' · '+(x.name||'Без названия'),cat:'Сборка ПК',grp:categoryGroup('i','Сборка ПК')||'Заработок',buildId:x.id})}else if(d.stx&&x.price){const n={id:uid(),kind:'i',date:x.sold,amount:x.price,desc:'Продажа ПК №'+x.num+' · '+(x.name||'Без названия'),cat:'Сборка ПК',grp:categoryGroup('i','Сборка ПК')||'Заработок',qty:1,acc:d.acc,note:'',buildId:x.id,buyer:x.buyer};S.tx.push(n);x.txId=n.id}}else if(t&&confirm('Статус изменён. Удалить связанный доход от продажи?')){S.tx=S.tx.filter(z=>z!=t);x.txId=''}
 P.length?PH[x.id]=P:delete PH[x.id];if(o)Object.assign(o,x);else{S.seq++;S.builds.push(x)}save();render()},1);
 const draw=()=>{
  const choices=[['','Выберите деталь']];
@@ -801,7 +801,10 @@ if(stockType){
  else{const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:transaction.id};transaction.batchId=batch.id;S.batches.push(batch)}
 }
 if(pcSale){
- const build=selectedBuild;build.status=ST[3];build.sold=d.date;build.price=amount;build.buyer=String(d.buyer||'').trim();build.cost=live(build);build.txId=transaction.id;
+ const build=selectedBuild,wasSold=build.status===ST[3],storedCost=build.cost;
+ build.status=ST[3];build.sold=d.date;build.price=amount;build.buyer=String(d.buyer||'').trim();
+ build.cost=wasSold&&storedCost!=null&&Number.isFinite(Number(storedCost))?Number(storedCost):live(build);
+ build.txId=transaction.id;
  transaction.buildId=build.id;transaction.buyer=build.buyer;transaction.desc='Продажа ПК №'+build.num+' · '+(build.name||'Без названия');
 }
 if(!o)S.tx.push(transaction);
@@ -1213,12 +1216,18 @@ const buildSaleDays=sold.map(b=>daysBetween(b.date,b.sold)).filter(v=>v!==null);
 const avgBuildSale=buildSaleDays.length?buildSaleDays.reduce((n,v)=>n+v,0)/buildSaleDays.length:null;
 const formatDays=v=>v===null?'—':(Math.round(v*10)/10).toLocaleString('ru-RU')+' дн.';
 const soldProfit=soldThisMonth.reduce((n,b)=>n+profit(b),0);
+const partSales=S.tx.filter(t=>t.partSale&&inP(t.date));
+const partUnits=partSales.reduce((n,t)=>n+Math.max(0,Number(t.qty)||0),0);
+const partCost=partSales.reduce((n,t)=>{const q=Math.max(0,Number(t.qty)||0),c=t.costAmount!=null?Number(t.costAmount):(Number(t.unitCost)||0)*q;return n+(Number.isFinite(c)?Math.max(0,c):0)},0);
+const partProfit=partSales.reduce((n,t)=>{const q=Math.max(0,Number(t.qty)||0),c=t.costAmount!=null?Number(t.costAmount):(Number(t.unitCost)||0)*q,p=t.grossProfit!=null?Number(t.grossProfit):(Number(t.amount)||0)-c;return n+(Number.isFinite(p)?p:0)},0);
+const avgMarkup=partUnits?partProfit/partUnits:null,avgMarkupRate=partCost?partProfit/partCost*100:null;
+const markupCard='<div class="kp"><span>Средняя наценка на единицу товара</span><b class="'+(avgMarkup===null?'':avgMarkup>=0?'ok':'bad')+'">'+(avgMarkup===null?'—':R(avgMarkup))+'</b><small>'+(avgMarkup===null?'Нет продаж комплектующих за выбранный период':(avgMarkupRate===null?'На одну проданную штуку':'Наценка '+N(avgMarkupRate)+'% к закупочной цене · '+N(partUnits)+' шт.'))+'</small></div>';
 const kpis='<div class="k">'+
 kpi('Стоимость склада',R(stockValue))+
 kpi('Продано за месяц',soldThisMonth.length+' шт.')+
 kpi('Заработок за месяц',R(soldProfit),soldProfit>=0?'ok':'bad')+
 kpi('Проблемные детали',problemQty+' шт.',problemQty?'w':'')+
-'</div>';
+'</div><div class="k">'+markupCard+'</div>';
 const statusCards='<section class="qd"><h2>Сборки по статусам</h2><div class="ac2">'+ST.map(status=>'<div class="kp"><span>'+esc(status)+'</span><b>'+S.builds.filter(b=>b.status==status).length+'</b></div>').join('')+'</div></section>';
 const totalCash=S.accounts.reduce((n,a)=>n+bal(a),0);
 const cashCards='<section class="qd"><h2>Баланс по кассам</h2><div class="ac2">'+S.accounts.map(a=>'<div class="kp"><span>'+esc(a.name)+'</span><b>'+R(bal(a))+'</b></div>').join('')+'</div><p class="rpt-note">Общий баланс: <b>'+R(totalCash)+'</b></p></section>';
