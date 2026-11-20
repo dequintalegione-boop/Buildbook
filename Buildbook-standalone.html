@@ -1332,7 +1332,7 @@ const partUnits=partSales.reduce((n,t)=>n+Math.max(0,Number(t.qty)||0),0);
 const partCost=partSales.reduce((n,t)=>{const q=Math.max(0,Number(t.qty)||0),c=t.costAmount!=null?Number(t.costAmount):(Number(t.unitCost)||0)*q;return n+(Number.isFinite(c)?Math.max(0,c):0)},0);
 const partProfit=partSales.reduce((n,t)=>{const q=Math.max(0,Number(t.qty)||0),c=t.costAmount!=null?Number(t.costAmount):(Number(t.unitCost)||0)*q,p=t.grossProfit!=null?Number(t.grossProfit):(Number(t.amount)||0)-c;return n+(Number.isFinite(p)?p:0)},0);
 const avgMarkup=partUnits?partProfit/partUnits:null,avgMarkupRate=partCost?partProfit/partCost*100:null;
-const markupCard='<div class="kp"><span>Средняя наценка на единицу товара</span><b class="'+(avgMarkup===null?'':avgMarkup>=0?'ok':'bad')+'">'+(avgMarkup===null?'—':R(avgMarkup))+'</b><small>'+(avgMarkup===null?'Нет продаж комплектующих за выбранный период':(avgMarkupRate===null?'На одну проданную штуку':'Наценка '+N(avgMarkupRate)+'% к закупочной цене · '+N(partUnits)+' шт.'))+'</small></div>';
+const markupCard='<div class="kp"><span>Средняя наценка на единицу товара</span><b class="'+(avgMarkup===null?'':avgMarkup>=0?'ok':'bad')+'">'+(avgMarkup===null?'—':R(avgMarkup))+'</b><small>'+(avgMarkup===null?'Нет продаж комплектующих за выбранный период':(avgMarkupRate===null?'На одну проданную штуку':'Наценка '+avgMarkupRate.toLocaleString('ru-RU',{maximumFractionDigits:2})+'% к закупочной цене · '+N(partUnits)+' шт.'))+'</small></div>';
 const kpis='<div class="k">'+
 kpi('Стоимость склада',R(stockValue))+
 kpi('Продано за месяц',soldThisMonth.length+' шт.')+
@@ -1944,11 +1944,11 @@ const CSV_FIELDS={
   ['batchDesc','Описание партии',['описаниепартии','batchdesc']],
   ['batchType','Тип партии',['типпартии','batchtype']],
   ['debtId','ID долга',['debtid','иддолга']],
-  ['debtPaymentId','ID платежа по долгу',['debtpaymentid','идплатежадолга']],
-  ['debtRole','Роль операции по долгу',['debtrole','рольдолга']],
+  ['debtPaymentId','ID платежа по долгу',['debtpaymentid','идплатежадолга','идплатежаподолгу']],
+  ['debtRole','Роль операции по долгу',['debtrole','рольдолга','рольоперацииподолгу']],
   ['investmentId','ID инвестиции',['investmentid','идинвестиции']],
   ['investmentEventId','ID движения инвестиции',['investmenteventid','иддвиженияинвестиции']],
-  ['investmentRole','Роль операции инвестиции',['investmentrole','рольинвестиции']]
+  ['investmentRole','Роль операции инвестиции',['investmentrole','рольинвестиции','рольоперацииинвестиции']]
  ],
  debts:[
   ['id','ID долга',['id','debtid','иддолга']],['direction','Направление',['направление','direction','типдолга']],['person','Кому / от кого',['человек','контрагент','комуоткого','person']],['principal','Сумма долга',['суммадолга','сумма','principal','amount']],['date','Дата',['дата','date']],['dueDate','Срок возврата',['сроквозврата','срок','duedate']],['accountId','ID кассы',['idкассы','accountid','касса']],['note','Комментарий',['комментарий','note']],['status','Статус',['статус','status']],['originTxId','ID исходной операции',['исходнаяоперацияid','origintxid']],['paymentsJson','Платежи JSON',['платежиjson','paymentsjson']]
@@ -2695,9 +2695,14 @@ function applyLayoutEditing(){
 function persistLayoutOrder(source){
  const parent=source&&source.parentElement,container=source&&source.dataset.layoutContainer;
  if(!parent||!container)return;
- const order=[...parent.children].filter(x=>x.dataset.layoutContainer===container).map(x=>x.dataset.layoutId);
- if(container==='sidebar')S.set.navOrder=order;
- else{S.set.layoutOrders=S.set.layoutOrders||{};S.set.layoutOrders[container]=order}
+ let order;
+ if(container==='sidebar'){
+  order=[...parent.querySelectorAll('button[data-id]')].filter(x=>!x.hidden&&x.dataset.id).map(x=>'nav:'+x.dataset.id);
+  S.set.navOrder=order;
+ }else{
+  order=[...parent.children].filter(x=>x.dataset.layoutContainer===container).map(x=>x.dataset.layoutId);
+  S.set.layoutOrders=S.set.layoutOrders||{};S.set.layoutOrders[container]=order;
+ }
  save.skip=1;save();render();
 }
 function render(){
@@ -2815,9 +2820,9 @@ td:()=>{const t=find('tx',id);if(!t)return;if(t.buildId){alert('Продажа �
 aadd:()=>accountForm(),
 aedit:()=>accountForm(id),
 catbrowse:()=>categoryBrowser(),
-cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>x.dataset.catGroup===id);if(select&&select.value)act('ccedit',catKey(k,g,select.value))},
-cchidepick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>x.dataset.catGroup===id);if(select&&select.value)act('cchide',catKey(k,g,select.value))},
-ccdelpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>x.dataset.catGroup===id);if(select&&select.value)act('ccdel',catKey(k,g,select.value))},
+cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccedit',catKey(k,g,select.value))},
+cchidepick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('cchide',catKey(k,g,select.value))},
+ccdelpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccdel',catKey(k,g,select.value))},
 txcat:()=>{try{const[k,g,c]=JSON.parse(decodeURIComponent(id));V.t.k=k;V.t.grp=g;V.t.cat=c;const overlay=document.querySelector('.ov');if(overlay)overlay.remove();render();toast('Показана категория «'+c+'».')}catch(error){alert('Не удалось выбрать категорию.')}},
 txcatclear:()=>{V.t.k='';V.t.cat='';V.t.grp='';const overlay=document.querySelector('.ov');if(overlay)overlay.remove();render()},
 planadd:()=>salesPlanForm(),planedit:()=>salesPlanForm(id),plandel:()=>{const plan=S.salesPlans.find(x=>x.id===id);if(!plan||!confirm('Удалить цель «'+planLabel(plan)+'» за '+plan.month+'?'))return;S.salesPlans=S.salesPlans.filter(x=>x.id!==id);save();render();toast('Цель удалена.')},
