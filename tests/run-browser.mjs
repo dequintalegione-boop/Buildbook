@@ -44,7 +44,7 @@ try {
   console.log(summary);
   for (const line of results) console.log(line);
 
-  if (failed.length || pageErrors.length) {
+  if (failed.length || pageErrors.length || consoleErrors.length) {
     if (pageErrors.length) console.error('Ошибки JavaScript:', pageErrors.join('; '));
     if (consoleErrors.length) console.error('Ошибки консоли браузера:', consoleErrors.join('; '));
     process.exitCode = 1;
