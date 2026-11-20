@@ -18,7 +18,7 @@ label{display:grid;gap:4px;color:var(--m);font-size:13px}input,select,textarea{f
 .ov{position:fixed;inset:0;background:#0009;display:grid;place-items:center;padding:14px;z-index:9;overflow:auto}.md{background:var(--s);border:1px solid var(--b);border-radius:14px;padding:22px;width:min(580px,100%);display:grid;gap:12px;max-height:94vh;overflow:auto}.md.w{width:min(780px,100%)}.md h3{margin:0;font-size:19px}.ac{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g3{display:grid;grid-template-columns:1fr 90px 40px;gap:8px;margin-bottom:6px}.sm{background:var(--s2);border-radius:8px;padding:10px 12px}
 .ac2{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:14px}.ts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--t);color:var(--bg);padding:9px 18px;border-radius:99px;z-index:20}
 .ft{margin-top:36px;padding:14px 16px;border:1px solid var(--b);border-radius:12px;color:var(--m);text-align:center}.ft b{color:var(--t);letter-spacing:.02em}
-.from-build td{background:color-mix(in srgb,var(--w) 11%,var(--s))}.cat-group{border:1px solid var(--b);border-radius:10px;padding:12px;margin:10px 0;background:var(--s)}.cat-select-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;align-items:end;gap:10px;margin-top:10px}.cat-select-row select{min-width:0}.cat-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--b)}.cat-item:first-child{border-top:0}.cat-actions{display:flex;gap:4px;flex-wrap:wrap}.muted-item{opacity:.55}.sell-scroll{max-height:52vh;overflow:auto;border:1px solid var(--b);border-radius:10px}.sell-scroll table{min-width:700px}.sell-scroll input[type=number]{min-width:85px}.sell-scroll tr:has(input[type=checkbox]:checked){background:color-mix(in srgb,var(--a) 8%,transparent)}
+.from-build td{background:color-mix(in srgb,var(--w) 11%,var(--s))}.kit-editor{display:grid;gap:12px;margin:12px 0}.kit-line{padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--s);display:grid;gap:9px}.kit-line .g2{display:grid;grid-template-columns:1fr 1.25fr;gap:10px}.kit-line label{display:grid;gap:5px;min-width:0}.kit-line input,.kit-line select{width:100%;min-width:0}.kit-line-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}.kit-summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:12px;border-radius:10px;background:var(--bg);border:1px solid var(--b)}.kit-summary strong{font-variant-numeric:tabular-nums}.kit-summary .bad{color:var(--bad)}.kit-summary .ok{color:var(--ok)}.kit-help{margin:0}.cat-group{border:1px solid var(--b);border-radius:10px;padding:12px;margin:10px 0;background:var(--s)}.cat-select-row{display:grid;grid-template-columns:minmax(180px,1fr) auto;align-items:end;gap:10px;margin-top:10px}.cat-select-row select{min-width:0}.cat-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--b)}.cat-item:first-child{border-top:0}.cat-actions{display:flex;gap:4px;flex-wrap:wrap}.muted-item{opacity:.55}.sell-scroll{max-height:52vh;overflow:auto;border:1px solid var(--b);border-radius:10px}.sell-scroll table{min-width:700px}.sell-scroll input[type=number]{min-width:85px}.sell-scroll tr:has(input[type=checkbox]:checked){background:color-mix(in srgb,var(--a) 8%,transparent)}
 .rpt-toolbar{align-items:center}.rpt-tabs{display:flex;gap:6px;flex-wrap:wrap}.rpt-scroll{overflow:auto;background:var(--s);border:1px solid var(--b);border-radius:12px}.rpt-scroll table{min-width:1180px}.rpt-scroll th{position:sticky;top:0;z-index:2}.rpt-scroll th:first-child,.rpt-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--s)}.rpt-scroll th:first-child{z-index:3;background:var(--s2)}.rpt-group td,.rpt-group th{font-weight:700;background:var(--s2)!important}.rpt-total td,.rpt-total th{font-weight:800;background:color-mix(in srgb,var(--a) 9%,var(--s))!important;border-top:2px solid var(--a)}.rpt-cat th{font-weight:500;padding-left:26px}.rpt-note{margin:10px 0;color:var(--m);font-size:13px}.rpt-summary{min-width:0!important}.rpt-summary td:first-child{min-width:150px}.rpt-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}.rpt-detail{min-width:850px!important}.rpt-chart{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px;margin:12px 0;overflow:hidden}.gsearch-results{display:grid;gap:6px;max-height:52vh;overflow:auto}.gsearch-result{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;width:100%;white-space:normal}.gsearch-result span{font-weight:600}.gsearch-result small{color:var(--m);text-align:right}.gsearch-help{color:var(--m);font-size:12px}
 @media(max-width:760px){.rpt-kpi{grid-template-columns:1fr 1fr}.rpt-scroll table{min-width:1060px}}
 @media(max-width:860px){.k{grid-template-columns:1fr 1fr}.kp:first-child{grid-column:1/-1}}
@@ -708,11 +708,11 @@ const rowHtml=rows.map(b=>{
  const normal=goodAvailable(b),bad=problemAvailable(b),off=writtenOff(b),allocated=used(b),marked=problemMarked(b);
  return '<tr class="'+(marked?'pr':'')+'"><td>'+esc(b.type)+'</td><td>'+esc(b.desc)+(marked?' <span class="bd bad">проблема: '+marked+' шт.</span> <small>'+esc(b.problemReason)+'</small>':'')+(safe(b.link)?' <a href="'+esc(b.link)+'" target="_blank" rel="noopener">ссылка</a>':'')+'</td><td>'+D(b.date)+'</td><td class="r">'+R(b.price)+'</td><td class="r">'+b.qty+'</td><td class="r ok">'+normal+'</td><td class="r '+(bad?'w':'')+'">'+bad+'</td><td class="r">'+off+'</td><td class="r">'+(allocated||'—')+'</td><td class="r">'+R(b.price*(normal+bad))+'</td><td class="r"><button class="btn ic" data-a="pprob" data-id="'+b.id+'" title="Отметить часть остатка как проблемную">⚠</button> '+(marked?'<button class="btn ic" data-a="pclear" data-id="'+b.id+'" title="Снять отметку с части проблемного остатка">↺</button> ':'')+(bad?'<button class="btn ic" data-a="pwriteoff" data-id="'+b.id+'" title="Списать проблемные единицы">−</button> ':'')+'<button class="btn ic" data-a="pe" data-id="'+b.id+'" title="Изменить">✎</button> <button class="btn ic" data-a="pd" data-id="'+b.id+'" title="Удалить">✕</button></td></tr>';
 });
-return head('Склад','<button class="btn" data-a="phistory">История проблем и списаний</button> <button class="btn" data-a="sellParts">Продать детали</button> <button class="btn p" data-a="padd">+ Закупка</button>')+'<section class="qd" style="margin-bottom:14px"><div class="hd"><h2>Готовые ПК на складе</h2><span class="mu">'+readyBuilds.length+' шт.</span></div>'+table(['ПК','Комплектация','Статус','Дата сборки','Себестоимость','Цена продажи','Сборщик',''],readyRows,'Готовых ПК пока нет. Завершите сборку во вкладке «Сборки», чтобы она появилась здесь.')+'</section><div class="k">'+kpi('Нормальный остаток',R(goodValue))+kpi('Проблемный остаток',R(problemValue),problemValue?'w':'')+kpi('Свободно без проблем',goodQty+' шт.')+kpi('Проблемные свободные',problemQty+' шт.',problemQty?'w':'')+'</div>'+
+return head('Склад','<button class="btn" data-a="phistory">История проблем и списаний</button> <button class="btn" data-a="sellParts">Продать детали</button>')+'<section class="qd" style="margin-bottom:14px"><div class="hd"><h2>Готовые ПК на складе</h2><span class="mu">'+readyBuilds.length+' шт.</span></div>'+table(['ПК','Комплектация','Статус','Дата сборки','Себестоимость','Цена продажи','Сборщик',''],readyRows,'Готовых ПК пока нет. Завершите сборку во вкладке «Сборки», чтобы она появилась здесь.')+'</section><div class="k">'+kpi('Нормальный остаток',R(goodValue))+kpi('Проблемный остаток',R(problemValue),problemValue?'w':'')+kpi('Свободно без проблем',goodQty+' шт.')+kpi('Проблемные свободные',problemQty+' шт.',problemQty?'w':'')+'</div>'+
 '<p class="mu" style="margin:-4px 0 12px">Списано за всё время: '+offQty+' шт. · Проблемные единицы не предлагаются в сборки автоматически — их можно выбрать отдельно.</p>'+
 '<div class="qg" style="margin-bottom:14px"><section class="qd"><b>Предметов по категориям</b>'+RT.bars(Wd.s1[3](),N)+'</section><section class="qd"><b>Стоимость по категориям</b>'+RT.bars(Wd.s2[3](),R)+'</section></div>'+
 '<div class="fl"><select data-f="s.type">'+opt([['','Все типы'],...T],f.type)+'</select><input data-f="s.q" placeholder="Поиск по описанию" value="'+esc(f.q)+'"><label>С даты<input type="date" data-f="s.from" value="'+esc(f.from)+'"></label><label>По дату<input type="date" data-f="s.to" value="'+esc(f.to)+'"></label><label class="ck"><input type="checkbox" data-f="s.av" '+(f.av?'checked':'')+'> Только свободные</label><label class="ck"><input type="checkbox" data-f="s.problemOnly" '+(f.problemOnly?'checked':'')+'> Только с проблемами</label><label class="ck"><input type="checkbox" data-f="s.showZero" '+(f.showZero?'checked':'')+'> Показать полностью проданные</label></div>'+
-table(['Тип','Описание','Дата','Цена закупки','В партии','Нормальные','Проблемные','Списано','В сборках','Стоимость остатка',''],rowHtml,'Склад пуст. Добавьте первую закупку: деталь попадёт на склад, а расход запишется в кассу.');
+table(['Тип','Описание','Дата','Цена закупки','В партии','Нормальные','Проблемные','Списано','В сборках','Стоимость остатка',''],rowHtml,'Склад пуст. Оформляйте обычные закупки или покупки комплектом через «Деньги» → «Транзакция».');
 }
 function stockHistory(){
  const items=(S.stockEvents||[]).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
@@ -851,27 +851,77 @@ const group=categoryGroup('e',cat);
 return group===S.stockGroup&&Array.isArray(EXP[group])&&EXP[group].includes(cat)&&cat!=='Компы и другое';
 };
 function tform(id,k0){
-const o=id&&S.tx.find(t=>t.id==id),linkedBatch=o&&o.batchId&&S.batches.find(b=>b.id===o.batchId&&b.txId===o.id),linkedBuild=o&&o.buildId&&S.builds.find(b=>b.id===o.buildId),k=o?o.kind:k0||'e';
+const o=id&&S.tx.find(t=>t.id==id),linkedKit=!!(o&&o.kitPurchase),kitBatches=linkedKit?S.batches.filter(b=>b.kitPurchaseId===o.id||(o.kitBatchIds||[]).includes(b.id)):[],linkedBatch=o&&o.batchId&&S.batches.find(b=>b.id===o.batchId&&b.txId===o.id),linkedBuild=o&&o.buildId&&S.builds.find(b=>b.id===o.buildId),k=o?o.kind:k0||'e';
 const buildOptions=()=>S.builds.filter(b=>b.status===ST[1]||b.status===ST[2]||b.id===(linkedBuild&&linkedBuild.id)).map(b=>[b.id,'№'+b.num+' · '+(b.name||'Без названия')+' · '+b.status]);
 const buildDetails=b=>b?(b.lines||[]).map(l=>{const part=S.batches.find(x=>x.id===l.batchId);return part?part.type+' — '+part.desc+' × '+l.qty:''}).filter(Boolean).join('\n'):'';
+const kitLineHtml=(row={})=>'<div class="kit-line" data-kit-line>'+
+'<input type="hidden" data-kit-id value="'+esc(row.id||'')+'">'+
+'<div class="g2"><label>Тип комплектующего<select data-kit-type>'+opt(T,row.type||T[0])+'</select></label><label>Название / модель<input type="text" data-kit-desc value="'+esc(row.desc||'')+'" placeholder="Например, RTX 4070 Super"></label></div>'+
+'<div class="g2"><label>Количество<input type="number" data-kit-qty min="1" step="1" value="'+esc(row.qty??1)+'"></label><label>Себестоимость за штуку, ₽<input type="number" data-kit-cost min="0" step="0.01" value="'+esc(row.price??'')+'" placeholder="0.00"></label></div>'+
+'<div class="kit-line-footer"><small data-kit-line-total>По строке: 0 ₽</small><button type="button" class="btn" data-kit-remove>Убрать позицию</button></div></div>';
+const existingKitRows=linkedKit?kitBatches.map(b=>({id:b.id,type:b.type,desc:b.desc,qty:b.qty,price:b.price})):[];
+const categoryOptions=catOpt(k,o&&o.cat)+(linkedKit?'<option value="Комплектная покупка" selected>Покупка комплектом</option>':'');
 const body='<div class="g2">'+fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))+fld('date','Дата','date',o?o.date:today())+'</div>'+
-'<div class="g2">'+fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')+fld('qty','Количество','number',o?o.qty:1,'min=1')+'</div>'+
-fld('cat','Категория','select','',catOpt(k,o&&o.cat))+
+'<div class="g2">'+fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=0.01')+fld('qty','Количество','number',o?o.qty:1,'min=1')+'</div>'+
+'<div id="purchase-mode-field">'+fld('purchaseMode','Режим расхода','select','',opt([['single','Обычный расход'],['kit','Покупка комплектом — разобрать на детали']],linkedKit?'kit':'single'))+'</div>'+
+'<div id="category-field">'+fld('cat','Категория','select','',categoryOptions)+'</div>'+
 '<div id="pc-sale-fields" style="display:none">'+fld('buildId','Готовый ПК','select','',opt([['','Выберите собранный ПК'],...buildOptions()],linkedBuild&&linkedBuild.id||o&&o.buildId))+
 fld('buyer','Покупатель','text',linkedBuild?linkedBuild.buyer:o&&o.buyer||'')+
 '<label>Состав выбранного ПК<textarea name="buildInfo" readonly rows="3">'+esc(buildDetails(linkedBuild))+'</textarea></label>'+
 '<p class="mu">При проведении продажи сборка перейдёт в статус «Продана» и исчезнет из доступных ПК на складе.</p></div>'+
-'<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст партию на складе. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
-fld('desc','Описание','text',linkedBatch?linkedBatch.desc:o?o.desc:'')+
+'<section id="kit-purchase-fields" class="kit-editor" style="display:none"><div><b>Комплектующие внутри покупки</b><p class="mu kit-help">Добавьте каждую деталь отдельно. Укажите количество и себестоимость за одну единицу. Итог по всем строкам обязан точно совпасть с суммой покупки.</p></div>'+
+'<div id="kit-lines">'+(existingKitRows.length?existingKitRows.map(kitLineHtml).join(''):kitLineHtml({}))+'</div>'+
+'<div class="kit-line-footer"><button type="button" class="btn" data-kit-add>+ Добавить комплектующее</button><small>Можно добавлять любое количество строк</small></div>'+
+'<div class="kit-summary"><span>Распределено по комплектующим</span><strong data-kit-summary>0 ₽ из 0 ₽</strong><b data-kit-difference>Укажите сумму</b></div></section>'+
+'<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст складскую партию. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
+fld('desc',linkedKit?'Описание покупки':'Описание','text',linkedBatch?linkedBatch.desc:o?o.desc:'')+
 fld('acc','Касса','select','',accOpt(o&&o.acc))+
 fld('note','Комментарий (для «Проебы» обязателен)','area',linkedBatch?linkedBatch.note:o?o.note:'');
 const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',body,form=>{
-const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,stockType=d.kind==='e'&&stockExpenseType(d.cat),pcSale=d.kind==='i'&&d.cat==='Сборка ПК',selectedBuild=pcSale&&S.builds.find(b=>b.id===d.buildId),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
-if(d.cat==='Проебы'&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
+const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,kitMode=d.kind==='e'&&d.purchaseMode==='kit',stockType=d.kind==='e'&&!kitMode&&stockExpenseType(d.cat),pcSale=d.kind==='i'&&d.cat==='Сборка ПК',selectedBuild=pcSale&&S.builds.find(b=>b.id===d.buildId),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
+if(linkedKit&&!kitMode){alert('Эта операция оформлена как покупка комплектом. Изменяйте её состав в режиме «Покупка комплектом».');return false}
 if(linkedBatch&&!stockType){alert('Эта операция связана со складской партией. Оставьте категорию комплектующих или удалите закупку вместе с партией.');return false}
 if(linkedBuild&&!pcSale){alert('Эта операция связана с продажей ПК. Оставьте категорию «Сборка ПК».');return false}
 if(!Number.isFinite(amount)||amount<0){alert('Укажите корректную сумму операции.');return false}
 if(!accountExists){alert('Выберите существующую кассу.');return false}
+let kitRows=[],oldKitBatches=linkedKit?kitBatches:[];
+if(kitMode){
+ if(amount<=0){alert('Сумма покупки комплектом должна быть больше нуля.');return false}
+ if(!desc){alert('Укажите описание покупки, например «Компьютер целиком».');return false}
+ kitRows=[...form.querySelectorAll('[data-kit-line]')].map(row=>({
+  id:row.querySelector('[data-kit-id]').value.trim(),
+  type:row.querySelector('[data-kit-type]').value,
+  desc:row.querySelector('[data-kit-desc]').value.trim(),
+  qty:Number(row.querySelector('[data-kit-qty]').value),
+  price:Number(row.querySelector('[data-kit-cost]').value),
+  costRaw:row.querySelector('[data-kit-cost]').value.trim()
+ }));
+ if(!kitRows.length){alert('Добавьте хотя бы одну комплектующую.');return false}
+ const seen=new Set();let total=0;
+ for(const row of kitRows){
+  if(!T.includes(row.type)){alert('Выберите корректный тип комплектующего для каждой строки.');return false}
+  if(!row.desc){alert('Заполните название или модель каждой комплектующей.');return false}
+  if(!Number.isInteger(row.qty)||row.qty<1){alert('Количество комплектующих должно быть целым числом больше нуля.');return false}
+  if(row.costRaw===''||!Number.isFinite(row.price)||row.price<0){alert('Укажите неотрицательную себестоимость каждой комплектующей.');return false}
+  if(row.id&&seen.has(row.id)){alert('Одна и та же складская позиция указана несколько раз.');return false}
+  if(row.id)seen.add(row.id);
+  total+=row.qty*row.price;
+ }
+ total=Math.round((total+Number.EPSILON)*100)/100;
+ const purchaseTotal=Math.round((amount+Number.EPSILON)*100)/100;
+ if(Math.abs(total-purchaseTotal)>0.009){alert('Сумма себестоимости комплектующих должна точно совпадать с суммой покупки. Покупка: '+R(purchaseTotal)+', распределено: '+R(total)+', разница: '+R(Math.abs(purchaseTotal-total))+'. Операция не сохранена.');return false}
+ if(oldKitBatches.some(b=>!seen.has(b.id)&&(used(b)>0||writtenOff(b)>0||problemMarked(b)>0||S.tx.some(tx=>tx.partSale&&tx.batchId===b.id)))){
+  alert('Нельзя убрать комплектующую из покупки: она уже используется в сборке, продана, отмечена проблемной или списана. Сначала разберите связанные операции.');return false
+ }
+ for(const row of kitRows)if(row.id){
+  const batch=oldKitBatches.find(b=>b.id===row.id);
+  if(!batch){alert('Одна из комплектующих больше не связана с этой покупкой. Обновите окно и повторите.');return false}
+  const minQty=used(batch)+writtenOff(batch)+problemMarked(batch);
+  if(row.qty<minQty){alert('Нельзя уменьшить количество «'+batch.desc+'» ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}
+ }
+ if(!linkedKit&&o&&o.batchId){alert('Сначала отвяжите обычную закупку от склада или создайте для неё отдельную комплектную покупку.');return false}
+}else if(linkedKit){alert('Состав комплектной покупки нельзя преобразовать в обычную операцию.');return false}
+if(d.cat==='Проебы'&&!kitMode&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
 const cashCheck=checkTransactionBalance({...o,kind:d.kind,date:d.date,amount,acc:d.acc},o||null);
 if(!cashCheck.ok){alert(cashCheck.error);return false}
 if(stockType){
@@ -879,14 +929,30 @@ if(stockType){
  if(linkedBatch&&qty<writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch)){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка.');return false}
 }
 if(pcSale){
- if(!selectedBuild){alert('Выберите готовый ПК из списка сборок.');return false}
+ if(!selectedBuild){alert('Выберите готовый ПК из списка.');return false}
  if(selectedBuild.status!==ST[1]&&selectedBuild.status!==ST[2]&&selectedBuild.id!==(linkedBuild&&linkedBuild.id)){alert('Продавать можно только собранные или протестированные ПК.');return false}
  if(selectedBuild.status===ST[3]&&selectedBuild.id!==(linkedBuild&&linkedBuild.id)){alert('Этот ПК уже продан.');return false}
  if(!Number.isFinite(amount)||amount<=0||!accountExists){alert('Укажите цену продажи больше нуля и кассу.');return false}
  if(linkedBuild&&linkedBuild.id!==selectedBuild.id){alert('Нельзя перепривязать продажу к другой сборке.');return false}
 }
-const group=categoryGroup(d.kind,d.cat)||'',value={grp:group,kind:d.kind,date:d.date,amount,qty,cat:d.cat,desc,acc:d.acc,note:d.note||''};
-const transaction=o||{id:uid()};if(o)Object.assign(o,value);else Object.assign(transaction,value);
+const group=categoryGroup(d.kind,d.cat)||'',value={grp:kitMode?S.stockGroup:group,kind:d.kind,date:d.date,amount,qty:kitMode?1:qty,cat:kitMode?'Комплектная покупка':d.cat,desc,acc:d.acc,note:d.note||''};
+const transaction=o||{id:uid()};
+if(kitMode){value.kitPurchase=true}else{delete transaction.kitPurchase;delete transaction.kitBatchIds}
+Object.assign(transaction,value);
+if(kitMode){
+ const nextIds=[];
+ for(const row of kitRows){
+  let batch=row.id?oldKitBatches.find(b=>b.id===row.id):null;
+  if(batch)Object.assign(batch,{type:row.type,desc:row.desc,date:d.date,price:row.price,qty:row.qty,note:d.note||'',kitPurchaseId:transaction.id});
+  else{batch={id:uid(),type:row.type,desc:row.desc,date:d.date,price:row.price,qty:row.qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,kitPurchaseId:transaction.id};S.batches.push(batch)}
+  nextIds.push(batch.id);
+ }
+ const keep=new Set(nextIds),removed=oldKitBatches.filter(b=>!keep.has(b.id));
+ removed.forEach(batch=>{const archived={...batch,kitPurchaseId:''};S.trash.unshift(makeTrashEntry('batch',archived))});
+ if(removed.length){const removeIds=new Set(removed.map(b=>b.id));S.batches=S.batches.filter(b=>!removeIds.has(b.id))}
+ transaction.kitBatchIds=nextIds;
+}
+if(!o)S.tx.push(transaction);
 if(stockType){
  if(linkedBatch)Object.assign(linkedBatch,{type:d.cat,date:d.date,desc,price:amount/qty,qty,note:d.note||''});
  else{const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:transaction.id};transaction.batchId=batch.id;S.batches.push(batch)}
@@ -898,14 +964,43 @@ if(pcSale){
  build.txId=transaction.id;
  transaction.buildId=build.id;transaction.buyer=build.buyer;transaction.desc='Продажа ПК №'+build.num+' · '+(build.name||'Без названия');
 }
-if(!o)S.tx.push(transaction);
 save();render();
 });
-const updateFields=()=>{const income=f.elements.kind.value==='i',pc=income&&f.elements.cat.value==='Сборка ПК',pcFields=f.querySelector('#pc-sale-fields'),hint=f.querySelector('#stock-expense-hint');if(pcFields)pcFields.style.display=pc?'block':'none';if(hint)hint.style.display=f.elements.kind.value==='e'&&stockExpenseType(f.elements.cat.value)?'block':'none'};
+const updateKitSummary=()=>{
+ const target=Number(f.elements.amount.value),rows=[...f.querySelectorAll('[data-kit-line]')],totals=rows.map(row=>{
+  const qty=Number(row.querySelector('[data-kit-qty]').value),costField=row.querySelector('[data-kit-cost]'),price=Number(costField.value),valid=Number.isInteger(qty)&&qty>0&&costField.value.trim()!==''&&Number.isFinite(price)&&price>=0,total=valid?qty*price:0;
+  row.querySelector('[data-kit-line-total]').textContent='По строке: '+R(total);
+  return total;
+ });
+ const total=Math.round((totals.reduce((a,b)=>a+b,0)+Number.EPSILON)*100)/100,amount=Number.isFinite(target)?Math.round((target+Number.EPSILON)*100)/100:0,diff=Math.round((total-amount)*100)/100;
+ const summary=f.querySelector('[data-kit-summary]'),difference=f.querySelector('[data-kit-difference]');
+ if(summary)summary.textContent=R(total)+' из '+R(amount);
+ if(difference){difference.className=Math.abs(diff)<.01?'ok':'bad';difference.textContent=Math.abs(diff)<.01?'Сумма совпадает':(diff>0?'Превышение: ':'Не хватает: ')+R(Math.abs(diff))}
+};
+const updateFields=()=>{
+ const income=f.elements.kind.value==='i',pc=income&&f.elements.cat.value==='Сборка ПК',kit=!income&&f.elements.purchaseMode.value==='kit';
+ f.querySelector('#pc-sale-fields').style.display=pc?'block':'none';
+ f.querySelector('#purchase-mode-field').style.display=income?'none':'block';
+ f.querySelector('#kit-purchase-fields').style.display=kit?'grid':'none';
+ f.querySelector('#category-field').style.display=kit?'none':'block';
+ const hint=f.querySelector('#stock-expense-hint');
+ if(hint)hint.style.display=!income&&!kit&&stockExpenseType(f.elements.cat.value)?'block':'none';
+ updateKitSummary();
+};
 const updateBuildInfo=()=>{const b=S.builds.find(x=>x.id===f.elements.buildId.value),info=f.elements.buildInfo;if(info)info.value=buildDetails(b);if(b&&!linkedBuild){if(!f.elements.amount.value)f.elements.amount.value=b.planned||b.price||'';if(!f.elements.desc.value)f.elements.desc.value='Продажа ПК №'+b.num+' · '+(b.name||'Без названия')}};
-f.elements.kind.onchange=e=>{f.elements.cat.innerHTML=catOpt(e.target.value);updateFields()};f.elements.cat.onchange=updateFields;f.elements.buildId.onchange=updateBuildInfo;updateFields();updateBuildInfo();return f;
+f.elements.kind.onchange=()=>{f.elements.cat.innerHTML=catOpt(f.elements.kind.value);updateFields()};
+f.elements.cat.onchange=()=>{updateFields();updateBuildInfo()};
+f.elements.buildId.onchange=updateBuildInfo;
+f.elements.purchaseMode.onchange=updateFields;
+f.addEventListener('click',event=>{
+ if(event.target.closest('[data-kit-add]')){f.querySelector('#kit-lines').insertAdjacentHTML('beforeend',kitLineHtml({}));updateKitSummary();return}
+ const remove=event.target.closest('[data-kit-remove]');
+ if(remove){remove.closest('[data-kit-line]').remove();updateKitSummary()}
+});
+f.addEventListener('input',event=>{if(event.target.matches('[data-kit-qty],[data-kit-cost]')||event.target.name==='amount')updateKitSummary()});
+f.addEventListener('change',event=>{if(event.target.matches('[data-kit-type]'))updateKitSummary()});
+updateFields();updateBuildInfo();return f;
 }
-
 const debtPayments=d=>(Array.isArray(d&&d.payments)?d.payments:[]).reduce((n,p)=>n+Math.max(0,Number(p.amount)||0),0);
 const debtOutstanding=d=>Math.max(0,(Number(d&&d.principal)||0)-debtPayments(d));
 const debtDirectionLabel=d=>d.direction==='given'?'Мне должны':'Я должен';
@@ -2839,6 +2934,7 @@ function makeTrashEntry(type,record,extra={}){
  const entry={id:uid(),type,at:now,createdAt:now,updatedAt:now,deletedAt:now,record:archived};
  if(extra.relatedTx){entry.relatedTx=trashClone(extra.relatedTx);applyRecordMetadata(entry.relatedTx,now,now);entry.relatedTx.updatedAt=now}
  if(Array.isArray(extra.photos))entry.photos=trashClone(extra.photos);
+ if(Array.isArray(extra.kitBatches))entry.kitBatches=trashClone(extra.kitBatches);
  if(extra.restoreState)entry.restoreState=trashClone(extra.restoreState);
  return entry;
 }
@@ -2895,7 +2991,14 @@ function restoreTrashItem(id){
  }else if(item.type==='tx'){
   if(S.tx.some(x=>x.id===record.id))return fail('Операция с таким ID уже существует.');
   const cashCheck=checkTransactionBalance(activateTrashRecord(record));if(!cashCheck.ok)return fail(cashCheck.error+' Операция осталась в корзине.');
-  if(record.partSale){
+  if(record.kitPurchase){
+   const kitBatches=Array.isArray(item.kitBatches)?item.kitBatches:[];
+   if(kitBatches.length!==(record.kitBatchIds||[]).length)return fail('В корзине отсутствует часть комплектующих этой покупки. Восстановление остановлено.');
+   if(kitBatches.some(batch=>S.batches.some(existing=>existing.id===batch.id)))return fail('Одна из комплектующих уже существует на складе. Сначала устраните конфликт ID.');
+   const expected=new Set(record.kitBatchIds||[]);
+   if(kitBatches.some(batch=>!expected.has(batch.id)||batch.kitPurchaseId!==record.id))return fail('Связи комплектующих в корзине повреждены. Восстановление остановлено.');
+   S.batches.push(...kitBatches.map(activateTrashRecord));
+  }else if(record.partSale){
    const state=item.restoreState,batch=state&&state.batch&&find('batches',state.batch.id);
    if(!state||!batch)return fail('Нельзя восстановить продажу: отсутствуют контрольные данные или исходная партия.');
    const current={qty:+batch.qty||0,problemQty:+batch.problemQty||0};
@@ -2926,11 +3029,11 @@ function trash(){
  return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
 }
 
-function act(a,id){const A={'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;render();scrollTo(0,0)},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;render();scrollTo(0,0)},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>{const batch=find('batches',id);if(batch&&batch.kitPurchaseId){tform(batch.kitPurchaseId);return}pform(id)},badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
-pd:()=>{const b=find('batches',id);if(!b)return;const linkedBuilds=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==b.id));if(linkedBuilds.length){alert('Нельзя удалить партию: она используется в сборках '+linkedBuilds.map(build=>'№'+build.num+(build.name?' («'+build.name+'»)':'')).join(', ')+'. Сначала удалите или измените состав этих сборок.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift(makeTrashEntry('batch',b,{relatedTx}));S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
+pd:()=>{const b=find('batches',id);if(!b)return;if(b.kitPurchaseId){alert('Эта позиция входит в покупку комплектом. Изменяйте весь комплект через транзакцию, чтобы сохранить распределение себестоимости.');return}const linkedBuilds=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==b.id));if(linkedBuilds.length){alert('Нельзя удалить партию: она используется в сборках '+linkedBuilds.map(build=>'№'+build.num+(build.name?' («'+build.name+'»)':'')).join(', ')+'. Сначала удалите или измените состав этих сборок.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift(makeTrashEntry('batch',b,{relatedTx}));S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
 bd:()=>{const b=find('builds',id);if(!b)return;if(!confirm('Переместить сборку №'+b.num+' в корзину? Детали вернутся в доступный остаток.'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный доход?')){const cashCheck=checkTransactionBalance(null,linked);if(!cashCheck.ok){alert(cashCheck.error+' Сборка не удалена.');return}relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}const photos=Array.isArray(PH[b.id])?trashClone(PH[b.id]):[];S.trash.unshift(makeTrashEntry('build',b,{relatedTx,photos}));S.builds=S.builds.filter(x=>x.id!==b.id);delete PH[b.id];save();render()},
-td:()=>{const t=find('tx',id);if(!t)return;if(t.buildId){alert('Продажа связана со сборкой ПК. Чтобы отменить её, откройте сборку во вкладке «Сборки» и измените статус.');return}if(t.debtId||t.investmentId){alert('Движения по долгам и инвестициям связаны с историей актива. Управляйте ими в разделе «Долги и инвестиции».');return}const cashCheck=checkTransactionBalance(null,t);if(!cashCheck.ok){alert(cashCheck.error+' Операция не удалена.');return}const livePartSale=!!t.partSale&&!t.partSaleImportedSnapshot;if(!confirm(livePartSale?'Переместить продажу в корзину и вернуть комплектующее на склад?':'Переместить операцию в корзину?'))return;const linkedBatch=t.batchId&&S.batches.find(batch=>batch.id==t.batchId&&batch.txId==t.id);if(linkedBatch){if(confirm('Операция связана с закупкой «'+linkedBatch.desc+'». Переместить в корзину также партию склада?')){const uses=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==linkedBatch.id));if(uses.length){alert('Партию нельзя удалить: она используется в сборках '+uses.map(build=>'№'+build.num).join(', ')+'. Операция будет удалена, партия останется на складе.');linkedBatch.txId=''}else{S.trash.unshift(makeTrashEntry('batch',linkedBatch));S.batches=S.batches.filter(batch=>batch.id!==linkedBatch.id)}}else linkedBatch.txId=''}let restoreState=null;if(livePartSale){const b=find('batches',t.batchId);if(!b){alert('Не найдена исходная партия. Операция не перемещена.');return}const qty=+t.qty||1,before={qty:+b.qty||0,problemQty:+b.problemQty||0},build=t.sourceBuildId&&find('builds',t.sourceBuildId),buildState=build?{id:build.id,status:build.status,beforeLines:trashClone(build.lines||[]),afterLines:null}:null;b.qty+=qty;if(t.sourceProblem)b.problemQty=problemMarked(b)+qty;if(build&&build.status!=ST[3]){const line=build.lines.find(l=>l.batchId==b.id&&!!l.problem==!!t.sourceProblem);if(line)line.qty+=qty;else build.lines.push({batchId:b.id,qty,problem:!!t.sourceProblem})}if(buildState)buildState.afterLines=trashClone(build.lines||[]);restoreState={batch:{id:b.id,before,after:{qty:+b.qty||0,problemQty:+b.problemQty||0}},build:buildState}}S.trash.unshift(makeTrashEntry('tx',t,{restoreState}));S.tx=S.tx.filter(x=>x.id!==id);save();render()},
+td:()=>{const t=find('tx',id);if(!t)return;if(t.buildId){alert('Продажа связана со сборкой ПК. Чтобы отменить её, откройте сборку во вкладке «Сборки» и измените статус.');return}if(t.debtId||t.investmentId){alert('Движения по долгам и инвестициям связаны с историей актива. Управляйте ими в разделе «Долги и инвестиции».');return}if(t.kitPurchase){const kitBatches=S.batches.filter(batch=>batch.kitPurchaseId===t.id||(t.kitBatchIds||[]).includes(batch.id));const usedParts=kitBatches.filter(batch=>used(batch)>0||writtenOff(batch)>0||problemMarked(batch)>0||S.tx.some(tx=>tx.partSale&&tx.batchId===batch.id));if(usedParts.length){alert('Нельзя удалить покупку комплектом: одна или несколько комплектующих уже используются, проданы или списаны. Сначала разберите связанные сборки и операции.');return}const cashCheck=checkTransactionBalance(null,t);if(!cashCheck.ok){alert(cashCheck.error+' Операция не удалена.');return}if(!confirm('Переместить в корзину покупку комплектом и все '+kitBatches.length+' складских позиций?'))return;S.trash.unshift(makeTrashEntry('tx',t,{kitBatches}));const ids=new Set(kitBatches.map(batch=>batch.id));S.batches=S.batches.filter(batch=>!ids.has(batch.id));S.tx=S.tx.filter(x=>x.id!==id);save();render();return}const cashCheck=checkTransactionBalance(null,t);if(!cashCheck.ok){alert(cashCheck.error+' Операция не удалена.');return}const livePartSale=!!t.partSale&&!t.partSaleImportedSnapshot;if(!confirm(livePartSale?'Переместить продажу в корзину и вернуть комплектующее на склад?':'Переместить операцию в корзину?'))return;const linkedBatch=t.batchId&&S.batches.find(batch=>batch.id==t.batchId&&batch.txId==t.id);if(linkedBatch){if(confirm('Операция связана с закупкой «'+linkedBatch.desc+'». Переместить в корзину также партию склада?')){const uses=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==linkedBatch.id));if(uses.length){alert('Партию нельзя удалить: она используется в сборках '+uses.map(build=>'№'+build.num).join(', ')+'. Операция будет удалена, партия останется на складе.');linkedBatch.txId=''}else{S.trash.unshift(makeTrashEntry('batch',linkedBatch));S.batches=S.batches.filter(batch=>batch.id!==linkedBatch.id)}}else linkedBatch.txId=''}let restoreState=null;if(livePartSale){const b=find('batches',t.batchId);if(!b){alert('Не найдена исходная партия. Операция не перемещена.');return}const qty=+t.qty||1,before={qty:+b.qty||0,problemQty:+b.problemQty||0},build=t.sourceBuildId&&find('builds',t.sourceBuildId),buildState=build?{id:build.id,status:build.status,beforeLines:trashClone(build.lines||[]),afterLines:null}:null;b.qty+=qty;if(t.sourceProblem)b.problemQty=problemMarked(b)+qty;if(build&&build.status!=ST[3]){const line=build.lines.find(l=>l.batchId==b.id&&!!l.problem==!!t.sourceProblem);if(line)line.qty+=qty;else build.lines.push({batchId:b.id,qty,problem:!!t.sourceProblem})}if(buildState)buildState.afterLines=trashClone(build.lines||[]);restoreState={batch:{id:b.id,before,after:{qty:+b.qty||0,problemQty:+b.problemQty||0}},build:buildState}}S.trash.unshift(makeTrashEntry('tx',t,{restoreState}));S.tx=S.tx.filter(x=>x.id!==id);save();render()},
 aadd:()=>accountForm(),
 aedit:()=>accountForm(id),
 catbrowse:()=>categoryBrowser(),
@@ -2964,10 +3067,10 @@ if(key==='escape'){const overlay=document.querySelector('.ov');if(overlay)overla
 if(!(e.ctrlKey&&e.altKey)||e.repeat)return;
 const navKeys={'1':'home','2':'dash','3':'stock','4':'builds','5':'tx','6':'reports','7':'tasks','8':'log','9':'set','0':'planning','a':'assets'};
 if(navKeys[key]){e.preventDefault();V.tab=navKeys[key];render();scrollTo(0,0);return}
-if(['n','p','t','i','e'].includes(key)){
+if(['n','t','i','e'].includes(key)){
 e.preventDefault();
 if(key==='n'){V.tab='builds';render();bform()}
-else if(key==='p'){V.tab='stock';render();pform()}
+
 else if(key==='t'){V.tab='tasks';render();kform(0,0)}
 else if(key==='i'){V.tab='tx';render();tform(0,'i')}
 else if(key==='e'){V.tab='tx';render();tform(0,'e')}
