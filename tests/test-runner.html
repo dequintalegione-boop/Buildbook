@@ -1803,7 +1803,7 @@ await test('Вкладки можно перемещать перетаскив�
  pointer('pointerdown',home,10,10);pointer('pointermove',w.document,26,26);pointer('pointerup',w.document,26,26);
  if(originalElementFromPoint)w.document.elementFromPoint=originalElementFromPoint;else delete w.document.elementFromPoint;
  assert(state().set.otherTabs.includes('home'),'Перетаскивание указателя не переместило вкладку в папку');
- toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+ toggle=w.document.querySelector('[data-f="layoutEdit"]');assert(toggle,'Переключатель режима редактирования не найден после перетаскивания');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
  const closedFolder=w.document.querySelector('#nav-other-folder'),movedHome=w.document.querySelector('#nav-other-list button[data-id="home"]');
  assert(closedFolder&&!closedFolder.hidden&&movedHome,'Папка скрылась, хотя в ней осталась вкладка');
  closedFolder.querySelector('[data-a="other-toggle"]').click();
