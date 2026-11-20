@@ -1345,6 +1345,45 @@ const plan=state().salesPlans[0];assert(plan&&plan.scope==='parts_category'&&pla
 assert(w.document.querySelector('#m').textContent.includes('3 шт.'),'Факт 3 проданных единиц не попал в план');
 assert(w.document.querySelector('#m').textContent.includes('7 шт.'),'Остаток до целевого количества рассчитан неверно');
 });
+await test('Планирование считает выручку по всем продажам комплектующих и готовых ПК',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7),date=month+'-12';
+d.tx=[{id:'revenue-part-sale',kind:'i',date,amount:450,desc:'Продажа комплектующих',cat:'Комплектующие',grp:'Продажи',qty:3,acc:'cash',partSale:true,batchDesc:'Тестовая видеокарта',batchType:'Видеокарты',unitCost:100,unitPrice:150,costAmount:300,grossProfit:150}];
+d.builds.push({id:'revenue-build-sale',num:30,name:'Проданный тестовый ПК',status:'Продана',date,sold:date,price:700,cost:400,lines:[]});
+api.setState(d);api.action('nav','planning');api.action('planadd');let f=form();
+setv(f,'month',month);setv(f,'metric','revenue');f.elements.metric.dispatchEvent(new w.Event('change',{bubbles:true}));
+setv(f,'scope','all_sales');setv(f,'targetAmount','1200');submit(f);
+const plan=state().salesPlans[0];assert(plan&&plan.metric==='revenue'&&plan.targetAmount===1200,'Цель по выручке не сохранилась');
+assert(api.planActual(plan.id)===1150,'Выручка должна учитывать 450 ₽ по комплектующим и 700 ₽ по ПК');
+const row=[...w.document.querySelectorAll('#m tbody tr')].find(x=>x.textContent.includes('Все продажи ПК и комплектующих'));
+assert(row&&row.textContent.includes('Выручка'),'В таблице не обозначен тип цели по выручке');
+assert(row.textContent.replace(/\s/g,'').includes('1 150'.replace(/\s/g,'')),'В таблице не показана фактическая выручка 1 150 ₽');
+assert(row.textContent.replace(/\s/g,'').includes('50'),'Не рассчитан остаток до цели в размере 50 ₽');
+});
+await test('Планирование считает выручку по выбранной категории и сохраняет правки',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7),date=month+'-15';
+d.tx=[
+{id:'revenue-category-one',kind:'i',date,amount:600,desc:'Видеокарта',cat:'Комплектующие',qty:2,partSale:true,batchType:'Видеокарты',batchDesc:'GPU A'},
+{id:'revenue-category-two',kind:'i',date,amount:250,desc:'SSD',cat:'Комплектующие',qty:5,partSale:true,batchType:'ССД',batchDesc:'SSD B'}
+];
+api.setState(d);api.action('nav','planning');api.action('planadd');let f=form();
+setv(f,'month',month);setv(f,'metric','revenue');f.elements.metric.dispatchEvent(new w.Event('change',{bubbles:true}));
+setv(f,'scope','parts_category');f.elements.scope.dispatchEvent(new w.Event('change',{bubbles:true}));setv(f,'category','Видеокарты');setv(f,'targetAmount','1000');submit(f);
+let plan=state().salesPlans[0];assert(plan&&api.planActual(plan.id)===600,'Для категории должна учитываться выручка 600 ₽, а не количество деталей');
+api.action('planedit',plan.id);f=form();assert(f.elements.metric.value==='revenue','Тип цели потерялся при редактировании');
+setv(f,'targetAmount','800');submit(f);plan=state().salesPlans[0];
+assert(plan.targetAmount===800&&api.planActual(plan.id)===600,'Редактирование цели выручки не сохранилось');
+const exported=api.exportRows('salesPlans');assert(exported[0].includes('Целевая выручка, ₽')&&exported[1][7]===800,'Экспорт планов не содержит целевую выручку');
+});
+await test('Для одного месяца можно создать и цель продаж, и цель выручки по одному показателю',()=>{
+const d=fixture(),month=api.localDateISO(new w.Date()).slice(0,7);
+api.setState(d);api.action('nav','planning');api.action('planadd');let f=form();
+setv(f,'month',month);setv(f,'scope','parts_all');setv(f,'targetQty','10');submit(f);
+api.action('planadd');f=form();setv(f,'month',month);setv(f,'metric','revenue');f.elements.metric.dispatchEvent(new w.Event('change',{bubbles:true}));
+setv(f,'scope','parts_all');setv(f,'targetAmount','5000');submit(f);
+const plans=state().salesPlans;assert(plans.length===2,'Цели по количеству и выручке ошибочно считаются дубликатами');
+assert(plans.some(p=>p.metric!=='revenue'&&p.targetQty===10)&&plans.some(p=>p.metric==='revenue'&&p.targetAmount===5000),'Один из типов цели потерялся при сохранении');
+});
+
 await test('Добавление и редактирование кассы открывает внутреннее окно приложения',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('aadd');let f=form();
 assert(f&&f.elements.name&&f.elements.open,'Вместо формы приложения не открылось окно кассы');
