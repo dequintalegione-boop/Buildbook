@@ -758,7 +758,63 @@ f.elements.price.oninput=f.elements.planned.oninput=draw;draw();dp()}
 function builds(){const f=V.b,q=f.q.toLowerCase(),rows=S.builds.filter(b=>(!f.st||b.status==f.st)&&(!q||(b.name+' '+b.builder+' '+b.buyer).toLowerCase().includes(q))&&(!f.from||b.date>=f.from)&&(!f.to||b.date<=f.to)).sort((a,b)=>b.num-a.num),done=S.builds.filter(b=>b.status==ST[3]);
 return head('Сборки','<button class="btn" data-a="calc">Расчёт</button> <label class="btn" style="display:inline-block;cursor:pointer">Импорт ZIP-карточки<input type="file" accept=".zip,application/zip" data-buildzip hidden></label> <button class="btn p" data-a="badd">+ Сборка</button>')+`<div class="k">${kpi('Заработок с проданных',R(done.reduce((n,b)=>n+profit(b),0)),'ok')}${kpi('В работе',S.builds.filter(b=>b.status==ST[0]).length)}${kpi('Готовы к продаже',S.builds.filter(b=>b.status==ST[1]||b.status==ST[2]).length)}${kpi('Продано',done.length)}</div><div class="fl"><select data-f="b.st">${opt([['','Все статусы'],...ST],f.st)}</select><input data-f="b.q" placeholder="Поиск по названию, сборщику, покупателю" value="${esc(f.q)}" style="min-width:220px"><label>С даты<input type="date" data-f="b.from" value="${esc(f.from)}"></label><label>По дату<input type="date" data-f="b.to" value="${esc(f.to)}"></label></div>`+table(['№','Название','Статус','Сборщик','Себестоимость','Цена','Заработок','Маржа',''],rows.map(b=>{const p=profit(b),s=sale(b);return`<tr><td>${b.num}</td><td>${esc(b.name||'Без названия')}</td><td><span class="bd ${b.status==ST[3]?'ok':''}">${b.status}</span></td><td>${esc(b.builder)}</td><td class="r">${R(cost(b))}</td><td class="r">${R(s)}${b.price?'':' <small>план</small>'}</td><td class="r ${b.status==ST[3]?(p>=0?'ok':'bad'):'mu'}">${R(p)}</td><td class="r">${s?Math.round(p/s*100)+'%':''}</td>${btns('b',b.id).replace('<td class="r">','<td class="r"><button class="btn ic" data-a="btxt" data-id="'+b.id+'" title="Скачать карточку TXT">TXT</button> <button class="btn ic" data-a="bprint" data-id="'+b.id+'" title="Открыть системную печать">⎙</button> <button class="btn ic" data-a="bdoc" data-id="'+b.id+'" title="Экспорт карточки и фото в ZIP">ZIP</button> ')}</tr>`}),'Сборок нет. Нажмите «+ Сборка», выберите детали со склада, и себестоимость посчитается сама.')}
 /* деньги */
-function tform(id,k0){const o=id&&S.tx.find(t=>t.id==id),k=o?o.kind:k0||'e';const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',`<div class="g2">${fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))}${fld('date','Дата','date',o?o.date:today())}</div><div class="g2">${fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')}${fld('qty','Количество','number',o?o.qty:1,'min=1')}</div>${fld('cat','Категория','select','',catOpt(k,o&&o.cat))}${fld('desc','Описание','text',o?o.desc:'')}${fld('acc','Касса','select','',accOpt(o&&o.acc))}${fld('note','Комментарий (для «Проебы» обязателен)','area',o?o.note:'')}`,f=>{const d=fd(f);if(d.cat=='Проебы'&&!d.note.trim()){alert('Для категории «Проебы» напишите комментарий');return false}const v={grp:f.elements.cat.selectedOptions[0].parentNode.label,kind:d.kind,date:d.date,amount:+d.amount,qty:+d.qty||1,cat:d.cat,desc:d.desc,acc:d.acc,note:d.note};o?Object.assign(o,v):S.tx.push({id:uid(),...v});save();render()});f.elements.kind.onchange=e=>f.elements.cat.innerHTML=catOpt(e.target.value)}
+const stockExpenseType=cat=>{
+const group=categoryGroup('e',cat);
+return group===S.stockGroup&&Array.isArray(EXP[group])&&EXP[group].includes(cat)&&cat!=='Компы и другое';
+};
+function tform(id,k0){
+const o=id&&S.tx.find(t=>t.id==id),linkedBatch=o&&o.batchId&&S.batches.find(b=>b.id===o.batchId&&b.txId===o.id),k=o?o.kind:k0||'e';
+const body='<div class="g2">'+fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))+fld('date','Дата','date',o?o.date:today())+'</div>'+
+'<div class="g2">'+fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')+fld('qty','Количество','number',o?o.qty:1,'min=1')+'</div>'+
+fld('cat','Категория','select','',catOpt(k,o&&o.cat))+
+'<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст партию на складе. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
+fld('desc','Описание','text',o?o.desc:'')+
+fld('acc','Касса','select','',accOpt(o&&o.acc))+
+fld('note','Комментарий (для «Проебы» обязателен)','area',o?o.note:'');
+const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',body,form=>{
+const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,stockType=d.kind==='e'&&stockExpenseType(d.cat),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
+if(d.cat==='Проебы'&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
+if(linkedBatch&&!stockType){alert('Эта операция связана со складской партией. Чтобы не потерять связь с остатками, оставьте категорию комплектующих или удалите закупку вместе с партией.');return false}
+if(stockType){
+ if(!desc){alert('Для добавления комплектующего на склад укажите описание или модель.');return false}
+ if(!Number.isFinite(amount)||amount<=0){alert('Сумма закупки должна быть больше нуля.');return false}
+ if(!Number.isInteger(qty)||qty<1){alert('Количество комплектующих должно быть целым числом не меньше 1.');return false}
+ if(!accountExists){alert('Для закупки комплектующих выберите существующую кассу.');return false}
+ if(linkedBatch){
+  const minQty=writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch);
+  if(qty<minQty){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}
+ }
+}
+const group=categoryGroup(d.kind,d.cat)||'';
+const value={grp:group,kind:d.kind,date:d.date,amount,qty,cat:d.cat,desc,acc:d.acc,note:d.note||''};
+if(o){
+ Object.assign(o,value);
+ if(stockType){
+  if(linkedBatch)Object.assign(linkedBatch,{type:d.cat,date:d.date,desc,price:amount/qty,qty,note:d.note||''});
+  else{
+   const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:o.id};
+   o.batchId=batch.id;S.batches.push(batch);
+  }
+ }
+}else{
+ const transaction={id:uid(),...value};
+ if(stockType){
+  const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:transaction.id};
+  transaction.batchId=batch.id;S.batches.push(batch);
+ }
+ S.tx.push(transaction);
+}
+save();render();
+});
+const updateStockHint=()=>{
+ const hint=f.querySelector('#stock-expense-hint');
+ if(hint)hint.style.display=f.elements.kind.value==='e'&&stockExpenseType(f.elements.cat.value)?'block':'none';
+};
+f.elements.kind.onchange=e=>{f.elements.cat.innerHTML=catOpt(e.target.value);updateStockHint()};
+f.elements.cat.onchange=updateStockHint;
+updateStockHint();
+return f;
+}
 
 const debtPayments=d=>(Array.isArray(d&&d.payments)?d.payments:[]).reduce((n,p)=>n+Math.max(0,Number(p.amount)||0),0);
 const debtOutstanding=d=>Math.max(0,(Number(d&&d.principal)||0)-debtPayments(d));
