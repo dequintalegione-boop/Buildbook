@@ -1272,16 +1272,19 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
 await test('Защищённые поля шифруются в IndexedDB и восстанавливаются паролем',async()=>{
  api.setState(fixture());
  const source=api.getState(),logs=[{t:'secret-log',l:'Секретная запись'}];
+ source.trash=[{id:'archived-secret',type:'batch',record:{desc:'Скрытая архивная запись',price:999}}];
  const result=await api.protectState(source,logs,'Correct Horse Battery 42',['financial','personal']);
  assert(result.stored._fieldVault&&result.stored._fieldVault.fields.length>0,'Не создано хранилище зашифрованных полей');
  assert(result.stored.accounts[0].name===null&&result.stored.accounts[0].open===null,'Данные кассы остались открытым текстом');
  assert(result.stored.batches[0].price===null&&result.stored.batches[0].desc===null,'Данные партии остались открытым текстом');
  assert(result.storedLogs.length===0,'Журнал изменений остался открытым текстом');
+ assert(result.stored.trash===null,'Корзина с архивными записями осталась открытым текстом');
  assert(JSON.stringify(result.stored).indexOf('Секретная запись')<0,'В зашифрованном профиле найден текст журнала');
  const restored=result.plain.state;
  assert(restored.accounts[0].name===source.accounts[0].name&&restored.accounts[0].open===source.accounts[0].open,'Поля кассы не восстановились');
  assert(restored.batches[0].desc===source.batches[0].desc&&restored.batches[0].price===source.batches[0].price,'Поля партии не восстановились');
  assert(JSON.stringify(result.plain.logs)===JSON.stringify(logs),'Журнал не восстановился');
+ assert(result.plain.state.trash[0].record.desc==='Скрытая архивная запись','Архивная запись не восстановилась');
 });
 await test('Неверный пароль отклоняется, а JSON/ZIP-копии остаются переносимыми',async()=>{
  api.setState(fixture());
