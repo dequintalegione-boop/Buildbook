@@ -616,6 +616,8 @@ function pform(id){const o=id&&S.batches.find(b=>b.id==id);modal(o?'Партия
 if(o){const minQty=writtenOff(o)+usedGood(o)+problemMarked(o);if(q<minQty){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}Object.assign(o,{type:d.type,date:d.date,desc:d.desc,price:p,qty:q,supplier:d.supplier,link:d.link,note:d.note});const t=o.txId&&S.tx.find(t=>t.id==o.txId);if(t)Object.assign(t,{date:o.date,amount:p*q,cat:o.type,qty:q,desc:'Закупка: '+o.desc})}
 else{const b={id:uid(),type:d.type,date:d.date,desc:d.desc,price:p,qty:q,supplier:d.supplier,link:d.link,note:d.note,problemQty:0,problemReason:'',writtenOffQty:0};if(!d.nx){const t={id:uid(),kind:'e',date:d.date,amount:p*q,desc:'Закупка: '+d.desc,cat:d.type,grp:S.stockGroup,qty:q,acc:d.acc,note:'',batchId:b.id};S.tx.push(t);b.txId=t.id}S.batches.push(b)}save();render()})}
 function stock(){
+const readyBuilds=S.builds.filter(b=>b.status===ST[1]||b.status===ST[2]).sort((a,b)=>b.num-a.num);
+const readyRows=readyBuilds.map(b=>'<tr><td>ПК №'+b.num+'</td><td><b>'+esc(b.name||'Без названия')+'</b><br><small>'+esc((b.lines||[]).map(l=>{const part=S.batches.find(x=>x.id===l.batchId);return part?part.type+': '+part.desc+' × '+l.qty:''}).filter(Boolean).join(' · '))+'</small></td><td>'+esc(b.status)+'</td><td>'+D(b.date)+'</td><td class="r">'+R(cost(b))+'</td><td class="r">'+R(b.planned||b.price||0)+'</td><td>'+esc(b.builder||'—')+'</td><td><button class="btn ic" data-a="be" data-id="'+b.id+'" title="Открыть сборку">✎</button></td></tr>');
 const f=V.s,q=f.q.toLowerCase();
 const rows=S.batches.filter(b=>(f.showZero||b.qty>0)&&(!f.type||b.type==f.type)&&(!q||(b.desc+' '+b.supplier).toLowerCase().includes(q))&&(!f.av||avail(b)>0)&&(!f.problemOnly||problemMarked(b)>0)&&(!f.from||b.date>=f.from)&&(!f.to||b.date<=f.to)).sort((a,b)=>b.date.localeCompare(a.date));
 const goodValue=S.batches.reduce((n,b)=>n+b.price*goodAvailable(b),0),problemValue=S.batches.reduce((n,b)=>n+b.price*problemAvailable(b),0);
@@ -624,8 +626,7 @@ const rowHtml=rows.map(b=>{
  const normal=goodAvailable(b),bad=problemAvailable(b),off=writtenOff(b),allocated=used(b),marked=problemMarked(b);
  return '<tr class="'+(marked?'pr':'')+'"><td>'+esc(b.type)+'</td><td>'+esc(b.desc)+(marked?' <span class="bd bad">проблема: '+marked+' шт.</span> <small>'+esc(b.problemReason)+'</small>':'')+(safe(b.link)?' <a href="'+esc(b.link)+'" target="_blank" rel="noopener">ссылка</a>':'')+'</td><td>'+D(b.date)+'</td><td class="r">'+R(b.price)+'</td><td class="r">'+b.qty+'</td><td class="r ok">'+normal+'</td><td class="r '+(bad?'w':'')+'">'+bad+'</td><td class="r">'+off+'</td><td class="r">'+(allocated||'—')+'</td><td class="r">'+R(b.price*(normal+bad))+'</td><td class="r"><button class="btn ic" data-a="pprob" data-id="'+b.id+'" title="Отметить часть остатка как проблемную">⚠</button> '+(marked?'<button class="btn ic" data-a="pclear" data-id="'+b.id+'" title="Снять отметку с части проблемного остатка">↺</button> ':'')+(bad?'<button class="btn ic" data-a="pwriteoff" data-id="'+b.id+'" title="Списать проблемные единицы">−</button> ':'')+'<button class="btn ic" data-a="pe" data-id="'+b.id+'" title="Изменить">✎</button> <button class="btn ic" data-a="pd" data-id="'+b.id+'" title="Удалить">✕</button></td></tr>';
 });
-return head('Склад','<button class="btn" data-a="phistory">История проблем и списаний</button> <button class="btn" data-a="sellParts">Продать детали</button> <button class="btn p" data-a="padd">+ Закупка</button>')+
-'<div class="k">'+kpi('Нормальный остаток',R(goodValue))+kpi('Проблемный остаток',R(problemValue),problemValue?'w':'')+kpi('Свободно без проблем',goodQty+' шт.')+kpi('Проблемные свободные',problemQty+' шт.',problemQty?'w':'')+'</div>'+
+return head('Склад','<button class="btn" data-a="phistory">История проблем и списаний</button> <button class="btn" data-a="sellParts">Продать детали</button> <button class="btn p" data-a="padd">+ Закупка</button>')+'<section class="qd" style="margin-bottom:14px"><div class="hd"><h2>Готовые ПК на складе</h2><span class="mu">'+readyBuilds.length+' шт.</span></div>'+table(['ПК','Комплектация','Статус','Дата сборки','Себестоимость','Цена продажи','Сборщик',''],readyRows,'Готовых ПК пока нет. Завершите сборку во вкладке «Сборки», чтобы она появилась здесь.')+'</section><div class="k">'+kpi('Нормальный остаток',R(goodValue))+kpi('Проблемный остаток',R(problemValue),problemValue?'w':'')+kpi('Свободно без проблем',goodQty+' шт.')+kpi('Проблемные свободные',problemQty+' шт.',problemQty?'w':'')+'</div>'+
 '<p class="mu" style="margin:-4px 0 12px">Списано за всё время: '+offQty+' шт. · Проблемные единицы не предлагаются в сборки автоматически — их можно выбрать отдельно.</p>'+
 '<div class="qg" style="margin-bottom:14px"><section class="qd"><b>Предметов по категориям</b>'+RT.bars(Wd.s1[3](),N)+'</section><section class="qd"><b>Стоимость по категориям</b>'+RT.bars(Wd.s2[3](),R)+'</section></div>'+
 '<div class="fl"><select data-f="s.type">'+opt([['','Все типы'],...T],f.type)+'</select><input data-f="s.q" placeholder="Поиск по описанию" value="'+esc(f.q)+'"><label>С даты<input type="date" data-f="s.from" value="'+esc(f.from)+'"></label><label>По дату<input type="date" data-f="s.to" value="'+esc(f.to)+'"></label><label class="ck"><input type="checkbox" data-f="s.av" '+(f.av?'checked':'')+'> Только свободные</label><label class="ck"><input type="checkbox" data-f="s.problemOnly" '+(f.problemOnly?'checked':'')+'> Только с проблемами</label><label class="ck"><input type="checkbox" data-f="s.showZero" '+(f.showZero?'checked':'')+'> Показать полностью проданные</label></div>'+
@@ -763,57 +764,51 @@ const group=categoryGroup('e',cat);
 return group===S.stockGroup&&Array.isArray(EXP[group])&&EXP[group].includes(cat)&&cat!=='Компы и другое';
 };
 function tform(id,k0){
-const o=id&&S.tx.find(t=>t.id==id),linkedBatch=o&&o.batchId&&S.batches.find(b=>b.id===o.batchId&&b.txId===o.id),k=o?o.kind:k0||'e';
+const o=id&&S.tx.find(t=>t.id==id),linkedBatch=o&&o.batchId&&S.batches.find(b=>b.id===o.batchId&&b.txId===o.id),linkedBuild=o&&o.buildId&&S.builds.find(b=>b.id===o.buildId),k=o?o.kind:k0||'e';
+const buildOptions=()=>S.builds.filter(b=>b.status!==ST[3]||b.id===(linkedBuild&&linkedBuild.id)).map(b=>[b.id,'№'+b.num+' · '+(b.name||'Без названия')+' · '+b.status]);
+const buildDetails=b=>b?(b.lines||[]).map(l=>{const part=S.batches.find(x=>x.id===l.batchId);return part?part.type+' — '+part.desc+' × '+l.qty:''}).filter(Boolean).join('\n'):'';
 const body='<div class="g2">'+fld('kind','Тип','select','',opt([['e','Расход'],['i','Доход']],k))+fld('date','Дата','date',o?o.date:today())+'</div>'+
 '<div class="g2">'+fld('amount','Сумма, ₽','number',o?o.amount:'','required min=0 step=any')+fld('qty','Количество','number',o?o.qty:1,'min=1')+'</div>'+
 fld('cat','Категория','select','',catOpt(k,o&&o.cat))+
+'<div id="pc-sale-fields" style="display:none">'+fld('buildId','Готовый ПК','select','',opt([['','Выберите собранный ПК'],...buildOptions()],linkedBuild&&linkedBuild.id||o&&o.buildId))+
+fld('buyer','Покупатель','text',linkedBuild?linkedBuild.buyer:o&&o.buyer||'')+
+'<label>Состав выбранного ПК<textarea name="buildInfo" readonly rows="3">'+esc(buildDetails(linkedBuild))+'</textarea></label>'+
+'<p class="mu">При проведении продажи сборка перейдёт в статус «Продана» и исчезнет из доступных ПК на складе.</p></div>'+
 '<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст партию на складе. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
 fld('desc','Описание','text',linkedBatch?linkedBatch.desc:o?o.desc:'')+
 fld('acc','Касса','select','',accOpt(o&&o.acc))+
 fld('note','Комментарий (для «Проебы» обязателен)','area',linkedBatch?linkedBatch.note:o?o.note:'');
 const f=modal(o?'Операция':k=='i'?'Новый доход':'Новый расход',body,form=>{
-const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,stockType=d.kind==='e'&&stockExpenseType(d.cat),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
+const d=fd(form),amount=Number(d.amount),qty=Number(d.qty)||1,stockType=d.kind==='e'&&stockExpenseType(d.cat),pcSale=d.kind==='i'&&d.cat==='Сборка ПК',selectedBuild=pcSale&&S.builds.find(b=>b.id===d.buildId),desc=String(d.desc||'').trim(),accountExists=S.accounts.some(a=>a.id===d.acc);
 if(d.cat==='Проебы'&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
-if(linkedBatch&&!stockType){alert('Эта операция связана со складской партией. Чтобы не потерять связь с остатками, оставьте категорию комплектующих или удалите закупку вместе с партией.');return false}
+if(linkedBatch&&!stockType){alert('Эта операция связана со складской партией. Оставьте категорию комплектующих или удалите закупку вместе с партией.');return false}
+if(linkedBuild&&!pcSale){alert('Эта операция связана с продажей ПК. Оставьте категорию «Сборка ПК».');return false}
 if(stockType){
- if(!desc){alert('Для добавления комплектующего на склад укажите описание или модель.');return false}
- if(!Number.isFinite(amount)||amount<=0){alert('Сумма закупки должна быть больше нуля.');return false}
- if(!Number.isInteger(qty)||qty<1){alert('Количество комплектующих должно быть целым числом не меньше 1.');return false}
- if(!accountExists){alert('Для закупки комплектующих выберите существующую кассу.');return false}
- if(linkedBatch){
-  const minQty=writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch);
-  if(qty<minQty){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}
- }
+ if(!desc||!Number.isFinite(amount)||amount<=0||!Number.isInteger(qty)||qty<1||!accountExists){alert('Для закупки укажите описание, положительную сумму, целое количество и кассу.');return false}
+ if(linkedBatch&&qty<writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch)){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка.');return false}
 }
-const group=categoryGroup(d.kind,d.cat)||'';
-const value={grp:group,kind:d.kind,date:d.date,amount,qty,cat:d.cat,desc,acc:d.acc,note:d.note||''};
-if(o){
- Object.assign(o,value);
- if(stockType){
-  if(linkedBatch)Object.assign(linkedBatch,{type:d.cat,date:d.date,desc,price:amount/qty,qty,note:d.note||''});
-  else{
-   const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:o.id};
-   o.batchId=batch.id;S.batches.push(batch);
-  }
- }
-}else{
- const transaction={id:uid(),...value};
- if(stockType){
-  const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:transaction.id};
-  transaction.batchId=batch.id;S.batches.push(batch);
- }
- S.tx.push(transaction);
+if(pcSale){
+ if(!selectedBuild){alert('Выберите готовый ПК из списка сборок.');return false}
+ if(selectedBuild.status===ST[3]&&selectedBuild.id!==(linkedBuild&&linkedBuild.id)){alert('Этот ПК уже продан.');return false}
+ if(!Number.isFinite(amount)||amount<=0||!accountExists){alert('Укажите цену продажи больше нуля и кассу.');return false}
+ if(linkedBuild&&linkedBuild.id!==selectedBuild.id){alert('Нельзя перепривязать продажу к другой сборке.');return false}
 }
+const group=categoryGroup(d.kind,d.cat)||'',value={grp:group,kind:d.kind,date:d.date,amount,qty,cat:d.cat,desc,acc:d.acc,note:d.note||''};
+const transaction=o||{id:uid()};if(o)Object.assign(o,value);else Object.assign(transaction,value);
+if(stockType){
+ if(linkedBatch)Object.assign(linkedBatch,{type:d.cat,date:d.date,desc,price:amount/qty,qty,note:d.note||''});
+ else{const batch={id:uid(),type:d.cat,date:d.date,desc,price:amount/qty,qty,supplier:'',link:'',note:d.note||'',problemQty:0,problemReason:'',writtenOffQty:0,txId:transaction.id};transaction.batchId=batch.id;S.batches.push(batch)}
+}
+if(pcSale){
+ const build=selectedBuild;build.status=ST[3];build.sold=d.date;build.price=amount;build.buyer=String(d.buyer||'').trim();build.cost=live(build);build.txId=transaction.id;
+ transaction.buildId=build.id;transaction.buyer=build.buyer;transaction.desc='Продажа ПК №'+build.num+' · '+(build.name||'Без названия');
+}
+if(!o)S.tx.push(transaction);
 save();render();
 });
-const updateStockHint=()=>{
- const hint=f.querySelector('#stock-expense-hint');
- if(hint)hint.style.display=f.elements.kind.value==='e'&&stockExpenseType(f.elements.cat.value)?'block':'none';
-};
-f.elements.kind.onchange=e=>{f.elements.cat.innerHTML=catOpt(e.target.value);updateStockHint()};
-f.elements.cat.onchange=updateStockHint;
-updateStockHint();
-return f;
+const updateFields=()=>{const income=f.elements.kind.value==='i',pc=income&&f.elements.cat.value==='Сборка ПК',pcFields=f.querySelector('#pc-sale-fields'),hint=f.querySelector('#stock-expense-hint');if(pcFields)pcFields.style.display=pc?'block':'none';if(hint)hint.style.display=f.elements.kind.value==='e'&&stockExpenseType(f.elements.cat.value)?'block':'none'};
+const updateBuildInfo=()=>{const b=S.builds.find(x=>x.id===f.elements.buildId.value),info=f.elements.buildInfo;if(info)info.value=buildDetails(b);if(b&&!linkedBuild){if(!f.elements.amount.value)f.elements.amount.value=b.planned||b.price||'';if(!f.elements.desc.value)f.elements.desc.value='Продажа ПК №'+b.num+' · '+(b.name||'Без названия')}};
+f.elements.kind.onchange=e=>{f.elements.cat.innerHTML=catOpt(e.target.value);updateFields()};f.elements.cat.onchange=updateFields;f.elements.buildId.onchange=updateBuildInfo;updateFields();updateBuildInfo();return f;
 }
 
 const debtPayments=d=>(Array.isArray(d&&d.payments)?d.payments:[]).reduce((n,p)=>n+Math.max(0,Number(p.amount)||0),0);
