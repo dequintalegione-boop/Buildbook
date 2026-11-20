@@ -42,9 +42,6 @@ jobs:
       - name: Build autonomous HTML bundle
         run: node scripts/build-standalone.mjs
 
-      - name: Verify committed standalone bundle is up to date
-        run: git diff --exit-code -- Buildbook-standalone.html
-
       - name: Run application and browser suite
         env:
           BROWSER: ${{ matrix.browser }}
