@@ -2703,7 +2703,7 @@ function removeDemoData(){
  (S.builds||[]).filter(item=>!item.demo).forEach(build=>(build.lines||[]).forEach(line=>keepBatchIds.add(line.batchId)));
  (S.tasks||[]).filter(item=>!item.demo&&item.build).forEach(task=>keepBuildIds.add(task.build));
  (S.stockEvents||[]).filter(item=>!item.demo&&item.batchId).forEach(item=>keepBatchIds.add(item.batchId));
- (S.trash||[]).filter(item=>!item.demo).forEach(entry=>{
+ (S.trash||[]).filter(item=>!item.demo&&!(item.record&&item.record.demo)).forEach(entry=>{
   const record=entry.record||{};
   if(entry.type==='batch'&&record.id)keepBatchIds.add(record.id);
   if(entry.type==='build'&&record.id){keepBuildIds.add(record.id);if(record.txId)keepTxIds.add(record.txId);(record.lines||[]).forEach(line=>keepBatchIds.add(line.batchId))}
@@ -2753,7 +2753,7 @@ function removeDemoData(){
  S.salesPlans=(S.salesPlans||[]).filter(item=>!item.demo);
  S.tasks=(S.tasks||[]).filter(item=>!item.demo);
  S.checklist=(S.checklist||[]).filter(item=>!item.demo);
- S.trash=(S.trash||[]).filter(item=>!item.demo);
+ S.trash=(S.trash||[]).filter(item=>!item.demo&&!(item.record&&item.record.demo));
  ['accounts','batches','builds','tx','debts','investments','stockEvents'].forEach(key=>(S[key]||[]).forEach(item=>{if(item.demo)item.demo=false}));
  LOG=(LOG||[]).filter(item=>!item.demo);
  S.set.demoLoaded=false;delete S.set.demoVersion;
