@@ -2173,9 +2173,9 @@ function exportDataCsv(kind){
   if(!rows.length)throw new Error('Для выбранного раздела нет строк для экспорта.');
   const quote=value=>{
    const text=String(value??'');
-   return /[;"\\r\\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
+   return /[;"\r\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
   };
-  const csv='\\ufeff'+rows.map(row=>row.map(quote).join(';')).join('\\r\\n');
+  const csv='\ufeff'+rows.map(row=>row.map(quote).join(';')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download='buildbook-'+kind+'-'+today()+'.csv';
