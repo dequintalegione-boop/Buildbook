@@ -264,8 +264,8 @@ api.action('nav','stock');api.openSale();const f=form();assert(!f.textContent.in
 await test('Себестоимость проданного ПК не меняется при изменении цены партии',()=>{
 const b=state().batches.find(x=>x.id==='gpu-batch');b.price=250;api.setState(state());assert(state().builds[0].cost===400,'Себестоимость проданной сборки изменилась');assert(api.buildCost('build-open')===400,'Функция расчёта использовала текущую цену вместо зафиксированной');
 });
-await test('Закупка создаёт партию и связанный расход',()=>{
-api.action('nav','stock');api.action('padd');const f=form();setv(f,'type','ССД');setv(f,'date','2026-03-01');setv(f,'desc','Новый SSD');setv(f,'price','500');setv(f,'qty','2');setv(f,'acc','cash');submit(f);const s=state(),b=s.batches.find(x=>x.desc==='Новый SSD');assert(b&&b.qty===2,'Партия закупки не создана');assert(s.tx.some(t=>t.batchId===b.id&&t.kind==='e'&&t.amount===1000),'Расход закупки не создан');
+await test('Обычная закупка комплектующего оформляется транзакцией и создаёт партию',()=>{
+const d=fixture();d.accounts.find(a=>a.id==='cash').open=5000;api.setState(d);api.action('nav','tx');api.action('tadd','e');const f=form();setv(f,'kind','e');setv(f,'purchaseMode','single');setv(f,'date','2026-03-01');setv(f,'amount','1000');setv(f,'qty','2');setv(f,'cat','ССД');setv(f,'desc','Новый SSD');setv(f,'acc','cash');submit(f);const saved=state(),b=saved.batches.find(x=>x.desc==='Новый SSD');assert(b&&b.qty===2,'Партия закупки не создана');assert(saved.tx.some(t=>t.batchId===b.id&&t.kind==='e'&&t.amount===1000),'Расход закупки не создан');
 });
 
 await test('Расход из вкладки «Деньги» автоматически добавляет комплектующее на склад',()=>{
@@ -1480,11 +1480,11 @@ assert(!state().tx.some(tx=>tx.kind==='transfer'),'Перевод с отриц�
 assert(api.balance('cash')===1000&&api.balance('card')===0,'Баланс касс изменился после отклонённого перевода');
 });
 
-await test('Закупка со склада не может превысить остаток кассы',()=>{
-api.setState(fixture());api.action('nav','stock');api.action('padd');
-const f=form();setv(f,'type','ССД');setv(f,'date','2026-04-06');setv(f,'desc','Закупка дороже остатка');setv(f,'price','1200');setv(f,'qty','1');setv(f,'acc','cash');submit(f);
+await test('Обычная закупка через транзакцию не может превысить остаток кассы',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+const f=form();setv(f,'kind','e');setv(f,'purchaseMode','single');setv(f,'date','2026-04-06');setv(f,'desc','Закупка дороже остатка');setv(f,'amount','1200');setv(f,'qty','1');setv(f,'cat','ССД');setv(f,'acc','cash');submit(f);
 assert(!state().batches.some(batch=>batch.desc==='Закупка дороже остатка'),'Партия была создана без достаточных средств');
-assert(!state().tx.some(tx=>tx.desc==='Закупка: Закупка дороже остатка'),'Расход закупки был проведён');
+assert(!state().tx.some(tx=>tx.desc==='Закупка дороже остатка'),'Расход закупки был проведён');
 assert(api.balance('cash')===1000,'Баланс кассы изменился после отклонённой закупки');
 });
 
@@ -1546,6 +1546,77 @@ assert(api.balance('cash')===1000&&!state().tx.some(tx=>tx.id==='backup-negative
 let replaceError=null;try{api.restoreBackup(bad,'replace',false)}catch(error){replaceError=String(error.message||error)}
 assert(!!replaceError&&replaceError.includes('отрицательный баланс'),'Замена профиля не выявила отрицательный остаток');
 assert(api.balance('cash')===1000&&!state().tx.some(tx=>tx.id==='backup-negative-expense'),'Неудачное восстановление изменило текущий профиль');
+});
+
+await test('Покупка комплектом распределяет полную сумму по отдельным складским позициям',()=>{
+const d=fixture();d.accounts.find(a=>a.id==='cash').open=5000;api.setState(d);api.action('nav','tx');api.action('tadd','e');
+const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','2026-06-01');setv(f,'amount','2500');setv(f,'desc','Компьютер целиком');setv(f,'acc','cash');
+let rows=[...f.querySelectorAll('[data-kit-line]')];assert(rows.length===1,'Не создана начальная строка комплектующего');
+const values=[['Процессоры','Ryzen 7 7700',1,900],['Мат платы','B550 motherboard',1,700],['Оперативка','DDR4 32 GB',2,300],['ССД','NVMe 1 TB',1,300]];
+for(let i=1;i<values.length;i++)f.querySelector('[data-kit-add]').click();
+rows=[...f.querySelectorAll('[data-kit-line]')];values.forEach((v,i)=>{rows[i].querySelector('[data-kit-type]').value=v[0];rows[i].querySelector('[data-kit-desc]').value=v[1];rows[i].querySelector('[data-kit-qty]').value=String(v[2]);rows[i].querySelector('[data-kit-cost]').value=String(v[3])});
+submit(f);
+const saved=state(),tx=saved.tx.find(item=>item.kitPurchase&&item.desc==='Компьютер целиком');
+assert(tx&&tx.amount===2500&&tx.kind==='e','Не создан единый расход на всю сумму комплекта');
+const parts=saved.batches.filter(batch=>batch.kitPurchaseId===tx.id);
+assert(parts.length===4&&tx.kitBatchIds.length===4,'Не созданы четыре отдельные складские позиции');
+assert(parts.reduce((sum,batch)=>sum+batch.qty*batch.price,0)===2500,'Сумма себестоимости позиций не совпадает с суммой покупки');
+assert(parts.find(batch=>batch.desc==='DDR4 32 GB')?.qty===2,'Не сохранено количество одинаковых комплектующих');
+assert(api.balance('cash')===2500,'Полная сумма транзакции не списана с кассы');
+});
+
+await test('Покупка комплектом не сохраняется при расхождении суммы комплектующих',()=>{
+api.setState(fixture());const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','e');
+const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','2026-06-02');setv(f,'amount','2500');setv(f,'desc','Неверно распределённый ПК');setv(f,'acc','cash');
+const row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='Процессоры';row.querySelector('[data-kit-desc]').value='CPU';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='2499';
+const before=alerts.length;submit(f);
+assert(!state().tx.some(tx=>tx.desc==='Неверно распределённый ПК'),'Сохранена комплектная покупка с суммой на 1 ₽ меньше оплаты');
+assert(state().batches.length===fixture().batches.length,'При ошибочной сумме появились складские позиции');
+assert(api.balance('cash')===baseline,'Баланс кассы изменился при отклонённой комплектной покупке');
+assert(alerts.length>before&&alerts.at(-1).includes('точно совпадать'),'Не показано понятное сообщение о несовпадении суммы');
+assert(form()===f,'Окно покупки закрылось при неверной сумме');
+});
+
+await test('Покупка комплектом также блокирует превышение общей суммы',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','2026-06-03');setv(f,'amount','2500');setv(f,'desc','Избыточная себестоимость');setv(f,'acc','cash');
+const row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='Процессоры';row.querySelector('[data-kit-desc]').value='CPU';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='2501';
+const before=alerts.length;submit(f);
+assert(!state().tx.some(tx=>tx.desc==='Избыточная себестоимость'),'Сохранена комплектная покупка с суммой на 1 ₽ больше оплаты');
+assert(alerts.length>before&&alerts.at(-1).includes('точно совпадать'),'Не показано сообщение о превышении суммы покупки');
+});
+
+await test('Редактирование комплектной покупки обновляет строки и сохраняет общий итог',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+let f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','2026-06-04');setv(f,'amount','1000');setv(f,'desc','Редактируемый комплект');setv(f,'acc','cash');
+let row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='ССД';row.querySelector('[data-kit-desc]').value='SSD 1';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='1000';submit(f);
+const tx=state().tx.find(x=>x.desc==='Редактируемый комплект'),originalId=state().batches.find(b=>b.kitPurchaseId===tx.id).id;
+api.action('te',tx.id);f=form();assert(f&&f.querySelector('[data-kit-line]'),'Редактирование не открыло состав комплекта');
+row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-desc]').value='SSD 2';row.querySelector('[data-kit-cost]').value='900';
+f.querySelector('[data-kit-add]').click();const rows=[...f.querySelectorAll('[data-kit-line]')];rows[1].querySelector('[data-kit-type]').value='Оперативка';rows[1].querySelector('[data-kit-desc]').value='RAM 16 GB';rows[1].querySelector('[data-kit-qty]').value='1';rows[1].querySelector('[data-kit-cost]').value='100';submit(f);
+const saved=state(),updated=saved.tx.find(x=>x.id===tx.id),parts=saved.batches.filter(b=>b.kitPurchaseId===tx.id);
+assert(updated.amount===1000&&parts.length===2,'После редактирования сумма или количество строк не совпали');
+assert(parts.some(b=>b.id===originalId&&b.desc==='SSD 2'&&b.price===900),'Существующая складская позиция не была обновлена');
+assert(parts.some(b=>b.desc==='RAM 16 GB'&&b.price===100),'Новая строка не создала складскую позицию');
+});
+
+await test('Удаление и восстановление покупки комплектом переносит все складские позиции вместе',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','2026-06-05');setv(f,'amount','500');setv(f,'desc','Комплект для удаления');setv(f,'acc','cash');
+const row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='ССД';row.querySelector('[data-kit-desc]').value='SSD для корзины';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='500';submit(f);
+const tx=state().tx.find(x=>x.desc==='Комплект для удаления'),batchId=state().batches.find(b=>b.kitPurchaseId===tx.id).id;
+w.confirm=()=>true;api.action('td',tx.id);
+assert(!state().tx.some(x=>x.id===tx.id)&&!state().batches.some(x=>x.id===batchId),'Транзакция или складская позиция не переместилась в корзину');
+const trash=state().trash.find(x=>x.type==='tx'&&x.record.id===tx.id);
+assert(trash&&trash.kitBatches.length===1,'В корзине не сохранена комплектующая');
+api.action('trrestore',trash.id);
+assert(state().tx.some(x=>x.id===tx.id)&&state().batches.some(x=>x.id===batchId),'Восстановление не вернуло транзакцию вместе с комплектующей');
+});
+
+await test('На складе больше нет отдельной кнопки «Закупка»',()=>{
+api.setState(fixture());api.action('nav','stock');
+assert(![...w.document.querySelectorAll('#m button[data-a="padd"]')].length,'На складе осталась отдельная кнопка добавления закупки');
+assert(w.document.querySelector('#m').textContent.includes('через «Деньги»'),'Не показано новое объяснение, как оформлять закупки');
 });
 await test('Графики дашборда показывают шкалу значений',()=>{
 const data=fixture();
