@@ -422,12 +422,18 @@ d.builds.push(
 {id:'build-sold-1',num:2,name:'Сборка с маржой 20%',status:'Продана',builder:'Тест',buyer:'',date:before(5),sold:todayIso,planned:0,price:1500,cost:1200,note:'',lines:[]},
 {id:'build-sold-2',num:3,name:'Сборка с маржой 50%',status:'Продана',builder:'Тест',buyer:'',date:before(10),sold:todayIso,planned:0,price:1000,cost:500,note:'',lines:[]}
 );
+d.tx=[
+{id:'part-sale-1',kind:'i',date:todayIso,amount:300,qty:2,acc:'cash',partSale:true,unitCost:100,unitPrice:150,costAmount:200,grossProfit:100},
+{id:'part-sale-2',kind:'i',date:todayIso,amount:230,qty:1,acc:'cash',partSale:true,unitCost:200,unitPrice:230,costAmount:200,grossProfit:30}
+];
 api.setState(d);await sleep(250);
 api.action('pe','gpu-batch');const f=form();assert(f,'Не открылась форма редактирования партии');
 setv(f,'desc','Видеокарта с обновлённым названием');submit(f);await sleep(250);
 api.action('nav','dash');
 const main=w.document.querySelector('#m'),txt=main.textContent;
 assert(txt.includes('Стоимость склада'),'Нет карточки стоимости склада');
+const markup=[...main.querySelectorAll('.kp')].find(x=>x.textContent.includes('Средняя наценка на единицу товара'));
+assert(markup&&markup.textContent.includes('43,33 ₽')&&markup.textContent.includes('32,5%'),'Средняя наценка на единицу товара должна быть 43,33 ₽ и 32,5% к закупочной цене');
 assert(txt.includes('Продано за месяц')&&txt.includes('2 шт.'),'Не посчитаны продажи текущего месяца');
 assert(txt.includes('Заработок за месяц')&&txt.includes('800'),'Не посчитан заработок текущего месяца');
 assert(txt.includes('Проблемные детали')&&txt.includes('10 шт.'),'Не посчитано количество проблемных деталей');
@@ -1327,6 +1333,24 @@ assert(tx&&tx.kind==='i'&&tx.amount===900&&tx.acc==='cash','Финансовый
 assert(tx.buyer==='Покупатель ПК'&&tx.desc.includes('Тестовая сборка'),'В операции нет данных покупателя или сборки');
 assert(api.balance('cash')===baseline+900,'Выручка не зачислена в выбранную кассу');
 });
+await test('Цена продажи из «Денег» обновляет сборку, а прибыль использует зафиксированную себестоимость',()=>{
+api.setState(fixture());
+api.action('nav','builds');api.action('be','build-open');let f=form();setv(f,'status','Собрана');setv(f,'price','1200');submit(f);
+let build=state().builds.find(x=>x.id==='build-open');assert(build.price===1200&&build.status==='Собрана','Не сохранена предварительная цена в настройках сборки');
+const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','i');f=form();setv(f,'kind','i');setv(f,'cat','Сборка ПК');f.elements.cat.onchange();setv(f,'buildId','build-open');f.elements.buildId.onchange();setv(f,'date','2026-05-21');setv(f,'amount','900');setv(f,'buyer','Покупатель');setv(f,'acc','cash');submit(f);
+let saved=state(),tx=saved.tx.find(x=>x.buildId==='build-open');build=saved.builds.find(x=>x.id==='build-open');
+assert(build.price===900&&tx&&tx.amount===900,'Цена в сборке не обновилась по сумме из «Денег»');
+assert(build.cost===400,'Себестоимость не зафиксирована на момент продажи');
+assert(api.balance('cash')===baseline+900,'Баланс после продажи ПК рассчитан неверно');
+const batch=saved.batches.find(x=>x.id==='gpu-batch');batch.price=250;api.setState(saved);
+api.action('nav','tx');api.action('te',tx.id);f=form();setv(f,'amount','950');submit(f);
+saved=state();build=saved.builds.find(x=>x.id==='build-open');tx=saved.tx.find(x=>x.id===tx.id);
+assert(build.price===950&&tx.amount===950,'Повторное редактирование продажи не синхронизировало цену');
+assert(build.cost===400,'Изменение закупочной цены детали переписало себестоимость уже проданного ПК');
+api.action('nav','builds');const row=[...w.document.querySelectorAll('#m tbody tr')].find(x=>x.textContent.includes('Тестовая сборка'));
+assert(row&&row.textContent.includes('950')&&row.textContent.includes('550'),'Во вкладке «Сборки» не отображаются обновлённая цена и прибыль 550 ₽');
+});
+
 await test('Проданный ПК исчезает из склада готовых компьютеров и не доступен для повторной продажи',()=>{
 api.action('nav','stock');assert(!w.document.body.textContent.includes('ПК №1'),'Проданный ПК остался в списке готовых на складе');
 api.action('nav','tx');api.action('tadd','i');const f=form();setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
