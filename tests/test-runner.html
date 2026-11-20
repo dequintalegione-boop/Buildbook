@@ -1669,13 +1669,15 @@ assert(api.balance('cash')===50,'Удаление дохода привело к
 });
 
 
-await test('Демо-данные не загружаются, если закупки делают кассу отрицательной',()=>{
-api.setState(fixture());const before=state().batches.length,alertsBefore=alerts.length;
+await test('Демо-данные используют отдельные кассы и не меняют пользовательский баланс',()=>{
+api.setState(fixture());const initialCash=api.balance('cash'),initialCard=api.balance('card');
 api.action('demoload');
-assert(state().batches.length===before,'Демо-партии были добавлены при недостатке денег');
-assert(!state().tx.some(tx=>tx.demo),'Демо-расходы были созданы при недостатке средств');
-assert(api.balance('cash')===1000,'Баланс изменился после отклонённой загрузки демо-данных');
-assert(alerts.length>alertsBefore&&alerts[alerts.length-1].includes('не менее'),'Не показано требование к минимальному остатку для демо-загрузки');
+const data=state(),demoAccounts=data.accounts.filter(account=>account.demo);
+assert(data.batches.filter(item=>item.demo).length===66,'Не созданы все демонстрационные партии');
+assert(data.tx.some(tx=>tx.demo),'Демо-операции не были добавлены');
+assert(demoAccounts.length===2,'Для демо-данных не созданы отдельные кассы');
+assert(api.balance('cash')===initialCash&&api.balance('card')===initialCard,'Демо-загрузка изменила баланс обычных касс');
+assert(demoAccounts.every(account=>api.balance(account.id)>=0),'Остаток одной из тестовых касс стал отрицательным');
 });
 
 await test('Отмена записи журнала не может сделать баланс отрицательным',()=>{
@@ -1992,9 +1994,9 @@ await test('Демо-генератор создаёт согласованну�
  api.action('nav','set');
  assert(w.document.querySelector('#m').textContent.includes('за 6 месяцев'),'Настройки не сообщают о шестимесячном наборе');
  const totalBefore=demoTx.length+demo('batches').length+demo('builds').length;
+ assert(state().set.demoLoaded===true,'Флаг загрузки демо-данных не сохранён');
  api.action('demoload');
- assert(alerts.some(message=>message.includes('уже загружены')),'Повторная загрузка не была заблокирована');
- assert(state().tx.filter(tx=>tx.demo).length===demoTx.length&&state().batches.filter(batch=>batch.demo).length===demo('batches').length,'Повторный запуск создал дубликаты');
+ assert(state().set.demoLoaded===true&&state().tx.filter(tx=>tx.demo).length===demoTx.length&&state().batches.filter(batch=>batch.demo).length===demo('batches').length,'Повторный запуск создал дубликаты или сбросил флаг набора');
  assert(totalBefore>200,'Демо-набор получился слишком маленьким');
  await api.flushStorage();
 });
