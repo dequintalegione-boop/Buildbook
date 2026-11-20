@@ -1573,7 +1573,7 @@ const before=alerts.length;submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Неверно распределённый ПК'),'Сохранена комплектная покупка с суммой на 1 ₽ меньше оплаты');
 assert(state().batches.length===fixture().batches.length,'При ошибочной сумме появились складские позиции');
 assert(api.balance('cash')===baseline,'Баланс кассы изменился при отклонённой комплектной покупке');
-assert(alerts.length>before,'Не показано предупреждение при несовпадении суммы: '+alerts.slice(before).join(' | '));
+assert(f.querySelector('[data-kit-error]')&&!f.querySelector('[data-kit-error]').hidden&&f.querySelector('[data-kit-error]').textContent.includes('должна точно совпадать'),'Не показано встроенное предупреждение при несовпадении суммы');
 assert(form()===f,'Окно покупки закрылось при неверной сумме');
 });
 
@@ -1583,7 +1583,7 @@ const f=form();setv(f,'kind','e');setv(f,'purchaseMode','kit');setv(f,'date','20
 const row=f.querySelector('[data-kit-line]');row.querySelector('[data-kit-type]').value='Процессоры';row.querySelector('[data-kit-desc]').value='CPU';row.querySelector('[data-kit-qty]').value='1';row.querySelector('[data-kit-cost]').value='2501';
 const before=alerts.length;submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Избыточная себестоимость'),'Сохранена комплектная покупка с суммой на 1 ₽ больше оплаты');
-assert(alerts.length>before,'Не показано предупреждение при превышении суммы: '+alerts.slice(before).join(' | '));
+assert(f.querySelector('[data-kit-error]')&&!f.querySelector('[data-kit-error]').hidden&&f.querySelector('[data-kit-error]').textContent.includes('должна точно совпадать'),'Не показано встроенное предупреждение при превышении суммы');
 });
 
 await test('Редактирование комплектной покупки обновляет строки и сохраняет общий итог',()=>{
