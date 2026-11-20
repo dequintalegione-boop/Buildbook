@@ -1420,18 +1420,25 @@ assert(![...w.document.querySelectorAll('nav button[data-id]')].some(x=>x.dragga
 });
 
 await test('Графики дашборда показывают шкалу значений',()=>{
-api.setState(fixture());api.action('nav','dash');
+const data=fixture();
+data.builds.push(
+{id:'build-sold-a',num:2,name:'Проданная сборка 1',status:'Продана',builder:'Тест',buyer:'',date:'2026-01-05',sold:'2026-01-20',planned:900,price:900,cost:400,note:'',lines:[]},
+{id:'build-sold-b',num:3,name:'Проданная сборка 2',status:'Продана',builder:'Тест',buyer:'',date:'2026-03-05',sold:'2026-03-21',planned:2500,price:2500,cost:1000,note:'',lines:[]}
+);
+api.setState(data);api.action('nav','dash');
 let chart=w.document.querySelector('#m .dash-widget[data-widget-id="b3"]');
 assert(chart,'Не найден график заработка по месяцам');
 let svg=chart.querySelector('svg'),labels=[...svg.querySelectorAll('.chart-y-label')];
 assert(svg.querySelectorAll('.chart-grid').length===5,'На столбчатом графике отсутствуют пять делений сетки');
 assert(labels.length===5&&labels.every(x=>x.textContent.includes('₽')),'Шкала заработка не показывает значения в рублях');
+assert(new Set(labels.map(x=>x.textContent.trim())).size>1,'Шкала заработка не показывает диапазон значений');
 const state=api.getState(),widget=state.set.dash.find(x=>x.id==='b3');
 assert(widget,'Не найдена настройка графика заработка');
 widget.type='line';api.setState(state);api.action('nav','dash');
 chart=w.document.querySelector('#m .dash-widget[data-widget-id="b3"]');svg=chart&&chart.querySelector('svg');
 labels=svg?[...svg.querySelectorAll('.chart-y-label')]:[];
 assert(labels.length===5&&labels.every(x=>x.textContent.includes('₽')),'Линейный график не показывает шкалу в рублях');
+assert(new Set(labels.map(x=>x.textContent.trim())).size>1,'Линейная шкала не показывает диапазон значений');
 assert(svg.querySelectorAll('.chart-grid').length===5,'На линейном графике отсутствует сетка шкалы');
 });
 await test('Настройки стали компактнее, а галочки заменены переключателями',()=>{
