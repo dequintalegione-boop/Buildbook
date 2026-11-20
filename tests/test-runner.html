@@ -1269,6 +1269,32 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
  assert(api.getState().tx.some(x=>x.debtId===debt.id&&x.debtRole==='payment'),'Потеряна связь платежа долга с операцией');
  assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
+await test('Защищённые поля шифруются в IndexedDB и восстанавливаются паролем',async()=>{
+ api.setState(fixture());
+ const source=api.getState(),logs=[{t:'secret-log',l:'Секретная запись'}];
+ const result=await api.protectState(source,logs,'Correct Horse Battery 42',['financial','personal']);
+ assert(result.stored._fieldVault&&result.stored._fieldVault.fields.length>0,'Не создано хранилище зашифрованных полей');
+ assert(result.stored.accounts[0].name===null&&result.stored.accounts[0].open===null,'Данные кассы остались открытым текстом');
+ assert(result.stored.batches[0].price===null&&result.stored.batches[0].desc===null,'Данные партии остались открытым текстом');
+ assert(result.storedLogs.length===0,'Журнал изменений остался открытым текстом');
+ assert(JSON.stringify(result.stored).indexOf('Секретная запись')<0,'В зашифрованном профиле найден текст журнала');
+ const restored=result.plain.state;
+ assert(restored.accounts[0].name===source.accounts[0].name&&restored.accounts[0].open===source.accounts[0].open,'Поля кассы не восстановились');
+ assert(restored.batches[0].desc===source.batches[0].desc&&restored.batches[0].price===source.batches[0].price,'Поля партии не восстановились');
+ assert(JSON.stringify(result.plain.logs)===JSON.stringify(logs),'Журнал не восстановился');
+});
+await test('Неверный пароль отклоняется, а JSON/ZIP-копии остаются переносимыми',async()=>{
+ api.setState(fixture());
+ const source=api.getState(),result=await api.protectState(source,[{l:'private'}],'Another Secure Password 42',['financial']);
+ let rejected=false;
+ try{await api.unprotectState(result.stored,'Wrong Password 42')}catch(_){rejected=true}
+ assert(rejected,'Неверный пароль не был отклонён');
+ api.setState(Object.assign({},source,{set:Object.assign({},source.set,{fieldProtection:result.config}),_fieldVault:result.stored._fieldVault}));
+ const json=api.createBackupSnapshot(null);
+ assert(!json.set.fieldProtection&&!json._fieldVault,'JSON-копия содержит привязку к паролю или шифрованный vault');
+ const zip=api.createZipBackup();
+ assert(zip instanceof Blob&&zip.size>0,'ZIP-копия не создана');
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
