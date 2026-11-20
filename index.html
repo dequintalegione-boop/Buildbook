@@ -43,14 +43,14 @@ const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
 const defaultState=()=>({
  accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
- batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],checklist:[],notes:'',
+ batches:[],builds:[],tx:[],debts:[],investments:[],stockEvents:[],seq:0,tasks:[],trash:[],checklist:[],notes:'',
  stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
  categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
  hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
- set:{theme:'auto',year:new Date().getFullYear(),backup:''}
+ set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true}
 });
 let S=defaultState(),V={tab:'home',s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',acc:''},report:'expenses'},dip;
-const DATA_SCHEMA_VERSION=3;
+const DATA_SCHEMA_VERSION=4;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
 const repository=window.BuildbookRepository.create(DB_NAME);
@@ -83,7 +83,7 @@ function applyRecordMetadata(record,now,deletedAt=null){
  return record;
 }
 function ensureProfileMetadata(state,now=new Date().toISOString()){
- const collections=['accounts','batches','builds','tx','stockEvents','tasks','checklist'];
+ const collections=['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','checklist'];
  collections.forEach(key=>(Array.isArray(state[key])?state[key]:[]).forEach(record=>applyRecordMetadata(record,now,null)));
  (Array.isArray(state.trash)?state.trash:[]).forEach(entry=>{
   if(!isPlainRecord(entry))return;
@@ -100,7 +100,7 @@ function recordDataWithoutMetadata(record){
  return JSON.stringify(copy);
 }
 function stampChangedRecords(previous,now=new Date().toISOString()){
- const keys=['accounts','batches','builds','tx','stockEvents','tasks','checklist'];
+ const keys=['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','checklist'];
  keys.forEach(key=>{
   const oldItems=Array.isArray(previous&&previous[key])?previous[key]:[];
   const oldById=new Map(oldItems.filter(x=>x&&x.id!=null).map(x=>[String(x.id),x]));
@@ -127,7 +127,7 @@ function migrateState(source){
  let version=parsedVersion,migrated=false;
  while(version<DATA_SCHEMA_VERSION){
   if(version===0){
-   ['accounts','batches','builds','tx','stockEvents','tasks','trash','checklist'].forEach(key=>{
+   ['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','trash','checklist'].forEach(key=>{
     if(!Array.isArray(state[key]))state[key]=defaults[key];
    });
    state.seq=Number.isFinite(+state.seq)&&+state.seq>=0?Math.floor(+state.seq):0;
@@ -150,6 +150,12 @@ function migrateState(source){
   }else if(version===2){
    ensureProfileMetadata(state,new Date().toISOString());
    state.schemaVersion=3;
+  }else if(version===3){
+   if(!Array.isArray(state.debts))state.debts=[];
+   if(!Array.isArray(state.investments))state.investments=[];
+   state.set=Object.assign({},defaults.set,isPlainRecord(state.set)?state.set:{});
+   if(typeof state.set.debtsInvestments!=='boolean')state.set.debtsInvestments=true;
+   state.schemaVersion=4;
   }
   version++;
   migrated=true;
@@ -157,7 +163,7 @@ function migrateState(source){
  const beforeMetadata=JSON.stringify(state);
  ensureProfileMetadata(state,new Date().toISOString());
  if(JSON.stringify(state)!==beforeMetadata)migrated=true;
- ['accounts','batches','builds','tx','stockEvents','tasks','trash','checklist'].forEach(key=>{
+ ['accounts','batches','builds','tx','debts','investments','stockEvents','tasks','trash','checklist'].forEach(key=>{
   if(!Array.isArray(state[key]))throw new Error('Повреждена структура данных: раздел «'+key+'» не является списком. Данные не изменены.');
  });
  return {state,migrated};
@@ -1804,7 +1810,7 @@ function replaceBackupData(data){
   stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
   categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
   hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
-  set:{theme:'auto',year:new Date().getFullYear(),backup:''}
+  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true}
  };
  const incoming=JSON.parse(JSON.stringify(data));delete incoming.photos;S=migrateState(Object.assign(base,incoming)).state;
  S.accounts=Array.isArray(S.accounts)?S.accounts:base.accounts;
