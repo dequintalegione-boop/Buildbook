@@ -872,7 +872,7 @@ fld('buyer','Покупатель','text',linkedBuild?linkedBuild.buyer:o&&o.buy
 '<section id="kit-purchase-fields" class="kit-editor" style="display:none"><div><b>Комплектующие внутри покупки</b><p class="mu kit-help">Добавьте каждую деталь отдельно. Укажите количество и себестоимость за одну единицу. Итог по всем строкам обязан точно совпасть с суммой покупки.</p></div>'+
 '<div id="kit-lines">'+(existingKitRows.length?existingKitRows.map(kitLineHtml).join(''):kitLineHtml({}))+'</div>'+
 '<div class="kit-line-footer"><button type="button" class="btn" data-kit-add>+ Добавить комплектующее</button><small>Можно добавлять любое количество строк</small></div>'+
-'<div class="kit-summary"><span>Распределено по комплектующим</span><strong data-kit-summary>0 ₽ из 0 ₽</strong><b data-kit-difference>Укажите сумму</b></div></section>'+
+'<div class="kit-summary"><span>Распределено по комплектующим</span><strong data-kit-summary>0 ₽ из 0 ₽</strong><b data-kit-difference>Укажите сумму</b></div><p data-kit-error class="bad" role="alert" hidden></p></section>'+
 '<p id="stock-expense-hint" class="mu" style="display:none">Этот расход автоматически создаст складскую партию. Сумма считается общей стоимостью закупки, а цена за штуку рассчитывается как сумма ÷ количество.</p>'+
 fld('desc',linkedKit?'Описание покупки':'Описание','text',linkedBatch?linkedBatch.desc:o?o.desc:'')+
 fld('acc','Касса','select','',accOpt(o&&o.acc))+
@@ -909,7 +909,7 @@ if(kitMode){
  }
  total=Math.round((total+Number.EPSILON)*100)/100;
  const purchaseTotal=Math.round((amount+Number.EPSILON)*100)/100;
- if(Math.abs(total-purchaseTotal)>0.009){alert('Сумма себестоимости комплектующих должна точно совпадать с суммой покупки. Покупка: '+R(purchaseTotal)+', распределено: '+R(total)+', разница: '+R(Math.abs(purchaseTotal-total))+'. Операция не сохранена.');return false}
+ if(Math.abs(total-purchaseTotal)>0.009){const message='Сумма себестоимости комплектующих должна точно совпадать с суммой покупки. Покупка: '+R(purchaseTotal)+', распределено: '+R(total)+', разница: '+R(Math.abs(purchaseTotal-total))+'. Операция не сохранена.',inlineError=form.querySelector('[data-kit-error]');if(inlineError){inlineError.hidden=false;inlineError.textContent=message}alert(message);return false}
  if(oldKitBatches.some(b=>!seen.has(b.id)&&(used(b)>0||writtenOff(b)>0||problemMarked(b)>0||S.tx.some(tx=>tx.partSale&&tx.batchId===b.id)))){
   alert('Нельзя убрать комплектующую из покупки: она уже используется в сборке, продана, отмечена проблемной или списана. Сначала разберите связанные операции.');return false
  }
@@ -976,6 +976,7 @@ const updateKitSummary=()=>{
  const summary=f.querySelector('[data-kit-summary]'),difference=f.querySelector('[data-kit-difference]');
  if(summary)summary.textContent=R(total)+' из '+R(amount);
  if(difference){difference.className=Math.abs(diff)<.01?'ok':'bad';difference.textContent=Math.abs(diff)<.01?'Сумма совпадает':(diff>0?'Превышение: ':'Не хватает: ')+R(Math.abs(diff))}
+ const inlineError=f.querySelector('[data-kit-error]');if(inlineError&&Math.abs(diff)<.01){inlineError.hidden=true;inlineError.textContent=''}
 };
 const updateFields=()=>{
  const income=f.elements.kind.value==='i',pc=income&&f.elements.cat.value==='Сборка ПК',kit=!income&&f.elements.purchaseMode.value==='kit';
