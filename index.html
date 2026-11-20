@@ -1859,7 +1859,7 @@ function validBackup(data){
  const version=data.schemaVersion==null?0:Number(data.schemaVersion);
  return Number.isSafeInteger(version)&&version>=0&&version<=DATA_SCHEMA_VERSION;
 }
-function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,tasks:(data.tasks||[]).length,checklist:(data.checklist||[]).length}}
+function backupCounts(data){return {accounts:(data.accounts||[]).length,batches:data.batches.length,builds:data.builds.length,tx:data.tx.length,debts:(data.debts||[]).length,investments:(data.investments||[]).length,tasks:(data.tasks||[]).length,checklist:(data.checklist||[]).length}}
 function createBackupSnapshot(backupAt){
  const snapshot=JSON.parse(JSON.stringify(S));
  if(backupAt)snapshot.set.backup=backupAt;
@@ -1899,8 +1899,8 @@ function downloadBackup(filename,markDate){
 function mergeBackupData(data){
  if(!validBackup(data))throw new Error('Файл не похож на резервную копию Buildbook.');
  data=migrateState(data).state;
- const stats={accounts:0,batches:0,builds:0,tx:0,tasks:0,checklist:0,stockEvents:0,trash:0,skipped:0};
- const accountMap={},batchMap={},buildMap={},txMap={};
+ const stats={accounts:0,batches:0,builds:0,tx:0,debts:0,investments:0,tasks:0,checklist:0,stockEvents:0,trash:0,skipped:0};
+ const accountMap={},batchMap={},buildMap={},txMap={},debtMap={},investmentMap={};
  const clone=value=>JSON.parse(JSON.stringify(value));
  (Array.isArray(data.accounts)?data.accounts:[]).forEach(source=>{
   const old=String(source.id||''),sameId=old&&S.accounts.find(a=>a.id==old),sameName=S.accounts.find(a=>csvHeaderNorm(a.name)==csvHeaderNorm(source.name));
@@ -1945,6 +1945,22 @@ function mergeBackupData(data){
   if(invalid){stats.skipped++;return}
   item.lines=lines;buildMap[old]=item.id;S.builds.push(item);stats.builds++;S.seq=Math.max(+S.seq||0,+item.num||0);
  });
+ (Array.isArray(data.debts)?data.debts:[]).forEach(source=>{
+  const old=String(source.id||''),existing=old&&S.debts.find(d=>d.id==old);
+  if(existing){debtMap[old]=existing.id;stats.skipped++;return}
+  const item=clone(source);item.id=old||uid();if(S.debts.some(d=>d.id==item.id))item.id=uid();
+  item.accountId=accountMap[String(item.accountId||'')]||S.accounts.find(a=>a.id==item.accountId)?.id||S.accounts[0]?.id||'';
+  item.payments=(Array.isArray(item.payments)?item.payments:[]).map(p=>({...p,accountId:accountMap[String(p.accountId||'')]||S.accounts.find(a=>a.id==p.accountId)?.id||S.accounts[0]?.id||''}));
+  debtMap[old]=item.id;S.debts.push(item);stats.debts++;
+ });
+ (Array.isArray(data.investments)?data.investments:[]).forEach(source=>{
+  const old=String(source.id||''),existing=old&&S.investments.find(i=>i.id==old);
+  if(existing){investmentMap[old]=existing.id;stats.skipped++;return}
+  const item=clone(source);item.id=old||uid();if(S.investments.some(i=>i.id==item.id))item.id=uid();
+  item.accountId=accountMap[String(item.accountId||'')]||S.accounts.find(a=>a.id==item.accountId)?.id||S.accounts[0]?.id||'';
+  item.events=(Array.isArray(item.events)?item.events:[]).map(e=>({...e,accountId:accountMap[String(e.accountId||'')]||S.accounts.find(a=>a.id==e.accountId)?.id||S.accounts[0]?.id||''}));
+  investmentMap[old]=item.id;S.investments.push(item);stats.investments++;
+ });
  (data.tx||[]).forEach(source=>{
   const old=String(source.id||''),existing=old&&S.tx.find(t=>t.id==old);
   if(existing){txMap[old]=existing.id;stats.skipped++;return}
@@ -1955,9 +1971,20 @@ function mergeBackupData(data){
   if(item.batchId){const mapped=batchMap[String(item.batchId)];if(!mapped){stats.skipped++;return}item.batchId=mapped}
   if(item.buildId){const mapped=buildMap[String(item.buildId)];if(!mapped){stats.skipped++;return}item.buildId=mapped}
   if(item.sourceBuildId){const mapped=buildMap[String(item.sourceBuildId)];if(!mapped){stats.skipped++;return}item.sourceBuildId=mapped}
+  if(item.debtId){const mapped=debtMap[String(item.debtId)];if(!mapped){stats.skipped++;return}item.debtId=mapped}
+  if(item.investmentId){const mapped=investmentMap[String(item.investmentId)];if(!mapped){stats.skipped++;return}item.investmentId=mapped}
   if(item.kind=='transfer'&&(!item.fromAcc||!item.toAcc||item.fromAcc==item.toAcc)){stats.skipped++;return}
   if(item.kind!='transfer'&&!item.acc)item.acc=S.accounts[0]?.id;
   txMap[old]=item.id;S.tx.push(item);stats.tx++;
+ });
+ (data.debts||[]).forEach(source=>{
+  const item=S.debts.find(d=>d.id===debtMap[String(source.id||'')]);if(!item)return;
+  if(source.originTxId)item.originTxId=txMap[String(source.originTxId)]||item.originTxId;
+  item.payments=(item.payments||[]).map(p=>({...p,txId:txMap[String(p.txId||'')]||p.txId}));
+ });
+ (data.investments||[]).forEach(source=>{
+  const item=S.investments.find(i=>i.id===investmentMap[String(source.id||'')]);if(!item)return;
+  item.events=(item.events||[]).map(e=>({...e,txId:txMap[String(e.txId||'')]||e.txId}));
  });
  (data.batches||[]).forEach(source=>{
   const mapped=batchMap[String(source.id||'')],target=mapped&&S.batches.find(b=>b.id==mapped),txId=source.txId&&txMap[String(source.txId)];
@@ -1994,7 +2021,7 @@ function replaceBackupData(data){
  const base={
   schemaVersion:DATA_SCHEMA_VERSION,
   accounts:[{id:'a1',name:'Наличные',open:0},{id:'a2',name:'Карта',open:0}],
-  batches:[],builds:[],tx:[],stockEvents:[],seq:0,tasks:[],trash:[],notes:'',
+  batches:[],builds:[],tx:[],debts:[],investments:[],stockEvents:[],seq:0,tasks:[],trash:[],notes:'',
   stockGroup:'Сборка ПК',partSaleGroup:'Продажи',partSaleCategory:'Комплектующие',
   categories:{e:JSON.parse(JSON.stringify(DEFAULT_EXP)),i:JSON.parse(JSON.stringify(DEFAULT_INC))},
   hiddenCategories:{e:[],i:[]},hiddenGroups:{e:[],i:[]},
@@ -2024,7 +2051,7 @@ function backupRestoreWizard(data){
   const mode=form.elements.mode.value;
   if(mode=='replace'&&!confirm('Заменить все текущие данные? Перед заменой будет скачана резервная копия текущего состояния.'))return false;
   const result=restoreBackupData(data,mode,mode=='replace');
-  const rows=mode=='add'?[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks],['Чек-лист',result.checklist],['Складские события',result.stockEvents],['Пропущено',result.skipped]]:[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Задачи',result.tasks],['Чек-лист',result.checklist]];
+  const rows=mode=='add'?[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Долги',result.debts],['Инвестиции',result.investments],['Задачи',result.tasks],['Чек-лист',result.checklist],['Складские события',result.stockEvents],['Пропущено',result.skipped]]:[['Кассы',result.accounts],['Партии',result.batches],['Сборки',result.builds],['Операции',result.tx],['Долги',result.debts],['Инвестиции',result.investments],['Задачи',result.tasks],['Чек-лист',result.checklist]];
   const report='<div class="tw"><table><tbody>'+rows.map(x=>'<tr><td>'+x[0]+'</td><td class="r">'+x[1]+'</td></tr>').join('')+'</tbody></table></div>';
   modal('Восстановление завершено',report,()=>true,true,'Закрыть');
  },false,'Восстановить');
@@ -2384,7 +2411,7 @@ function trash(){
  return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
 }
 
-function act(a,id){const A={assetsTab:()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;render();scrollTo(0,0)},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+function act(a,id){const A={'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;render();scrollTo(0,0)},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>reportCsv(),xlsx:()=>exportXlsx(id),padd:()=>pform(),pe:()=>pform(id),badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
 pd:()=>{const b=find('batches',id);if(!b)return;const linkedBuilds=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==b.id));if(linkedBuilds.length){alert('Нельзя удалить партию: она используется в сборках '+linkedBuilds.map(build=>'№'+build.num+(build.name?' («'+build.name+'»)':'')).join(', ')+'. Сначала удалите или измените состав этих сборок.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift(makeTrashEntry('batch',b,{relatedTx}));S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
 bd:()=>{const b=find('builds',id);if(!b)return;if(!confirm('Переместить сборку №'+b.num+' в корзину? Детали вернутся в доступный остаток.'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный доход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}const photos=Array.isArray(PH[b.id])?trashClone(PH[b.id]):[];S.trash.unshift(makeTrashEntry('build',b,{relatedTx,photos}));S.builds=S.builds.filter(x=>x.id!==b.id);delete PH[b.id];save();render()},
