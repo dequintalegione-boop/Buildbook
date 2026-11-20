@@ -1806,7 +1806,7 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     if(!Array.isArray(payments))throw new Error('История платежей должна быть списком.');
     payments=payments.map(p=>{
      const amount=Number(p.amount),paymentDate=csvDate(p.date)||p.date,acc=S.accounts.find(a=>a.id==p.accountId||csvHeaderNorm(a.name)===csvHeaderNorm(p.accountId));
-     if(!Number.isFinite(amount)||amount<=0||!/^\\d{4}-\\d{2}-\\d{2}$/.test(paymentDate||''))throw new Error('В истории долга найден некорректный платёж.');
+     if(!Number.isFinite(amount)||amount<=0||!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate||''))throw new Error('В истории долга найден некорректный платёж.');
      if(p.accountId&&!acc)throw new Error('Не найдена касса одного из платежей долга.');
      return {...p,id:String(p.id||uid()),amount,date:paymentDate,accountId:acc?acc.id:'',note:String(p.note||'')};
     });
@@ -1824,7 +1824,7 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     if(!Array.isArray(events))throw new Error('История инвестиции должна быть списком.');
     events=events.map(e=>{
      const amount=Number(e.amount),eventDate=csvDate(e.date)||e.date,acc=S.accounts.find(a=>a.id==e.accountId||csvHeaderNorm(a.name)===csvHeaderNorm(e.accountId));
-     if(!['contribution','withdrawal'].includes(e.type)||!Number.isFinite(amount)||amount<=0||!/^\\d{4}-\\d{2}-\\d{2}$/.test(eventDate||''))throw new Error('В истории инвестиции найдено некорректное движение.');
+     if(!['contribution','withdrawal'].includes(e.type)||!Number.isFinite(amount)||amount<=0||!/^\d{4}-\d{2}-\d{2}$/.test(eventDate||''))throw new Error('В истории инвестиции найдено некорректное движение.');
      if(e.accountId&&!acc)throw new Error('Не найдена касса одного из движений инвестиции.');
      return {...e,id:String(e.id||uid()),amount,date:eventDate,accountId:acc?acc.id:'',note:String(e.note||'')};
     });
@@ -2122,6 +2122,8 @@ function xlsxDataRows(kind){
  if(kind=='tx')return [['ID','Дата','Тип','Группа','Категория','Описание','Количество','Сумма','Касса','Откуда','Куда','ID партии','ID сборки','Продажа комплектующего','Себестоимость продажи','Валовая прибыль','Себестоимость за штуку','Цена за штуку','ID исходной сборки','№ исходной сборки','Описание партии','Тип партии'],...S.tx.map(t=>[t.id,t.date,t.kind=='transfer'?'Перевод':t.kind=='i'?'Доход':'Расход',t.grp||'',t.cat,t.desc,t.qty||1,t.amount,(find('accounts',t.acc)||{}).name,(find('accounts',t.fromAcc)||{}).name,(find('accounts',t.toAcc)||{}).name,t.batchId||'',t.buildId||'',t.partSale?'Да':'',t.partSale?t.costAmount:'',t.partSale?t.grossProfit:'',t.partSale?t.unitCost:'',t.partSale?t.unitPrice:'',t.sourceBuildId||'',t.sourceBuildNum||'',t.batchDesc||'',t.batchType||''])];
  if(kind=='accounts')return [['ID','Касса','Начальный остаток','Текущий баланс'],...S.accounts.map(a=>[a.id,a.name,a.open,bal(a)])];
  if(kind=='tasks')return [['ID','Задача','Квадрант','Выполнено','Срок','Исполнитель','ID сборки'],...S.tasks.map(t=>[t.id,t.text,t.q,t.done?'Да':'Нет',t.due||'',t.who||t.assignee||'',t.build||t.buildId||''])];
+ if(kind=='debts')return [['ID','Направление','Кому / от кого','Сумма','Дата','Срок возврата','ID кассы','Комментарий','Статус','ID исходной операции','Платежи JSON'],...S.debts.map(d=>[d.id,d.direction,d.person,d.principal,d.date,d.dueDate||'',d.accountId||'',d.note||'',d.status||'active',d.originTxId||'',JSON.stringify(d.payments||[])])];
+ if(kind=='investments')return [['ID','Название','Тип актива','Площадка / брокер','Дата','Текущая оценка','ID кассы','Комментарий','Статус','Движения JSON'],...S.investments.map(i=>[i.id,i.name,i.type,i.platform||'',i.date,i.currentValue,i.accountId||'',i.note||'',i.status||'active',JSON.stringify(i.events||[])])];
  return [];
 }
 function xlsxAddSheet(wb,name,rows){
@@ -2154,13 +2156,13 @@ function buildXlsxWorkbook(kind){
  const X=window.XLSX;if(!X)throw new Error('Не загружена локальная библиотека XLSX.');
  const wb=X.utils.book_new(),year=activeReportYear();
  const add=(name,rows)=>xlsxAddSheet(wb,name,rows);
- const addData=k=>({batches:()=>add('Склад',xlsxDataRows('batches')),builds:()=>add('Сборки',xlsxDataRows('builds')),tx:()=>add('Транзакции',xlsxDataRows('tx')),accounts:()=>add('Кассы',xlsxDataRows('accounts')),tasks:()=>add('Задачи',xlsxDataRows('tasks'))})[k]();
+ const addData=k=>({accounts:()=>add('Кассы',xlsxDataRows('accounts')),batches:()=>add('Склад',xlsxDataRows('batches')),builds:()=>add('Сборки',xlsxDataRows('builds')),debts:()=>add('Долги',xlsxDataRows('debts')),investments:()=>add('Инвестиции',xlsxDataRows('investments')),tx:()=>add('Транзакции',xlsxDataRows('tx')),tasks:()=>add('Задачи',xlsxDataRows('tasks'))})[k]();
  if(kind=='all'){
-  ['batches','builds','tx','accounts','tasks'].forEach(addData);
+  ['accounts','batches','builds','debts','investments','tx','tasks'].forEach(addData);
   add('Расходы',xlsxReportRows('expenses',year));add('Доходы',xlsxReportRows('income',year));add('Сводка',xlsxReportRows('summary',year));add('Прибыль сборок',xlsxReportRows('builds',year));
  }else if(kind=='reports'){
   add('Расходы',xlsxReportRows('expenses',year));add('Доходы',xlsxReportRows('income',year));add('Сводка',xlsxReportRows('summary',year));add('Прибыль сборок',xlsxReportRows('builds',year));
- }else if(['batches','builds','tx','accounts','tasks'].includes(kind))addData(kind);
+ }else if(['batches','builds','tx','accounts','tasks','debts','investments'].includes(kind))addData(kind);
  else throw new Error('Неизвестный раздел для экспорта XLSX.');
  return wb;
 }
@@ -2230,7 +2232,7 @@ function xlsxImportWizard(buffer){
  let workbook,plans;
  try{workbook=X.read(buffer,{type:'array',cellDates:false});plans=xlsxWorkbookPlans(workbook)}catch(error){alert('Не удалось прочитать XLSX: '+(error.message||'повреждённый файл'));return}
  if(!plans.length){alert('В книге Excel нет листов.');return}
- const kinds=[['skip','Не импортировать'],['accounts','Кассы'],['batches','Склад'],['builds','Сборки'],['tx','Операции'],['tasks','Задачи']];
+ const kinds=[['skip','Не импортировать'],['accounts','Кассы'],['batches','Склад'],['builds','Сборки'],['debts','Долги'],['investments','Инвестиции'],['tx','Операции'],['tasks','Задачи']];
  const body=plans.map((p,i)=>{
   const preview=p.matrix.slice(0,5).map(row=>'<tr>'+p.headers.map((_,j)=>'<td>'+esc(row[j]??'')+'</td>').join('')+'</tr>').join('');
   return '<section class="cat-group"><label class="ck"><input type="checkbox" name="xlsx_use_'+i+'" '+(p.kind!='skip'?'checked':'')+'> Обработать лист «'+esc(p.name)+'»</label><label>Тип данных<select name="xlsx_kind_'+i+'">'+opt(kinds,p.kind)+'</select></label><div id="xlsx_map_'+i+'" class="g2"></div><div id="xlsx_default_'+i+'"></div><small>Предпросмотр: '+Math.max(0,p.matrix.length-1)+' строк данных</small><div class="sell-scroll"><table><thead><tr>'+p.headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div></section>';
