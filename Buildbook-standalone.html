@@ -2481,7 +2481,7 @@ function demoPushTx(data){
  S.tx.push(record);return record;
 }
 function demoEntryCount(){
- return ['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'].reduce((sum,key)=>sum+(S[key]||[]).filter(item=>item&&item.demo).length,0)+(LOG||[]).filter(item=>item&&item.demo).length;
+ return ['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'].reduce((sum,key)=>sum+(S[key]||[]).filter(item=>item&&(item.demo||(key==='trash'&&item.record&&item.record.demo))).length,0)+(LOG||[]).filter(item=>item&&item.demo).length;
 }
 function loadDemoData(){
  if(S.set.demoLoaded){alert('Полугодовые демо-данные уже загружены. Сначала удалите их, чтобы загрузить набор заново.');return}
@@ -2711,7 +2711,7 @@ function loadDemoData(){
 }
 function removeDemoData(){
  const collections=['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'];
- const hasDemo=collections.some(key=>(S[key]||[]).some(item=>item&&item.demo))||(LOG||[]).some(item=>item&&item.demo)||String(S.notes||'').includes('— Демо-данные Buildbook —');
+ const hasDemo=collections.some(key=>(S[key]||[]).some(item=>item&&(item.demo||(key==='trash'&&item.record&&item.record.demo))))||(LOG||[]).some(item=>item&&item.demo)||String(S.notes||'').includes('— Демо-данные Buildbook —');
  if(!S.set.demoLoaded&&!hasDemo){toast('Демо-данных нет.');return}
  if(!confirm('Удалить демонстрационные записи за полгода? Обычные данные останутся. Записи, на которые уже ссылаются ваши реальные операции, сборки или задачи, будут сохранены.'))return;
 
