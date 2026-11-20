@@ -1301,8 +1301,9 @@ const col=(d,f)=>{
  const min=Math.min(0,...all),max=Math.max(0,...all),hasData=all.some(v=>v!==0),range=max-min||1;
  const inner=Math.max(300,n*(k*14+14),n*36),left=86,right=12,W=left+inner+right,g=inner/Math.max(1,n),bw=12,top=12,bottom=132,plot=bottom-top;
  const Y=v=>top+(max-v)/range*plot,y0=Y(0);
- const axis=Array.from({length:5},(_,i)=>{
-  const v=hasData?min+(max-min)*i/4:0,y=Y(v);
+ const ticks=hasData?Array.from({length:5},(_,i)=>min+(max-min)*i/4):[0];
+ const axis=ticks.map(v=>{
+  const y=Y(v);
   return `<line class="chart-grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"/><text class="chart-y-label" x="${left-8}" y="${y+3}" text-anchor="end">${esc(f(v))}</text>`;
  }).join('');
  const bars=d.s.map((series,j)=>series[1].map((value,i)=>{
@@ -1317,8 +1318,9 @@ const line=(d,f)=>{
  const min=Math.min(0,...all),max=Math.max(0,...all),hasData=all.some(v=>v!==0),range=max-min||1;
  const W=470,left=86,right=12,top=12,bottom=132,plot=bottom-top,inner=W-left-right;
  const X=i=>n>1?left+i*inner/(n-1):left+inner/2,Y=v=>top+(max-v)/range*plot;
- const axis=Array.from({length:5},(_,i)=>{
-  const v=hasData?min+(max-min)*i/4:0,y=Y(v);
+ const ticks=hasData?Array.from({length:5},(_,i)=>min+(max-min)*i/4):[0];
+ const axis=ticks.map(v=>{
+  const y=Y(v);
   return `<line class="chart-grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"/><text class="chart-y-label" x="${left-8}" y="${y+3}" text-anchor="end">${esc(f(v))}</text>`;
  }).join('');
  const series=d.s.map((s,j)=>`<polyline fill="none" stroke="${s[2]||PC[j]}" stroke-width="2.5" stroke-linejoin="round" points="${s[1].map((v,i)=>X(i)+','+Y(Number(v)||0)).join(' ')}"/>${s[1].map((v,i)=>`<circle cx="${X(i)}" cy="${Y(Number(v)||0)}" r="3" fill="${s[2]||PC[j]}"><title>${esc(d.l[i])}: ${f(Number(v)||0)}</title></circle>`).join('')}`).join('');
