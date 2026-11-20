@@ -2052,6 +2052,58 @@ await test('Папка «Прочее» в режиме редактирован
  assert(css.includes('body.layout-editing #nav-other-list>button[data-id]')&&css.includes('overflow-wrap:anywhere'),'Не подключены правила переноса длинных названий');
 });
 
+
+await test('Настройки показывают каталог настраиваемых горячих клавиш',()=>{
+ const data=fixture();api.setState(data);api.action('nav','set');
+ const panel=w.document.querySelector('.hotkey-panel'),bindings=state().set.hotkeys,actions=api.hotkeyActions();
+ assert(panel&&panel.textContent.includes('Горячие клавиши'),'В настройках отсутствует редактор горячих клавиш');
+ assert(panel.querySelector('#hotkey-new-action')&&panel.querySelector('[data-a="hotkey-add"]'),'Нет выбора действия или кнопки добавления назначения');
+ assert(bindings.some(item=>item.action==='search'&&item.combo==='Ctrl+K'),'Не сохранено стандартное сочетание поиска');
+ assert(bindings.some(item=>item.action==='nav-stock'&&item.combo==='Ctrl+Alt+3'),'Не сохранено стандартное сочетание перехода на склад');
+ assert(actions.length>=20,'Слишком мало доступных действий для назначения');
+ assert(panel.textContent.includes('2 или 3 клавиш'),'Не объяснено ограничение длины комбинации');
+});
+await test('Можно записать и выполнить пользовательское сочетание из трёх клавиш',()=>{
+ const data=fixture();api.setState(data);api.action('nav','set');
+ const select=w.document.querySelector('#hotkey-new-action');select.value='nav-stock';
+ click('[data-a="hotkey-add"]');
+ const pending=state().set.hotkeys.find(item=>item.action==='nav-stock'&&!item.combo);
+ assert(pending,'Не создана новая запись горячей клавиши');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ const saved=state().set.hotkeys.find(item=>item.id===pending.id);
+ assert(saved&&saved.combo==='Ctrl+Shift+M','Комбинация Ctrl + Shift + M не сохранилась');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(w.document.querySelector('nav button[data-id="stock"]').classList.contains('on'),'Назначенная комбинация не открыла склад');
+});
+await test('Горячая клавиша может запускать создание задачи',()=>{
+ const data=fixture();data.set.hotkeys=[{id:'custom-task',action:'new-task',combo:'Ctrl+Shift+T'}];
+ api.setState(data);
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'T',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(w.document.querySelector('nav button[data-id="tasks"]').classList.contains('on'),'Сочетание не открыло раздел задач');
+ assert(w.document.querySelector('.ov form'),'Сочетание не открыло форму создания задачи');
+});
+await test('Система блокирует конфликты, комбинации длиннее трёх клавиш и ввод в полях',()=>{
+ const data=fixture();data.set.hotkeys=[
+  {id:'first',action:'nav-stock',combo:'Ctrl+Shift+M'},
+  {id:'duplicate',action:'nav-builds',combo:'Ctrl+Shift+M'}
+ ];
+ api.setState(data);
+ assert(state().set.hotkeys.filter(item=>item.combo==='Ctrl+Shift+M').length===1,'Дублирующее сочетание попало в профиль');
+ api.action('nav','set');
+ const select=w.document.querySelector('#hotkey-new-action');select.value='nav-trash';click('[data-a="hotkey-add"]');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&!item.combo),'Конфликтное назначение было принято');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,altKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&!item.combo),'Комбинация из четырёх клавиш была принята');
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(state().set.hotkeys.find(item=>item.action==='nav-trash'&&item.combo==='Ctrl+Shift+M'),'После отклонения некорректных комбинаций нельзя было сохранить валидную');
+ api.action('nav','set');
+ const input=w.document.createElement('input');w.document.body.append(input);input.focus();
+ input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'M',ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+ assert(w.document.querySelector('nav button[data-id="set"]').classList.contains('on'),'Глобальная клавиша сработала во время ввода текста');
+ input.remove();
+});
+
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
