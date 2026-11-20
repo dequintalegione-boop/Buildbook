@@ -1418,6 +1418,48 @@ api.action('nav','dash');assert([...w.document.querySelectorAll('#m .dash-widget
 api.action('nav','set');toggle=w.document.querySelector('[data-f="layoutEdit"]');toggle.checked=false;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
 assert(![...w.document.querySelectorAll('nav button[data-id]')].some(x=>x.draggable),'Перетаскивание не отключилось после выключения режима');
 });
+
+await test('Графики дашборда показывают шкалу значений',()=>{
+api.setState(fixture());api.action('nav','dash');
+let chart=w.document.querySelector('#m .dash-widget[data-widget-id="b3"]');
+assert(chart,'Не найден график заработка по месяцам');
+let svg=chart.querySelector('svg'),labels=[...svg.querySelectorAll('.chart-y-label')];
+assert(svg.querySelectorAll('.chart-grid').length===5,'На столбчатом графике отсутствуют пять делений сетки');
+assert(labels.length===5&&labels.every(x=>x.textContent.includes('₽')),'Шкала заработка не показывает значения в рублях');
+const state=api.getState(),widget=state.set.dash.find(x=>x.id==='b3');
+assert(widget,'Не найдена настройка графика заработка');
+widget.type='line';api.setState(state);api.action('nav','dash');
+chart=w.document.querySelector('#m .dash-widget[data-widget-id="b3"]');svg=chart&&chart.querySelector('svg');
+labels=svg?[...svg.querySelectorAll('.chart-y-label')]:[];
+assert(labels.length===5&&labels.every(x=>x.textContent.includes('₽')),'Линейный график не показывает шкалу в рублях');
+assert(svg.querySelectorAll('.chart-grid').length===5,'На линейном графике отсутствует сетка шкалы');
+});
+await test('Настройки стали компактнее, а галочки заменены переключателями',()=>{
+api.setState(fixture());api.action('nav','set');
+const page=w.document.querySelector('#m .settings-page');
+assert(page,'Не найден компактный контейнер настроек');
+const switches=[...page.querySelectorAll('input[type="checkbox"][role="switch"][data-f]')];
+assert(switches.length===2,'Не все настройки-переключатели заменены');
+const group=page.querySelector('.cat-group');
+assert(group&&w.getComputedStyle(group).paddingTop==='8px','Группы категорий не стали компактнее');
+const demo=page.querySelector('[data-a="demoload"]')?.closest('section');
+const install=page.querySelector('[data-a="inst"]')?.closest('section');
+const wipe=page.querySelector('[data-a="wipe"]');
+assert(demo&&install&&demo.compareDocumentPosition(install)&w.Node.DOCUMENT_POSITION_FOLLOWING,'Демо-данные расположены не перед установкой приложения');
+assert(wipe&&wipe.compareDocumentPosition(demo)&w.Node.DOCUMENT_POSITION_FOLLOWING,'Удаление данных должно находиться выше блока демо-данных');
+});
+await test('Режим компоновки не добавляет зелёную обводку блокам',()=>{
+api.setState(fixture());api.action('nav','set');
+const toggle=w.document.querySelector('[data-f="layoutEdit"]');
+toggle.checked=true;toggle.dispatchEvent(new w.Event('input',{bubbles:true}));
+const group=w.document.querySelector('#m .cat-group');
+const navItem=w.document.querySelector('nav button[data-id="home"]');
+assert(group&&w.getComputedStyle(group).outlineStyle==='none','Группа настроек получила обводку');
+assert(navItem&&w.getComputedStyle(navItem).outlineStyle==='none','Пункт меню получил обводку');
+api.action('nav','dash');
+const card=w.document.querySelector('#m .dash-widget');
+assert(card&&w.getComputedStyle(card).outlineStyle==='none','Виджет дашборда получил обводку');
+});
 await test('Интерфейс использует локальный современный шрифт без внешнего запроса',()=>{
 const style=w.document.querySelector('style')?.textContent||'';
 assert(style.includes('Bahnschrift'),'Новый шрифт не задан');
