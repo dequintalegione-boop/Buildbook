@@ -1373,10 +1373,9 @@ assert(!Object.values(stateAfter.categories.i).flat().includes('Заработн
 assert(stateAfter.tx.some(x=>x.id==='legacy-salary'&&x.cat==='Заработная плата'),'Историческая операция была удалена');
 });
 await test('Журнал хранит более 1000 записей без автоматического ограничения',()=>{
-api.setState(fixture());
+const d=fixture();d.tasks.push({id:'journal-tail-task',text:'Изменить после журнала',q:0,done:0});api.setState(d);
 const records=Array.from({length:1105},(_,i)=>({t:'20.11.2026 12:00:00',l:'Старая тестовая запись '+i,changes:[]}));
-api.migrateLegacyLogs(records);
-prompts.push('Тестовая запись после 1105 событий');api.action('ckadd');
+api.migrateLegacyLogs(records);api.action('kdone','journal-tail-task');
 assert(api.getLogs().length===1106,'Журнал сократился до фиксированного лимита: '+api.getLogs().length);
 });
 await test('Отключение долгов и инвестиций сразу скрывает пункт бокового меню',()=>{
@@ -1394,7 +1393,7 @@ const select=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.p
 assert(select,'Для группы категорий не создан выпадающий список');
 assert([...select.options].some(x=>x.value==='Бензин'),'Существующие категории не попали в список');
 prompts.push('Бензин для теста');api.action('cceditpick',select.dataset.catGroup);
-assert(state().categories.e['Транспорт'].includes('Бензин для теста'),'Переименование выбранной категории не сохранилось');
+assert(state().categories.e['Транспорт'].includes('Бензин для теста'),'Переименование выбранной категории не сохранилось: '+JSON.stringify(state().categories.e['Транспорт'])+'; prompts='+JSON.stringify(prompts));
 assert(!state().categories.e['Транспорт'].includes('Бензин'),'Старое название категории осталось после переименования');
 const current=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.parse(decodeURIComponent(x.dataset.catGroup))[1]==='Транспорт');
 current.value='Бензин для теста';api.action('cchidepick',current.dataset.catGroup);
@@ -1408,7 +1407,7 @@ assert(home&&dash&&home.draggable&&dash.draggable,'Пункты бокового
 const transfer={setData(){},getData(){return''}};
 const start=new w.Event('dragstart',{bubbles:true,cancelable:true});Object.defineProperty(start,'dataTransfer',{value:transfer});home.dispatchEvent(start);
 const drop=new w.Event('drop',{bubbles:true,cancelable:true});Object.defineProperty(drop,'dataTransfer',{value:transfer});dash.dispatchEvent(drop);
-assert(state().set.navOrder[0]==='nav:dash'&&state().set.navOrder[1]==='nav:home','Порядок пунктов меню не сохранился');
+assert(state().set.navOrder?.[0]==='nav:dash'&&state().set.navOrder?.[1]==='nav:home','Порядок пунктов меню не сохранился: '+JSON.stringify(state().set.navOrder||null));
 const groups=[...w.document.querySelectorAll('#m .cat-group')].filter(x=>x.draggable);
 assert(groups.length>=2,'Разделы настроек не стали перетаскиваемыми');
 const source=groups[0],target=groups[1];
@@ -1427,7 +1426,7 @@ assert(!/fonts\.googleapis\.com|use\.typekit\.net/.test(style),'Шрифт тр�
 await test('Готовые и протестированные ПК отображаются на складе',()=>{
 api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
 assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
-assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе');
+assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе: status='+JSON.stringify(state().builds[0]?.status)+'; rows='+JSON.stringify([...w.document.querySelectorAll('#m tbody tr')].map(x=>x.textContent)));
 assert(w.document.body.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан в карточке склада');
 });
 await test('Продажа ПК из вкладки «Деньги» закрывает сборку и записывает покупателя',()=>{
@@ -1436,7 +1435,7 @@ const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','i')
 setv(f,'kind','i');setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
 setv(f,'buildId','build-open');f.elements.buildId.onchange();setv(f,'date','2026-05-20');setv(f,'amount','900');setv(f,'buyer','Покупатель ПК');setv(f,'acc','cash');setv(f,'note','Продажа через деньги');submit(f);
 const saved=state(),build=saved.builds.find(x=>x.id==='build-open'),tx=saved.tx.find(x=>x.buildId==='build-open');
-assert(build&&build.status==='Продана','Сборка не получила статус «Продана»');
+assert(build&&build.status==='Продана','Сборка не получила статус «Продана»: status='+JSON.stringify(build&&build.status)+'; tx='+JSON.stringify(state().tx)+'; alerts='+JSON.stringify(alerts));
 assert(build.sold==='2026-05-20'&&build.buyer==='Покупатель ПК'&&build.price===900,'Не сохранены дата, покупатель или цена продажи');
 assert(build.cost===400,'Себестоимость ПК не зафиксирована на момент продажи');
 assert(tx&&tx.kind==='i'&&tx.amount===900&&tx.acc==='cash','Финансовый доход от продажи ПК не создан');
