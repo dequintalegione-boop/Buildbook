@@ -1960,6 +1960,68 @@ api.action('nav','stock');assert(!w.document.body.textContent.includes('ПК №
 api.action('nav','tx');api.action('tadd','i');const f=form();setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
 assert(!Array.from(f.elements.buildId.options).some(x=>x.value==='build-open'),'Проданный ПК доступен для повторной продажи');f.closest('.ov').remove();
 });
+
+await test('Демо-генератор создаёт согласованную историю работы за полгода',async()=>{
+ api.setState(fixture());
+ api.action('demoload');
+ const data=state(),demo=key=>(data[key]||[]).filter(item=>item&&item.demo);
+ const demoTx=demo('tx'),demoAccounts=demo('accounts'),sold=demo('builds').filter(build=>build.status==='Продана');
+ const monthKeys=new Set(demoTx.map(tx=>String(tx.date||'').slice(0,7)).filter(Boolean));
+ assert(demoAccounts.length===2,'Не созданы отдельные тестовые кассы');
+ assert(demo('batches').length>=60,'Ожидалось не менее 60 партий комплектующих, создано '+demo('batches').length);
+ assert(demo('builds').length===18,'Ожидалось 18 сборок, создано '+demo('builds').length);
+ assert(demoTx.length>=140,'Недостаточно финансовых операций: '+demoTx.length);
+ assert(monthKeys.size===6,'Финансовые операции должны охватывать ровно шесть месяцев: '+[...monthKeys].join(', '));
+ assert(sold.length>=8&&sold.every(build=>demoTx.some(tx=>tx.buildId===build.id&&tx.kind==='i')),'Проданные сборки не связаны с доходными операциями');
+ assert(demoTx.filter(tx=>tx.partSale).length>=12,'Не хватает розничных продаж комплектующих');
+ assert(demo('debts').length>=4&&demo('debts').some(debt=>(debt.payments||[]).length>=2),'Не созданы разнообразные долги с историей платежей');
+ assert(demo('investments').length>=3&&demo('investments').some(item=>(item.events||[]).length>=3),'Не созданы инвестиции с несколькими движениями');
+ assert(demo('salesPlans').length>=24,'Не созданы месячные планы');
+ assert(demo('tasks').length>=36&&demo('tasks').some(task=>task.done&&task.archivedAt)&&demo('tasks').some(task=>!task.done&&!task.archivedAt),'Не созданы активные и архивные задачи');
+ assert(demo('checklist').length>=10,'Не заполнен чек-лист');
+ assert(demo('stockEvents').length>=5,'Не заполнена история проблем и списаний');
+ assert(demo('trash').length>=4,'Не заполнена корзина');
+ assert(api.getLogs().filter(entry=>entry.demo).length>=6,'Не создана история действий за шесть месяцев');
+ assert(demoTx.filter(tx=>tx.kind==='transfer').length>=3,'Не созданы переводы между кассами');
+ demoAccounts.forEach(account=>assert(api.balance(account.id)>=0,'Отрицательный баланс демо-кассы '+account.name));
+ demoTx.forEach(tx=>{
+  if(tx.kind==='transfer')assert(data.accounts.some(account=>account.id===tx.fromAcc)&&data.accounts.some(account=>account.id===tx.toAcc),'Перевод ссылается на неизвестную кассу');
+  else assert(data.accounts.some(account=>account.id===tx.acc),'Операция ссылается на неизвестную кассу: '+tx.desc);
+ });
+ assert(data.batches.some(batch=>!batch.demo&&batch.id==='gpu-batch')&&data.builds.some(build=>!build.demo&&build.id==='build-open'),'Загрузка демо-данных изменила исходные записи пользователя');
+ api.action('nav','set');
+ assert(w.document.querySelector('#m').textContent.includes('за 6 месяцев'),'Настройки не сообщают о шестимесячном наборе');
+ const totalBefore=demoTx.length+demo('batches').length+demo('builds').length;
+ api.action('demoload');
+ assert(alerts.some(message=>message.includes('уже загружены')),'Повторная загрузка не была заблокирована');
+ assert(state().tx.filter(tx=>tx.demo).length===demoTx.length&&state().batches.filter(batch=>batch.demo).length===demo('batches').length,'Повторный запуск создал дубликаты');
+ assert(totalBefore>200,'Демо-набор получился слишком маленьким');
+ await api.flushStorage();
+});
+await test('Удаление демо-данных сохраняет обычные записи и демо-объекты, на которые они ссылаются',async()=>{
+ api.setState(fixture());
+ api.action('demoload');
+ const data=state(),batch=data.batches.find(item=>item.demo&&item.type==='Прочее'),build=data.builds.find(item=>item.demo&&item.status==='Продана'),account=data.accounts.find(item=>item.demo&&item.name.includes('Расчётный'));
+ assert(batch&&build&&account,'Не найдены сущности для теста связей');
+ const userBuild={id:'user-build-uses-demo-batch',num:data.seq+1,name:'Моя сборка с демо-деталью',status:'Собирается',builder:'Пользователь',buyer:'',date:api.localDateISO(new Date()),sold:'',planned:0,price:0,note:'Обычная запись',lines:[{batchId:batch.id,qty:1,problem:false}]};
+ const userTask={id:'user-task-uses-demo-build',text:'Моя задача для сборки',q:1,done:0,due:'',who:'Пользователь',build:build.id};
+ const userTx={id:'user-tx-uses-demo-account',kind:'i',date:api.localDateISO(new Date()),amount:123,desc:'Моя обычная операция',cat:'Другое',grp:'Заработок',qty:1,acc:account.id,note:'Не удалять'};
+ data.builds.push(userBuild);data.tasks.push(userTask);data.tx.push(userTx);
+ api.setState(data);
+ api.action('demoremove');
+ await api.flushStorage();
+ const after=state(),keptBatch=after.batches.find(item=>item.id===batch.id),keptBuild=after.builds.find(item=>item.id===build.id),keptAccount=after.accounts.find(item=>item.id===account.id);
+ assert(after.batches.some(item=>item.id==='gpu-batch')&&after.builds.some(item=>item.id==='build-open'),'Удаление затронуло исходные записи пользователя');
+ assert(after.builds.some(item=>item.id===userBuild.id)&&after.tasks.some(item=>item.id===userTask.id)&&after.tx.some(item=>item.id===userTx.id),'Удаление затронуло добавленные пользователем записи');
+ assert(keptBatch&&!keptBatch.demo&&after.tx.some(tx=>tx.id===keptBatch.txId&&!tx.demo),'Не сохранены партия и связанная с ней закупка, используемые реальной сборкой');
+ assert(keptBuild&&!keptBuild.demo&&after.tx.some(tx=>tx.id===keptBuild.txId&&!tx.demo),'Не сохранены сборка и связанная продажа, используемые реальной задачей');
+ assert(keptAccount&&!keptAccount.demo,'Не сохранена демо-касса, используемая обычной операцией');
+ const collections=['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'];
+ collections.forEach(key=>assert(!(after[key]||[]).some(item=>item&&item.demo),'После очистки остались демо-записи в '+key));
+ assert(!api.getLogs().some(entry=>entry.demo),'После очистки остались демо-записи в журнале');
+ assert(!after.set.demoLoaded,'Флаг загруженного демо-набора не сброшен');
+});
+
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
