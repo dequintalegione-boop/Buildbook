@@ -1683,11 +1683,25 @@ const CSV_FIELDS={
   ['sourceBuildId','Исходная сборка ID',['исходнаясборкаid','sourcebuildid','idисходнойсборки']],
   ['sourceBuildNum','Исходная сборка №',['исходнаясборка','sourcebuildnum']],
   ['batchDesc','Описание партии',['описаниепартии','batchdesc']],
-  ['batchType','Тип партии',['типпартии','batchtype']]
+  ['batchType','Тип партии',['типпартии','batchtype']],
+  ['debtId','ID долга',['debtid','иддолга']],
+  ['debtPaymentId','ID платежа по долгу',['debtpaymentid','идплатежадолга']],
+  ['debtRole','Роль операции по долгу',['debtrole','рольдолга']],
+  ['investmentId','ID инвестиции',['investmentid','идинвестиции']],
+  ['investmentEventId','ID движения инвестиции',['investmenteventid','иддвиженияинвестиции']],
+  ['investmentRole','Роль операции инвестиции',['investmentrole','рольинвестиции']]
+ ],
+ debts:[
+  ['id','ID долга',['id','debtid','иддолга']],['direction','Направление',['направление','direction','типдолга']],['person','Кому / от кого',['человек','контрагент','комуоткого','person']],['principal','Сумма долга',['суммадолга','сумма','principal','amount']],['date','Дата',['дата','date']],['dueDate','Срок возврата',['сроквозврата','срок','duedate']],['accountId','ID кассы',['idкассы','accountid','касса']],['note','Комментарий',['комментарий','note']],['status','Статус',['статус','status']],['originTxId','ID исходной операции',['исходнаяоперацияid','origintxid']],['paymentsJson','Платежи JSON',['платежиjson','paymentsjson']]
+ ],
+ investments:[
+  ['id','ID инвестиции',['id','investmentid','идинвестиции']],['name','Название',['название','актив','name']],['type','Тип актива',['типактива','тип','type']],['platform','Площадка / брокер',['площадка','брокер','platform']],['date','Дата',['дата','date']],['currentValue','Текущая оценка',['текущаяоценка','оценка','currentvalue']],['accountId','ID кассы',['idкассы','accountid','касса']],['note','Комментарий',['комментарий','note']],['status','Статус',['статус','status']],['eventsJson','Движения JSON',['движенияjson','eventsjson']]
  ]
 };
 function guessCsvKind(headers){
  const h=headers.map(csvHeaderNorm);
+ if(h.some(x=>['paymentsjson','платежиjson','principal','суммадолга','debtid','иддолга'].includes(x)))return'debts';
+ if(h.some(x=>['eventsjson','движенияjson','currentvalue','текущаяоценка','investmentid','идинвестиции'].includes(x)))return'investments';
  if(h.some(x=>['сумма','amount'].includes(x))||h.includes('типоперации'))return'tx';
  if(h.includes('названиекассы')||h.includes('начальныйостаток')||h.includes('начальныйбаланс')||h.includes('openingbalance'))return'accounts';
  if(h.includes('задача')||h.includes('текстзадачи')||h.includes('описаниезадачи')||h.includes('task')||(h.includes('квадрант')&&(h.includes('исполнитель')||h.includes('срок')||h.includes('дедлайн'))))return'tasks';
@@ -1776,6 +1790,45 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
     const build=value(row,'build');
     if(build&&!S.builds.some(b=>b.id==build))throw new Error('Не найдена сборка по указанному ID.');
     S.tasks.push({id,text:textValue,q,done,due,who:value(row,'who'),build:build||''});stats.added++;
+   }else if(kind=='debts'){
+    const sourceId=value(row,'id'),id=sourceId||uid();
+    if(S.debts.some(d=>d.id==id))throw new Error('Долг с таким ID уже существует.');
+    const directionRaw=csvHeaderNorm(value(row,'direction'));
+    const direction=['given','мне должны','выдан','выдал','выданный'].includes(directionRaw)?'given':['received','ядолжен','получен','занял','полученный'].includes(directionRaw)?'received':'';
+    const person=value(row,'person'),principal=csvNumber(value(row,'principal')),date=csvDate(value(row,'date'));
+    if(!direction||!person||!Number.isFinite(principal)||principal<=0||!date)throw new Error('Нужны направление, контрагент, сумма больше нуля и дата.');
+    const dueRaw=value(row,'dueDate'),dueDate=dueRaw?csvDate(dueRaw):'';
+    if(dueRaw&&!dueDate)throw new Error('Некорректный срок возврата долга.');
+    const accountRaw=value(row,'accountId'),account=S.accounts.find(a=>a.id==accountRaw||csvHeaderNorm(a.name)===csvHeaderNorm(accountRaw));
+    if(accountRaw&&!account)throw new Error('Не найдена касса долга.');
+    let payments=[];const rawPayments=value(row,'paymentsJson');
+    if(rawPayments){try{payments=JSON.parse(rawPayments)}catch(_){throw new Error('Поле платежей JSON повреждено.')}}
+    if(!Array.isArray(payments))throw new Error('История платежей должна быть списком.');
+    payments=payments.map(p=>{
+     const amount=Number(p.amount),paymentDate=csvDate(p.date)||p.date,acc=S.accounts.find(a=>a.id==p.accountId||csvHeaderNorm(a.name)===csvHeaderNorm(p.accountId));
+     if(!Number.isFinite(amount)||amount<=0||!/^\\d{4}-\\d{2}-\\d{2}$/.test(paymentDate||''))throw new Error('В истории долга найден некорректный платёж.');
+     if(p.accountId&&!acc)throw new Error('Не найдена касса одного из платежей долга.');
+     return {...p,id:String(p.id||uid()),amount,date:paymentDate,accountId:acc?acc.id:'',note:String(p.note||'')};
+    });
+    if(payments.reduce((n,p)=>n+p.amount,0)>principal+0.000001)throw new Error('Сумма платежей превышает исходный долг.');
+    S.debts.push({id,direction,person,principal,date,dueDate,accountId:account?account.id:'',note:value(row,'note'),status:value(row,'status')==='archived'?'archived':'active',originTxId:value(row,'originTxId'),payments});stats.added++;
+   }else if(kind=='investments'){
+    const sourceId=value(row,'id'),id=sourceId||uid();
+    if(S.investments.some(i=>i.id==id))throw new Error('Инвестиция с таким ID уже существует.');
+    const name=value(row,'name'),date=csvDate(value(row,'date')),currentValue=csvNumber(value(row,'currentValue'));
+    if(!name||!date||!Number.isFinite(currentValue)||currentValue<0)throw new Error('Нужны название, дата и неотрицательная текущая оценка.');
+    const accountRaw=value(row,'accountId'),account=S.accounts.find(a=>a.id==accountRaw||csvHeaderNorm(a.name)===csvHeaderNorm(accountRaw));
+    if(accountRaw&&!account)throw new Error('Не найдена касса инвестиции.');
+    let events=[];const rawEvents=value(row,'eventsJson');
+    if(rawEvents){try{events=JSON.parse(rawEvents)}catch(_){throw new Error('Поле движений JSON повреждено.')}}
+    if(!Array.isArray(events))throw new Error('История инвестиции должна быть списком.');
+    events=events.map(e=>{
+     const amount=Number(e.amount),eventDate=csvDate(e.date)||e.date,acc=S.accounts.find(a=>a.id==e.accountId||csvHeaderNorm(a.name)===csvHeaderNorm(e.accountId));
+     if(!['contribution','withdrawal'].includes(e.type)||!Number.isFinite(amount)||amount<=0||!/^\\d{4}-\\d{2}-\\d{2}$/.test(eventDate||''))throw new Error('В истории инвестиции найдено некорректное движение.');
+     if(e.accountId&&!acc)throw new Error('Не найдена касса одного из движений инвестиции.');
+     return {...e,id:String(e.id||uid()),amount,date:eventDate,accountId:acc?acc.id:'',note:String(e.note||'')};
+    });
+    S.investments.push({id,name,type:value(row,'type')||'other',platform:value(row,'platform'),date,currentValue,accountId:account?account.id:'',note:value(row,'note'),status:value(row,'status')==='closed'?'closed':'active',events});stats.added++;
    }else if(kind=='tx'){
     const date=csvDate(value(row,'date')),amount=csvNumber(value(row,'amount'));
     if(!date||!Number.isFinite(amount)||amount<=0)throw new Error('Нужны корректная дата и сумма больше нуля.');
@@ -1807,6 +1860,11 @@ function applyCsvImport(matrix,kind,mapping,defaultKind){
      if(partSale&&!batchId)throw new Error('Для продажи комплектующего нужен ID исходной партии.');
      if(partSale&&sourceBuildId&&!S.builds.some(b=>b.id==sourceBuildId))throw new Error('Не найдена исходная сборка по указанному ID.');
      const tx={...common,acc:account.id,batchId:batchId||undefined,buildId:buildId||undefined};
+     const debtId=value(row,'debtId'),investmentId=value(row,'investmentId');
+     if(debtId&&!S.debts.some(d=>d.id==debtId))throw new Error('Не найден долг по указанному ID.');
+     if(investmentId&&!S.investments.some(i=>i.id==investmentId))throw new Error('Не найдена инвестиция по указанному ID.');
+     if(debtId){tx.debtId=debtId;tx.debtPaymentId=value(row,'debtPaymentId')||undefined;tx.debtRole=value(row,'debtRole')||undefined}
+     if(investmentId){tx.investmentId=investmentId;tx.investmentEventId=value(row,'investmentEventId')||undefined;tx.investmentRole=value(row,'investmentRole')||undefined}
      if(partSale){
       tx.partSale=true;
       tx.partSaleImportedSnapshot=true;
@@ -1836,7 +1894,7 @@ function importCsvWizard(raw){
  const guess=guessCsvKind(headers);
  const preview=matrix.slice(1,5).map(row=>'<tr>'+headers.map((h,i)=>'<td>'+esc(row[i]??'')+'</td>').join('')+'</tr>').join('');
  const previewHtml='<div class="sell-scroll"><table><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+preview+'</tbody></table></div>';
- const body='<p class="mu">Строк в файле: '+(matrix.length-1)+'. Сначала проверьте тип таблицы и сопоставление столбцов. Обязательные поля отмечены в описаниях.</p><label>Что импортируем<select name="importKind">'+opt([['batches','Склад'],['builds','Сборки'],['tx','Операции'],['accounts','Кассы'],['tasks','Задачи']],guess)+'</select></label><div id="csv-mapping" class="g2"></div><div id="csv-default-kind"></div><h3 style="margin-top:8px">Предпросмотр (первые строки)</h3>'+previewHtml;
+ const body='<p class="mu">Строк в файле: '+(matrix.length-1)+'. Сначала проверьте тип таблицы и сопоставление столбцов. Обязательные поля отмечены в описаниях.</p><label>Что импортируем<select name="importKind">'+opt([['batches','Склад'],['builds','Сборки'],['tx','Операции'],['accounts','Кассы'],['tasks','Задачи'],['debts','Долги'],['investments','Инвестиции']],guess)+'</select></label><div id="csv-mapping" class="g2"></div><div id="csv-default-kind"></div><h3 style="margin-top:8px">Предпросмотр (первые строки)</h3>'+previewHtml;
  const f=modal('Импорт CSV',body,form=>{
   const kind=form.elements.importKind.value,mapping={};
   CSV_FIELDS[kind].forEach(field=>mapping[field[0]]=form.elements['map_'+field[0]].value);
@@ -2115,6 +2173,8 @@ function exportXlsx(kind){
 }
 function guessXlsxKind(sheetName,headers){
  const name=csvHeaderNorm(sheetName),h=headers.map(csvHeaderNorm);
+ if(name.includes('долг')||name.includes('debt'))return'debts';
+ if(name.includes('инвест')||name.includes('investment'))return'investments';
  if(name.includes('склад')||name.includes('stock'))return'batches';
  if(name.includes('сборк')||name.includes('build'))return'builds';
  if(name.includes('касс')||name.includes('счет')||name.includes('счёт')||name.includes('account'))return'accounts';
@@ -2149,7 +2209,7 @@ function xlsxMappingHtml(kind,headers,sheetIndex){
  }).join('');
 }
 function applyXlsxSelections(plans,choices){
- const order={accounts:0,batches:1,builds:2,tx:3,tasks:4},selected=choices.filter(x=>x.include&&x.kind!='skip').sort((a,b)=>(order[a.kind]??99)-(order[b.kind]??99));
+ const order={accounts:0,batches:1,builds:2,debts:3,investments:4,tx:5,tasks:6},selected=choices.filter(x=>x.include&&x.kind!='skip').sort((a,b)=>(order[a.kind]??99)-(order[b.kind]??99));
  const total={added:0,skipped:0,errors:[],sheets:[]};
  selected.forEach(choice=>{
   const result=applyCsvImport(choice.matrix,choice.kind,choice.mapping,choice.defaultKind||'e');
