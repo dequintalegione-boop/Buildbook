@@ -1471,17 +1471,14 @@ api.action('aedit',account.id);f=form();assert(f&&f.elements.name.value==='Но�
 setv(f,'name','Касса после переименования');setv(f,'open','400');submit(f);
 account=state().accounts.find(x=>x.id===account.id);assert(account.name==='Касса после переименования'&&account.open===400,'Изменения кассы не сохранились');
 });
-await test('Выбор категории открывает операции только выбранной группы и категории',()=>{
+await test('Отдельный выбор категории убран со вкладки «Транзакции»',()=>{
 const d=fixture();d.tx=[
 {id:'category-test-1',kind:'e',date:'2026-05-01',amount:100,cat:'Бензин',grp:'Транспорт',desc:'Заправка',acc:'cash'},
-{id:'category-test-2',kind:'e',date:'2026-05-02',amount:200,cat:'Еда',grp:'Общие расходы',desc:'Обед',acc:'cash'},
-{id:'category-test-3',kind:'i',date:'2026-05-03',amount:500,cat:'Комплектующие',grp:'Продажи',desc:'Доход',acc:'cash'}
-];api.setState(d);api.action('nav','tx');api.action('catbrowse');
-const choice=[...w.document.querySelectorAll('.ov [data-a="txcat"]')].find(x=>decodeURIComponent(x.dataset.id).includes('Бензин'));
-assert(choice,'В окне не отображаются категории операций');api.action('txcat',choice.dataset.id);
-const rows=[...w.document.querySelectorAll('#m tbody tr')];
-assert(rows.some(x=>x.textContent.includes('Заправка')),'Не показана выбранная операция');
-assert(!rows.some(x=>x.textContent.includes('Обед')),'В фильтр попала посторонняя категория');
+{id:'category-test-2',kind:'e',date:'2026-05-02',amount:200,cat:'Еда',grp:'Общие расходы',desc:'Обед',acc:'cash'}
+];api.setState(d);api.action('nav','tx');
+assert(!w.document.querySelector('#m [data-a="catbrowse"]'),'Кнопка «Выбрать категорию» осталась на странице');
+assert(!w.document.querySelector('.ov .category-browser'),'Отдельный браузер категорий всё ещё открывается');
+assert(w.document.querySelector('#m [data-a="tadd"]'),'Основная форма добавления транзакции должна остаться доступной');
 });
 await test('Заработная плата удалена из категорий, но старая операция остаётся в истории',()=>{
 const d=fixture();d.categories.i={'Заработок':['Заработная плата','Сборка ПК','Другое'],'Продажи':['Комплектующие']};
