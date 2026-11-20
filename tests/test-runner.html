@@ -1419,6 +1419,102 @@ api.action('nav','set');toggle=w.document.querySelector('[data-f="layoutEdit"]')
 assert(![...w.document.querySelectorAll('nav button[data-id]')].some(x=>x.draggable),'Перетаскивание не отключилось после выключения режима');
 });
 
+
+await test('Примечания в задачах можно скрыть и снова показать',()=>{
+const data=fixture();data.notes='Сохранённая заметка для задач';
+api.setState(data);api.action('nav','tasks');
+assert(w.document.querySelector('#m [data-n]'),'Поле примечаний не отображается изначально');
+api.action('knote');
+assert(!w.document.querySelector('#m [data-n]'),'Поле примечаний не скрылось');
+assert(w.document.querySelector('#m [data-a="knote"]').textContent.includes('Показать'),'Не появилась кнопка повторного показа');
+api.action('knote');
+assert(w.document.querySelector('#m [data-n]').value==='Сохранённая заметка для задач','Содержимое примечаний потерялось после скрытия');
+});
+
+await test('Важность задач визуально выделяется разными цветами',()=>{
+const data=fixture();data.tasks=Array.from({length:5},(_,q)=>({id:'priority-'+q,text:'Задача '+q,q,done:0,due:'',who:'',build:''}));
+api.setState(data);api.action('nav','tasks');
+const cards=[...w.document.querySelectorAll('#m .qg > section')];
+assert(cards.length===5,'Не найдены все пять уровней важности');
+assert(cards.every((card,i)=>card.classList.contains('task-priority-'+i)),'Не все квадранты получили классы важности');
+const colors=cards.map(card=>w.getComputedStyle(card).getPropertyValue('--task-priority').trim());
+assert(new Set(colors).size===5&&colors.every(Boolean),'Цвета приоритетов не различаются');
+});
+
+await test('В разделе «Деньги» одна синяя кнопка «Транзакция» и аккуратные итоги',()=>{
+api.setState(fixture());api.action('nav','tx');
+const buttons=[...w.document.querySelectorAll('#m button[data-a="tadd"]')];
+assert(buttons.length===1&&buttons[0].textContent.trim()==='Транзакция'&&buttons[0].classList.contains('p'),'Вместо одной синей кнопки «Транзакция» остались раздельные кнопки дохода и расхода');
+const totals=w.document.querySelector('#m .money-totals');
+assert(totals&&totals.textContent.trim().startsWith('Доходы'),'Над историей не отображаются доходы с заглавной буквы');
+assert(totals.textContent.includes('Расходы')&&!totals.textContent.includes(','),'Расходы должны быть с заглавной буквы, без запятой между итогами');
+});
+
+await test('Заработок на дашборде меняется вместе с выбранным периодом',()=>{
+const data=fixture(),dateAt=monthsAgo=>{const d=new Date();d.setUTCDate(10);d.setUTCMonth(d.getUTCMonth()-monthsAgo);return d.toISOString().slice(0,10)};
+data.set.per='q';
+data.builds.push(
+{id:'period-sale-a',num:2,name:'Продажа за прошлый месяц',status:'Продана',builder:'Тест',buyer:'',date:dateAt(1),sold:dateAt(1),planned:500,price:500,cost:300,lines:[]},
+{id:'period-sale-b',num:3,name:'Продажа за текущий месяц',status:'Продана',builder:'Тест',buyer:'',date:dateAt(0),sold:dateAt(0),planned:1000,price:1000,cost:500,lines:[]}
+);
+api.setState(data);api.action('nav','dash');
+const earned=[...w.document.querySelectorAll('#m .kp')].find(card=>card.textContent.includes('Заработок'));
+assert(earned&&earned.textContent.includes('3 месяца'),'Подпись заработка не учитывает режим «3 месяца»');
+assert(earned.textContent.includes('700'),'Заработок должен суммировать прибыль за весь выбранный период (700 ₽)');
+});
+
+await test('Расход сверх остатка кассы блокируется',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+const f=form(),beforeAlerts=alerts.length;
+setv(f,'kind','e');setv(f,'date','2026-04-04');setv(f,'amount','1200');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Расход сверх остатка');setv(f,'acc','cash');submit(f);
+assert(!state().tx.some(tx=>tx.desc==='Расход сверх остатка'),'Расход с отрицательным итоговым балансом был сохранён');
+assert(api.balance('cash')===1000,'Баланс изменился после отклонённого расхода');
+assert(alerts.length>beforeAlerts&&alerts[alerts.length-1].includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств');
+});
+
+await test('Перевод не может списать больше доступного остатка',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('xfer');
+const f=form();setv(f,'date','2026-04-05');setv(f,'amount','1001');setv(f,'fromAcc','cash');setv(f,'toAcc','card');submit(f);
+assert(!state().tx.some(tx=>tx.kind==='transfer'),'Перевод с отрицательным остатком отправителя был сохранён');
+assert(api.balance('cash')===1000&&api.balance('card')===0,'Баланс касс изменился после отклонённого перевода');
+});
+
+await test('Закупка со склада не может превысить остаток кассы',()=>{
+api.setState(fixture());api.action('nav','stock');api.action('padd');
+const f=form();setv(f,'type','ССД');setv(f,'date','2026-04-06');setv(f,'desc','Закупка дороже остатка');setv(f,'price','1200');setv(f,'qty','1');setv(f,'acc','cash');submit(f);
+assert(!state().batches.some(batch=>batch.desc==='Закупка дороже остатка'),'Партия была создана без достаточных средств');
+assert(!state().tx.some(tx=>tx.desc==='Закупка: Закупка дороже остатка'),'Расход закупки был проведён');
+assert(api.balance('cash')===1000,'Баланс кассы изменился после отклонённой закупки');
+});
+
+await test('Нельзя выдать долг или вложить больше средств, чем есть в кассе',()=>{
+api.setState(fixture());
+const debt=api.createDebt({direction:'given',person:'Проверка',principal:1200,date:'2026-04-07',accountId:'cash'});
+assert(!debt.ok&&api.balance('cash')===1000,'Выдача долга сверх остатка не была заблокирована');
+const investment=api.createInvestment({name:'Проверка',type:'other',amount:1200,currentValue:1200,date:'2026-04-07',accountId:'cash'});
+assert(!investment.ok&&api.balance('cash')===1000,'Вложение сверх остатка не было заблокировано');
+});
+
+await test('Редактирование расхода также проверяет будущий баланс',()=>{
+api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
+let f=form();setv(f,'kind','e');setv(f,'date','2026-04-08');setv(f,'amount','800');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Редактируемый расход');setv(f,'acc','cash');submit(f);
+const tx=state().tx.find(item=>item.desc==='Редактируемый расход');assert(tx,'Тестовый расход не создан');
+api.action('te',tx.id);f=form();const beforeAlerts=alerts.length;setv(f,'amount','1200');submit(f);
+assert(state().tx.find(item=>item.id===tx.id).amount===800,'Редактирование позволило уйти балансу в минус');
+assert(api.balance('cash')===200,'Баланс изменился после отклонённого редактирования');
+assert(alerts.length>beforeAlerts,'Не показано предупреждение при редактировании');
+});
+
+await test('Удаление дохода не может сделать баланс отрицательным',()=>{
+api.setState(fixture());
+const add=(kind,amount,desc)=>{api.action('nav','tx');api.action('tadd',kind);const f=form();setv(f,'kind',kind);setv(f,'date','2026-04-09');setv(f,'amount',String(amount));setv(f,'qty','1');setv(f,'cat',kind==='i'?'Другое':'Бензин');setv(f,'desc',desc);setv(f,'acc','cash');submit(f);return state().tx.find(tx=>tx.desc===desc)};
+add('e',1000,'Обнулить кассу');const income=add('i',100,'Временный доход');add('e',50,'Часть дохода потрачена');
+assert(api.balance('cash')===50,'Подготовительный баланс теста рассчитан неверно');
+w.confirm=()=>true;api.action('td',income.id);
+assert(state().tx.some(tx=>tx.id===income.id),'Удаление дохода с отрицательным итоговым балансом не было заблокировано');
+assert(api.balance('cash')===50,'Удаление дохода привело к отрицательному балансу');
+});
+
 await test('Графики дашборда показывают шкалу значений',()=>{
 const data=fixture();
 data.set.per='all';
