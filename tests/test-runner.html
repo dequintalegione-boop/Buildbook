@@ -1307,6 +1307,31 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
  assert(api.getState().tx.some(x=>x.debtId===debt.id&&x.debtRole==='payment'),'Потеряна связь платежа долга с операцией');
  assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
+
+await test('Готовые и протестированные ПК отображаются на складе',()=>{
+api.setState(fixture());const b=state().builds[0];b.status='Собрана';api.setState(state());api.action('nav','stock');
+assert(w.document.body.textContent.includes('Готовые ПК на складе'),'На складе нет отдельного списка готовых ПК');
+assert(w.document.body.textContent.includes('Тестовая сборка'),'Готовая сборка не отображается на складе');
+assert(w.document.body.textContent.includes('Тестовая видеокарта'),'Состав ПК не показан в карточке склада');
+});
+await test('Продажа ПК из вкладки «Деньги» закрывает сборку и записывает покупателя',()=>{
+api.setState(fixture());const b=state().builds[0];b.status='Протестирована';b.planned=850;api.setState(state());
+const baseline=api.balance('cash');api.action('nav','tx');api.action('tadd','i');const f=form();
+setv(f,'kind','i');setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
+setv(f,'buildId','build-open');f.elements.buildId.onchange();setv(f,'date','2026-05-20');setv(f,'amount','900');setv(f,'buyer','Покупатель ПК');setv(f,'acc','cash');setv(f,'note','Продажа через деньги');submit(f);
+const saved=state(),build=saved.builds.find(x=>x.id==='build-open'),tx=saved.tx.find(x=>x.buildId==='build-open');
+assert(build&&build.status==='Продана','Сборка не получила статус «Продана»');
+assert(build.sold==='2026-05-20'&&build.buyer==='Покупатель ПК'&&build.price===900,'Не сохранены дата, покупатель или цена продажи');
+assert(build.cost===400,'Себестоимость ПК не зафиксирована на момент продажи');
+assert(tx&&tx.kind==='i'&&tx.amount===900&&tx.acc==='cash','Финансовый доход от продажи ПК не создан');
+assert(tx.buyer==='Покупатель ПК'&&tx.desc.includes('Тестовая сборка'),'В операции нет данных покупателя или сборки');
+assert(api.balance('cash')===baseline+900,'Выручка не зачислена в выбранную кассу');
+});
+await test('Проданный ПК исчезает из склада готовых компьютеров и не доступен для повторной продажи',()=>{
+api.action('nav','stock');assert(!w.document.body.textContent.includes('ПК №1'),'Проданный ПК остался в списке готовых на складе');
+api.action('nav','tx');api.action('tadd','i');const f=form();setv(f,'cat','Сборка ПК');f.elements.cat.onchange();
+assert(!Array.from(f.elements.buildId.options).some(x=>x.value==='build-open'),'Проданный ПК доступен для повторной продажи');f.closest('.ov').remove();
+});
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
