@@ -198,7 +198,7 @@ main>*{min-width:0}
 table{min-width:100%}
 
 /* Transaction history fills the free screen height; only the history pane scrolls when needed. */
-body.transaction-screen{height:100dvh;min-height:0;overflow:hidden}
+html.transaction-screen{height:100dvh;overflow:hidden}\nbody.transaction-screen{height:100dvh;min-height:0;overflow:hidden}
 body.transaction-screen nav{height:100dvh;min-height:0}
 body.transaction-screen main{height:100dvh;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:clamp(12px,1.25vw,24px) clamp(14px,1.65vw,32px) 12px}
 body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
@@ -251,7 +251,7 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
  html,body{min-width:320px}
  body,body.nav-collapsed{height:auto;min-height:100dvh;overflow-x:hidden;overflow-y:auto;grid-template-columns:minmax(0,1fr)}
  main{width:100%;max-width:none;min-height:calc(100dvh - 64px);height:auto;overflow:visible;padding:16px 12px 80px}
- body.transaction-screen{height:auto;min-height:100dvh;overflow-x:hidden;overflow-y:auto}
+ html.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto}\n body.transaction-screen{height:auto;min-height:100dvh;overflow-x:hidden;overflow-y:auto}
  body.transaction-screen nav{height:auto;min-height:0}
  body.transaction-screen main{height:auto;min-height:calc(100dvh - 64px);overflow:visible;display:block;padding:16px 12px 80px}
  body.transaction-screen #m{display:block;min-height:0;overflow:visible}
@@ -3981,6 +3981,7 @@ function render(){
  if(V.tab==='assets'&&!S.set.debtsInvestments)V.tab='set';
  $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
  document.body.classList.toggle('transaction-screen',V.tab==='tx');
+ document.documentElement.classList.toggle('transaction-screen',V.tab==='tx');
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
  document.body.classList.toggle('nav-collapsed',!!S.set.navCollapsed);
  applyLayoutEditing();
