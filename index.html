@@ -3956,7 +3956,7 @@ function render(){
  archiveOldCompletedTasks();
  if(V.tab==='assets'&&!S.set.debtsInvestments)V.tab='set';
  $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
- document.body.classList.toggle('transaction-screen',V.tab==='tx'&&!storageConflict);
+ document.body.classList.toggle('transaction-screen',V.tab==='tx');
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
  document.body.classList.toggle('nav-collapsed',!!S.set.navCollapsed);
  applyLayoutEditing();
