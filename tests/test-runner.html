@@ -2104,6 +2104,36 @@ await test('Система блокирует конфликты, комбина
  input.remove();
 });
 
+
+await test('Основная область приложения занимает всю доступную ширину окна',()=>{
+ const data=fixture();api.setState(data);api.action('nav','tx');
+ const main=w.document.querySelector('main'),nav=w.document.querySelector('nav'),style=w.getComputedStyle(main);
+ assert(main&&nav,'Не найдены основные контейнеры приложения');
+ assert(style.maxWidth==='none','Для main осталось ограничение max-width: '+style.maxWidth);
+ assert(main.getBoundingClientRect().right>=w.innerWidth-2,'Основная область не растянулась до правого края окна');
+ assert(main.getBoundingClientRect().left>=nav.getBoundingClientRect().right-1,'Контент заходит под боковую панель');
+});
+await test('История транзакций заполняет свободную высоту экрана без прокрутки всей страницы',()=>{
+ const data=fixture();
+ data.tx=Array.from({length:24},(_,i)=>({id:'responsive-tx-'+i,kind:i%2?'e':'i',date:'2026-06-'+String(24-i).padStart(2,'0'),amount:100+i,desc:'Тестовая транзакция '+i,cat:'Другое',qty:1,acc:'cash'}));
+ api.setState(data);api.action('nav','tx');
+ const body=w.document.body,main=w.document.querySelector('main'),page=w.document.querySelector('.transaction-page'),history=w.document.querySelector('.transaction-history'),table=history&&history.querySelector('.tw');
+ assert(body.classList.contains('transaction-screen'),'Не включён режим экранной компоновки транзакций');
+ assert(page&&history&&table,'Не найдена отдельная область истории транзакций');
+ assert(w.getComputedStyle(body).overflowY==='hidden','Страница продолжает прокручиваться по вертикали');
+ assert(history.getBoundingClientRect().height>=150,'Истории не выделена свободная высота окна');
+ assert(Math.abs(main.getBoundingClientRect().height-w.innerHeight)<=2,'Основная область не ограничена высотой окна');
+ assert(w.getComputedStyle(history).flexGrow==='1','История не растягивается на оставшуюся высоту');
+ assert(table.getBoundingClientRect().width>=history.getBoundingClientRect().width-2,'Таблица истории не заполняет ширину контейнера');
+});
+await test('Мобильная компоновка транзакций возвращается к естественной прокрутке',()=>{
+ const data=fixture();api.setState(data);api.action('nav','tx');
+ const css=[...w.document.querySelectorAll('style')].map(node=>node.textContent).join('\n');
+ assert(css.includes('@media(max-width:760px)'),'Не найден мобильный breakpoint');
+ assert(css.includes('body.transaction-screen main{height:auto'),'На мобильном экране не отключена фиксированная высота');
+ assert(css.includes('.transaction-history>.tw{height:auto;overflow-x:auto;overflow-y:visible}'),'Мобильная таблица не получает собственную горизонтальную адаптацию');
+});
+
 summary.textContent='Готово: '+passed+' пройдено, '+failed+' ошибок';details.textContent='Тесты проверяли текущие реализованные функции. Несуществующие функции исходного ТЗ не считаются пройденными.';summary.dataset.finished='true';
 }
 const failBoot=e=>{report('Запуск тестов',false,e&&e.message||String(e));summary.dataset.finished='true'};
