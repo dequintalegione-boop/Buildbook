@@ -2118,9 +2118,9 @@ await test('История транзакций заполняет свобод�
  data.tx=Array.from({length:24},(_,i)=>({id:'responsive-tx-'+i,kind:i%2?'e':'i',date:'2026-06-'+String(24-i).padStart(2,'0'),amount:100+i,desc:'Тестовая транзакция '+i,cat:'Другое',qty:1,acc:'cash'}));
  api.setState(data);api.action('nav','tx');
  const body=w.document.body,main=w.document.querySelector('main'),page=w.document.querySelector('.transaction-page'),history=w.document.querySelector('.transaction-history'),table=history&&history.querySelector('.tw');
- assert(body.classList.contains('transaction-screen'),'Не включён режим экранной компоновки транзакций');
+ assert(body.classList.contains('transaction-screen')&&w.document.documentElement.classList.contains('transaction-screen'),'Не включён режим экранной компоновки транзакций');
  assert(page&&history&&table,'Не найдена отдельная область истории транзакций');
- assert(w.getComputedStyle(body).overflowY==='hidden','Страница продолжает прокручиваться по вертикали');
+ assert(w.getComputedStyle(w.document.documentElement).overflowY==='hidden','Корневой контейнер продолжает прокручиваться по вертикали');
  assert(history.getBoundingClientRect().height>=150,'Истории не выделена свободная высота окна');
  assert(Math.abs(main.getBoundingClientRect().height-w.innerHeight)<=2,'Основная область не ограничена высотой окна');
  assert(w.getComputedStyle(history).flexGrow==='1','История не растягивается на оставшуюся высоту');
@@ -2130,6 +2130,7 @@ await test('Мобильная компоновка транзакций воз�
  const data=fixture();api.setState(data);api.action('nav','tx');
  const css=[...w.document.querySelectorAll('style')].map(node=>node.textContent).join('\n');
  assert(css.includes('@media(max-width:760px)'),'Не найден мобильный breakpoint');
+ assert(css.includes('html.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto}'),'Для мобильного корневого контейнера не включена естественная прокрутка');
  assert(css.includes('body.transaction-screen main{height:auto'),'На мобильном экране не отключена фиксированная высота');
  assert(css.includes('.transaction-history>.tw{height:auto;overflow-x:auto;overflow-y:visible}'),'Мобильная таблица не получает собственную горизонтальную адаптацию');
 });
