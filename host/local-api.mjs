@@ -18,24 +18,44 @@ function send(response, status, payload) {
 function readJson(request) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let settled = false;
+    let tooLarge = false;
     const chunks = [];
+    const fail = (message, status) => {
+      if (settled) return;
+      settled = true;
+      reject(Object.assign(new Error(message), { status }));
+    };
+
     request.on('data', chunk => {
+      if (tooLarge || settled) return;
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        reject(Object.assign(new Error('Тело запроса превышает допустимый размер.'), { status: 413 }));
-        request.destroy();
+        tooLarge = true;
+        chunks.length = 0;
+        fail('Тело запроса превышает допустимый размер.', 413);
+        // Drain the remaining request without retaining it; keep the socket alive
+        // long enough for the caller to send the documented 413 response.
+        request.resume();
         return;
       }
       chunks.push(chunk);
     });
     request.on('end', () => {
+      if (settled) return;
       try {
+        settled = true;
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
       } catch {
-        reject(Object.assign(new Error('Ожидался корректный JSON.'), { status: 400 }));
+        fail('Ожидался корректный JSON.', 400);
       }
     });
-    request.on('error', reject);
+    request.on('error', error => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
   });
 }
 
