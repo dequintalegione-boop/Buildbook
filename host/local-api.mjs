@@ -100,8 +100,9 @@ function originAllowed(request) {
  * Browser clients read/write the canonical profile through this API, never the file.
  */
 export function createLocalApiServer({ profileStore, accessToken, host = '127.0.0.1', port = 0 } = {}) {
-  if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32) {
-    throw new TypeError('Для локального API требуется секретный токен длиной не менее 32 байт.');
+  if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32
+    || Buffer.byteLength(accessToken, 'utf8') > 4096) {
+    throw new TypeError('Для локального API требуется секретный токен длиной от 32 до 4096 байт.');
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
