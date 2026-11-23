@@ -49,6 +49,22 @@ const nextRevision = await client.writeProfile(profile, revision);
 
 Этот модуль не является безопасным bootstrap токена и пока не подключён к интерфейсу/IndexedDB. Не передавайте токен из URL, общего профиля, репозитория приложения или Telegram-бота. Запросы из `file://` остаются неподдержанными до решения CORS/origin и безопасной выдачи секрета.
 
+## Адаптер контракта существующего репозитория
+
+`host/profile-repository-adapter.mjs` преобразует формат API-профиля в контракт `repository.readProfile()` / `repository.writeProfile(state, logs, photos, expectedRevision)`. Он сохраняет поля state/logs/photos и кодирует ArrayBuffer/TypedArray фотографии в base64-маркеры для JSON-транспорта, восстанавливая их при чтении.
+
+Пример сборки слоёв:
+
+```js
+import { createLocalProfileClient } from './local-profile-client.mjs';
+import { createProfileRepositoryAdapter } from './profile-repository-adapter.mjs';
+
+const client = createLocalProfileClient({ accessToken: tokenFromSecureBootstrap });
+const repository = createProfileRepositoryAdapter(client);
+```
+
+Адаптер не переключает приложение автоматически и не переносит существующую IndexedDB. При внедрении потребуется отдельный проверяемый процесс импорта и восстановления, а также учёт лимита тела API 8 MiB (base64 увеличивает объём фото примерно на треть). Пока что IndexedDB остаётся активным хранилищем приложения.
+
 ## Граница безопасности
 
 Это локальный транспортный слой с обязательным секретом доступа, но пока без безопасной выдачи и ротации токена. Токен API и токен Telegram-бота — разные секреты: токен бота никогда не должен попадать в этот API или клиентский код. Защита от вредоносного процесса под тем же пользователем и безопасный bootstrap токена остаются отдельными задачами.
