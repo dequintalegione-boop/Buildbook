@@ -75,3 +75,22 @@ test('concurrent start calls share one lifecycle loop', async () => {
   await service.stop();
   await first;
 });
+
+
+test('observer callback errors do not cause a successful poll to be retried', async () => {
+  let service;
+  let cycles = 0;
+  let observerErrors = 0;
+  service = createTelegramService({
+    runtime: { async runOnce() { cycles += 1; if (cycles === 2) queueMicrotask(() => service.stop()); return { cycles }; } },
+    intervalMs: 0,
+    onCycle() { throw new Error('observer failed'); },
+    onError(error, context) {
+      if (context.phase === 'onCycle') observerErrors += 1;
+    },
+  });
+
+  await service.start();
+  assert.equal(cycles, 2);
+  assert.equal(observerErrors, 2);
+});
