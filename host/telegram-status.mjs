@@ -25,7 +25,7 @@ export function createTelegramStatus({ now = () => new Date().toISOString() } = 
 
   return Object.freeze({
     started() {
-      state = { ...state, startedAt: now(), lastError: null };
+      state = { ...state, startedAt: now(), lastError: null, consecutiveFailures: 0 };
     },
     cycle(result) {
       state = {
