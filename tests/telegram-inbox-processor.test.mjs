@@ -93,6 +93,14 @@ test('rejects missing canonical adapter', () => {
 });
 
 
+test('keeps the inbox pending when adapter returns no committed operation ID', async () => {
+  const inbox = makeInbox(sample);
+  const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { return { ok: true }; } });
+  await assert.rejects(processor.processOne(), /valid committed Buildbook operation ID/);
+  assert.equal(inbox.state.status, 'pending');
+  assert.deepEqual(inbox.state.calls, ['processing', 'pending']);
+});
+
 test('does not report success when durable completion fails', async () => {
   const inbox = makeInbox(sample);
   inbox.markCompleted = async () => false;
