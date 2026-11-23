@@ -3857,7 +3857,7 @@ async function installApp(){
   await promptEvent.prompt();
   const choice=await promptEvent.userChoice;
   toast(choice&&choice.outcome==='accepted'?'Buildbook добавлен в приложения.': 'Установка не подтверждена. Вы можете повторить её через меню браузера.');
- }catch(error){alert('Не удалось открыть установку: '+(error&&error.message||'ошибка браузера')+'\\n\\n'+installInstructions())}
+ }catch(error){alert('Не удалось открыть установку: '+(error&&error.message||'ошибка браузера')+'\n\n'+installInstructions())}
  render();
 }
 
@@ -4174,7 +4174,7 @@ document.addEventListener('change',e=>{
    const verified=await window.BuildbookProfileImport.parseAndValidate(text);
    const bytes=verified.sizeBytes;
    const size=bytes<1024*1024?(bytes/1024).toFixed(1)+' KiB':(bytes/1024/1024).toFixed(2)+' MiB';
-   alert('Файл переноса проверен.\\n\\nСхема: '+verified.sourceSchemaVersion+'\\nРазмер профиля: '+size+'\\nДата экспорта: '+verified.exportedAt+'\\n\\nПроверка не импортировала данные и не изменила текущее хранилище.');
+   alert('Файл переноса проверен.\n\nСхема: '+verified.sourceSchemaVersion+'\nРазмер профиля: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\nПроверка не импортировала данные и не изменила текущее хранилище.');
   }).catch(error=>alert('Файл переноса не прошёл проверку: '+(error&&error.message||'ошибка файла')));
   return;
  }
