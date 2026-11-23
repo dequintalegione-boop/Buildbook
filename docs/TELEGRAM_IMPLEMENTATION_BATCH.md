@@ -20,7 +20,7 @@ This checklist tracks the next implementation batch for `feature/telegram-local-
 14. Add a status endpoint that exposes only bounded, sanitized service state.
 15. Add local UI client support for status and setup, without embedding the bot token in the app bundle.
 16. Define safe first-run token provisioning and protected local secret storage.
-17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling. Design contract: [TELEGRAM_PROFILE_MIGRATION.md](./TELEGRAM_PROFILE_MIGRATION.md).
+17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling. Design contract: [TELEGRAM_PROFILE_MIGRATION.md](./TELEGRAM_PROFILE_MIGRATION.md). The authenticated host import endpoint is implemented; browser export/backup UI, preview/confirmation, read-back verification, and storage-mode switching remain.
 18. Keep browser-only and standalone modes functional when the local host is not configured.
 19. Add documented Windows launch/stop and recovery instructions; defer OS autostart until the lifecycle is verified.
 20. Perform a code review of the full data path, then run the existing and new tests only after the user authorizes testing.
@@ -45,7 +45,7 @@ Implemented in code:
 Still blocked / incomplete:
 - The combined host shares one profile store between API and Telegram, but the UI still starts with browser IndexedDB. The repository adapter is not yet wired into the app startup path; do not treat the UI and host as one live ledger until that switch/migration is implemented and exercised.
 - Category/group and account selection now resolve against the canonical profile, including hidden-category filtering and account IDs. User-configurable default choices and explicit account selection in command syntax remain.
-- UI setup, safe token provisioning, browser-to-host migration, and service installation/autostart remain. Status is available from the authenticated local API but not yet displayed in the app.
+- UI setup, safe token provisioning, browser export/backup UI, import preview/confirmation, post-import verification, storage-mode switching, and service installation/autostart remain. The authenticated import endpoint is implemented but not yet wired to UI. Status is available from the authenticated local API but not yet displayed in the app.
 - Review and tests remain pending; tests have not been run per user instruction.
 
 ### Current command format
