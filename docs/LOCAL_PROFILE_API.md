@@ -51,7 +51,7 @@ const nextRevision = await client.writeProfile(profile, revision);
 
 ## Адаптер контракта существующего репозитория
 
-`host/profile-repository-adapter.mjs` преобразует формат API-профиля в контракт `repository.readProfile()` / `repository.writeProfile(state, logs, photos, expectedRevision)`. Он сохраняет поля state/logs/photos и кодирует ArrayBuffer/TypedArray фотографии в base64-маркеры для JSON-транспорта, восстанавливая их при чтении. Обычные объекты, совпадающие по форме с бинарным маркером, экранируются как пары ключ-значение; декодирование сохраняет собственные ключи `__proto__` без изменения прототипа. Бинарные дескрипторы проверяются на канонический base64.
+`host/profile-repository-adapter.mjs` преобразует формат API-профиля в контракт `repository.readProfile()` / `repository.writeProfile(state, logs, photos, expectedRevision)`. Он сохраняет поля state/logs/photos и кодирует ArrayBuffer/TypedArray фотографии в base64-маркеры для JSON-транспорта, восстанавливая их при чтении. Обычные объекты, совпадающие по форме с бинарным маркером, экранируются как пары ключ-значение; декодирование сохраняет собственные ключи `__proto__` без изменения прототипа. Бинарные дескрипторы проверяются на канонический base64, а экранированные объекты — на повторяющиеся ключи.
 
 Пример сборки слоёв:
 
