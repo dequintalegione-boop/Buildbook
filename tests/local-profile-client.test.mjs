@@ -74,6 +74,13 @@ test('maps redirect refusal to the safe unavailable error without retrying elsew
   assert.equal(calls, 1);
 });
 
+test('rejects API tokens longer than the server limit before making a request', () => {
+  assert.throws(() => createLocalProfileClient({
+    accessToken: 'x'.repeat(4097),
+    fetchImpl: async () => { throw new Error('must not be called'); },
+  }), /32 до 4096 байт/);
+});
+
 test('reads profile and sends bearer token to local API', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
