@@ -273,3 +273,18 @@ test('does not invoke Telegram status callback for unauthenticated requests', as
   assert.equal(response.status, 401);
   assert.equal(calls, 0);
 });
+
+
+test('preflight responses carry the same browser isolation headers', async (t) => {
+  const { base } = await fixture(t);
+  const response = await fetch(`${base}/api/profile`, {
+    method: 'OPTIONS',
+    headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'GET' },
+  });
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'");
+});
