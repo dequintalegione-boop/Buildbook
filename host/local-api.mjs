@@ -138,7 +138,18 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
       send(response, 401, { error: 'Требуется действительный токен локального API.' });
       return;
     }
-    const pathname = new URL(request.url || '/', 'http://localhost').pathname;
+    let pathname;
+    try {
+      const requestUrl = new URL(request.url || '/', 'http://localhost');
+      if (requestUrl.origin !== 'http://localhost') {
+        send(response, 400, { error: 'Некорректный адрес запроса.' });
+        return;
+      }
+      pathname = requestUrl.pathname;
+    } catch {
+      send(response, 400, { error: 'Некорректный адрес запроса.' });
+      return;
+    }
     if (request.method === 'GET' && pathname === '/api/health') {
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
       return;
