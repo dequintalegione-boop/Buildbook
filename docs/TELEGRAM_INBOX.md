@@ -40,7 +40,7 @@ Run the complete Node.js unit-test set (including the Telegram gate, poller, pro
 node --test tests/*.test.mjs
 ```
 
-The CI host-test job runs this same command.
+The service lifecycle tests also verify that stop cancels an interval wait promptly, the service can restart after stopping, and repeated start calls share one loop. The CI host-test job runs this same command.
 
 
 ## Host configuration
