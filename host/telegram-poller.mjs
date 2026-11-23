@@ -12,13 +12,9 @@ async function readTelegramJson(response) {
     throw new Error('Telegram response exceeds the allowed size.');
   }
   if (!response.body?.getReader) {
-    const text = await response.text();
-    if (Buffer.byteLength(text, 'utf8') > MAX_TELEGRAM_RESPONSE_BYTES) {
-      throw new Error('Telegram response exceeds the allowed size.');
-    }
-    try { return JSON.parse(text); } catch {
-      throw new Error('Telegram returned invalid JSON.');
-    }
+    // Do not fall back to response.text(): it buffers an unbounded body before
+    // the size check and defeats the response limit on non-standard fetches.
+    throw new Error('Telegram response does not expose a bounded readable body.');
   }
 
   const reader = response.body.getReader();
@@ -79,6 +75,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
       const payload = await readTelegramJson(response);
       if (!payload?.ok || !Array.isArray(payload.result)) throw new Error('Telegram returned an invalid getUpdates response.');
+      if (payload.result.length > 1000) throw new Error('Telegram returned too many updates in one batch.');
 
       let accepted = 0;
       let rejected = 0;
