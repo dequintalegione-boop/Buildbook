@@ -79,6 +79,22 @@ test('cannot mark an inbox item completed without a committed operation ID', asy
   });
 });
 
+test('inbox state transitions reject invalid completion and terminal-state rewrites', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 12, userId: '1001', update: { message: 'income' } });
+    assert.equal(await inbox.markPending(item.id, 'not processing'), false);
+    assert.equal(await inbox.markRejected(item.id, 'not processing'), false);
+    assert.equal(await inbox.markCompleted(item.id, 'tx-12'), false);
+    assert.equal(await inbox.markProcessing(item.id), true);
+    assert.equal(await inbox.markCompleted(item.id, 'tx-12'), true);
+    assert.equal(await inbox.markCompleted(item.id, 'tx-other'), false);
+    assert.equal(await inbox.markPending(item.id, 'must not reopen'), false);
+    assert.equal(await inbox.markRejected(item.id, 'must not rewrite'), false);
+    assert.equal((await inbox.stats()).completed, 1);
+  });
+});
+
 test('invalid sender IDs and update IDs are rejected', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
