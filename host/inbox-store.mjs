@@ -77,8 +77,9 @@ export function createInboxStore(filePath) {
       if (!/^\d+$/.test(String(userId ?? ''))) {
         throw new TypeError('A numeric Telegram userId is required.');
       }
-      if (!update || typeof update !== 'object' || Array.isArray(update)) {
-        throw new TypeError('The Telegram update payload must be an object.');
+      if (!update || typeof update !== 'object' || Array.isArray(update)
+        || update.update_id !== numericUpdateId) {
+        throw new TypeError('The Telegram update payload must be an object matching updateId.');
       }
       let serializedUpdate;
       try { serializedUpdate = JSON.stringify(update); } catch {
