@@ -41,3 +41,13 @@ test('rejects malformed profile fields and invalid export timestamps', async () 
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: {}, photos: {} }), /массивом/);
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: [] }), /Фотографии/);
 });
+
+
+test('refuses an export larger than the canonical profile limit', async () => {
+  const exporter = await loadExporter();
+  const oversized = 'x'.repeat(32 * 1024 * 1024 + 1);
+  await assert.rejects(
+    exporter.createEnvelope({ state: { oversized }, logs: [], photos: {} }),
+    /32 MiB/,
+  );
+});
