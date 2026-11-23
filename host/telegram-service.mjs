@@ -43,7 +43,10 @@ export function createTelegramService({
       try {
         const result = await runtime.runOnce({ signal });
         failures = 0;
-        onCycle(result);
+        try { onCycle(result); } catch (error) {
+          // UI/metrics callbacks must not turn a successful poll into a failed cycle.
+          try { onError(error, { failures: 0, phase: 'onCycle' }); } catch {}
+        }
         await wait(intervalMs, signal);
       } catch (error) {
         if (signal.aborted) break;
