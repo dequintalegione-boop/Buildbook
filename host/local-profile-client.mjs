@@ -67,6 +67,15 @@ export function createLocalProfileClient({
       if (!result || result.ok !== true) throw new Error('Локальный сервис вернул некорректный ответ проверки состояния.');
       return result;
     },
+    async telegramStatus() {
+      const result = await request('/api/telegram/status');
+      if (!result || typeof result.running !== 'boolean'
+        || !Number.isSafeInteger(result.lastProcessed) || result.lastProcessed < 0
+        || !Number.isSafeInteger(result.consecutiveFailures) || result.consecutiveFailures < 0) {
+        throw new Error('Локальный сервис вернул некорректный статус Telegram.');
+      }
+      return result;
+    },
     async readProfile() {
       const result = await request('/api/profile');
       if (!result || !Number.isSafeInteger(result.revision) || result.revision < 0 ||
