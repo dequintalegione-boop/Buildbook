@@ -28,7 +28,7 @@ export function readTelegramServiceConfig(env = process.env) {
 
   const allowlistRaw = requiredString(env, 'BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS');
   const rawUserIds = allowlistRaw.split(',').map(value => value.trim());
-  if (!rawUserIds.length || rawUserIds.length > 100 || rawUserIds.some(value => !/^\\d{1,16}$/.test(value)
+  if (!rawUserIds.length || rawUserIds.length > 100 || rawUserIds.some(value => !/^\d{1,16}$/.test(value)
     || !Number.isSafeInteger(Number(value)) || Number(value) <= 0)) {
     throw new TypeError('BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS must contain 1–100 positive numeric IDs.');
   }
