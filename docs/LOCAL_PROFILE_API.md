@@ -43,7 +43,7 @@ node host/run-buildbook-local-host.mjs
 - `GET /api/profile` — возвращает `{ revision, profile }`; до первого сохранения профиль равен `null`.
 - `PUT /api/profile` — принимает `{ expectedRevision, profile }` и возвращает новую ревизию. Устаревшая ревизия даёт HTTP 409 и код `BUILD_BOOK_STORAGE_CONFLICT`.
 
-API принимает JSON до 8 MiB. Ошибки формата возвращаются как 400, неподдерживаемый тип содержимого — 415. Каждый запрос требует `Authorization: Bearer <accessToken>`; токен должен быть не короче 32 байт. Сравнение токена выполняется constant-time. Запросы с посторонним `Origin` или `Host` отклоняются. Сервис разрешено привязывать только к loopback-интерфейсу, не к LAN или публичному адресу.
+API принимает JSON до 8 MiB. Успешные и ошибочные ответы используют `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin`, `Cross-Origin-Opener-Policy: same-origin` и ограничительную `Permissions-Policy`. Ошибки формата возвращаются как 400, неподдерживаемый тип содержимого — 415. Каждый запрос требует `Authorization: Bearer <accessToken>`; токен должен быть не короче 32 байт. Сравнение токена выполняется constant-time. Запросы с посторонним `Origin` или `Host` отклоняются. Сервис разрешено привязывать только к loopback-интерфейсу, не к LAN или публичному адресу.
 
 ## Клиентский транспортный модуль
 
