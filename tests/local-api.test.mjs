@@ -118,7 +118,7 @@ test('refuses to bind the API to a non-loopback interface', () => {
 
 test('returns 413 for request bodies above the configured limit', async (t) => {
   const { base, request } = await fixture(t);
-  const oversized = JSON.stringify({ expectedRevision: 0, profile: { data: 'x'.repeat(8 * 1024 * 1024) } });
+  const oversized = JSON.stringify({ expectedRevision: 0, profile: { data: 'x'.repeat(34 * 1024 * 1024) } });
   const response = await request(`${base}/api/profile`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
