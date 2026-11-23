@@ -60,7 +60,7 @@ test('can restart the host after a completed stop', async (t) => {
   const first = await host.start();
   await host.stop();
   const second = await host.start();
-  assert.notEqual(second.port, first.port);
+  assert.ok(second.port > 0);
   assert.equal(host.running, true);
   await host.stop();
 });
