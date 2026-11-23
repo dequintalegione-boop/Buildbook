@@ -20,6 +20,13 @@ function makeInbox(item) {
       state.calls.push('pending');
       return true;
     },
+    async markRejected(id, message) {
+      if (id !== state.item.id) return false;
+      state.status = 'rejected';
+      state.error = message;
+      state.calls.push('rejected');
+      return true;
+    },
     async markCompleted(id, operationId) {
       if (id !== state.item.id) return false;
       state.status = 'completed';
@@ -90,7 +97,7 @@ test('does not report success when durable completion fails', async () => {
   inbox.markCompleted = async () => false;
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { return { operationId: 'operation-8' }; } });
   await assert.rejects(processor.processOne(), /could not be marked completed/);
-  assert.equal(inbox.state.status, 'pending');
+  assert.equal(inbox.state.status, 'rejected');
 });
 
 test('rejects malformed or tampered inbox payload before calling domain adapter', async () => {
@@ -105,4 +112,15 @@ test('rejects malformed or tampered inbox payload before calling domain adapter'
   await assert.rejects(processor.processOne(), /private-text command validation/);
   assert.equal(called, false);
   assert.equal(inbox.state.status, 'pending');
+});
+
+
+test('malformed inbox items are quarantined rather than retried', async () => {
+  const tampered = structuredClone(sample);
+  tampered.update.message.chat.id = 2002;
+  const inbox = makeInbox(tampered);
+  const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { assert.fail('adapter must not run'); } });
+  await assert.rejects(processor.processOne(), /private-text command validation/);
+  assert.equal(inbox.state.status, 'rejected');
+  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
