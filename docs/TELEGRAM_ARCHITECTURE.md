@@ -11,6 +11,7 @@
 ## Inbox and delivery semantics
 
 - Store each accepted Telegram update durably before advancing the Telegram polling offset.
+- Enforce inbox state transitions (`pending → processing → pending|completed|rejected`); completed/rejected records are terminal, and repeated completion is idempotent only for the same operation ID.
 - Use the Telegram update ID plus bot identity as a unique idempotency key.
 - Process updates in order; persist the outcome and resulting Buildbook operation ID atomically where the storage design permits.
 - If operation persistence fails, keep the inbox item pending and retry with bounded backoff; do not acknowledge it as completed in the UI.
