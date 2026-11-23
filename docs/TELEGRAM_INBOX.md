@@ -1,11 +1,11 @@
 # Durable Telegram inbox
 
-The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled by `host/telegram-update-gate.mjs`. These are host-side modules, not a financial ledger. `host/telegram-poller.mjs` receives updates with Telegram long polling, and `host/telegram-offset-store.mjs` persists the polling checkpoint.
+The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled by `host/telegram-update-gate.mjs`. `host/telegram-poller.mjs` receives updates with Telegram long polling, and `host/telegram-offset-store.mjs` persists the polling checkpoint. `host/telegram-inbox-processor.mjs` hands queued updates to the canonical domain adapter.
 
 ## Current behavior
 
 - Persists received updates to a local JSON file using write-to-temp then rename.
-- `createTelegramUpdateGate` validates numeric allowlist IDs and checks the sender before enqueuing; rejected updates are not persisted.\n- The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.\n- Deduplicates by bot identity and Telegram update ID.
+- `createTelegramUpdateGate` validates numeric allowlist IDs and checks the sender before enqueuing; rejected updates are not persisted.\n- The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.\n- The processor marks an item complete only after the domain adapter succeeds, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must enforce that key atomically with its domain write. The inbox cannot itself guarantee exactly-once financial writes.\n- Deduplicates by bot identity and Telegram update ID.
 - Tracks pending, processing and completed states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
 - Recovers interrupted processing to pending after a host restart.
 - Exposes counts for the future Telegram status screen.
@@ -27,4 +27,4 @@ Run with Node.js 22:
 node --test tests/inbox-store.test.mjs
 ```
 
-The inbox test suite covers duplicate delivery, persistence across store instances, retry after failure, recovery after interruption, completed-item exclusion and numeric ID validation. The Telegram gate and poller suites cover allowlist filtering and durable checkpoint behavior.
+The inbox test suite covers duplicate delivery, persistence across store instances, retry after failure, recovery after interruption, completed-item exclusion and numeric ID validation. The Telegram gate and poller suites cover allowlist filtering and durable checkpoint behavior. The processor suite covers completion, retry, and stable idempotency-key delivery.
