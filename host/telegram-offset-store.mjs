@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -23,6 +23,8 @@ export function createTelegramOffsetStore(filePath) {
 
   async function readOffset() {
     try {
+      const info = await stat(filePath);
+      if (info.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
       const parsed = JSON.parse(await readFile(filePath, 'utf8'));
       if (parsed?.version !== 1 || !(parsed.offset === null || Number.isSafeInteger(parsed.offset) && parsed.offset >= 0)) {
         throw new Error('Unsupported or corrupt Telegram offset file.');
