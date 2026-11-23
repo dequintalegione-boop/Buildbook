@@ -130,7 +130,7 @@ export function createProfileRepositoryAdapter(client) {
         error.currentRevision = current.revision;
         throw error;
       }
-      const base = current.profile === null ? {} : current.profile;
+      const base = current.profile === null ? {} : decode(current.profile);
       if (!isPlainObject(base)) throw new Error('Канонический профиль имеет неверный формат.');
       const profile = encode({ ...base, state, logs, photos });
       return client.writeProfile(profile, expectedRevision);
