@@ -12,6 +12,10 @@ function send(response, status, payload) {
     'content-length': Buffer.byteLength(body),
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'no-referrer',
+    'cross-origin-resource-policy': 'same-origin',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
   });
   response.end(body);
 }
