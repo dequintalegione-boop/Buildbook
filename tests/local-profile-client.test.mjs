@@ -46,6 +46,34 @@ test('allows explicit loopback hosts and preserves a configured port', async () 
   }
 });
 
+test('disables redirects, ambient credentials, caching and referrer on token requests', async () => {
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: fakeFetch(async (_url, options) => {
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.credentials, 'omit');
+      assert.equal(options.cache, 'no-store');
+      assert.equal(options.referrerPolicy, 'no-referrer');
+      return { status: 200, body: { ok: true } };
+    }),
+  });
+  await client.health();
+});
+
+test('maps redirect refusal to the safe unavailable error without retrying elsewhere', async () => {
+  let calls = 0;
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      assert.equal(options.redirect, 'error');
+      throw new Error('redirect blocked');
+    },
+  });
+  await assert.rejects(client.health(), error => error.code === 'BUILD_BOOK_LOCAL_API_UNAVAILABLE');
+  assert.equal(calls, 1);
+});
+
 test('reads profile and sends bearer token to local API', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
