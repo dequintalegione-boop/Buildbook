@@ -158,7 +158,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       response.writeHead(204, {
-        'access-control-allow-methods': 'GET, PUT, OPTIONS',
+        'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
         'access-control-allow-headers': 'Authorization, Content-Type',
         'access-control-max-age': '600',
         'cache-control': 'no-store',
