@@ -13,6 +13,16 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
   let active = false;
   let recovered = false;
 
+  async function drainInbox() {
+    let processed = 0;
+    while (true) {
+      const result = await processor.processOne();
+      if (!result.processed) break;
+      processed += 1;
+    }
+    return processed;
+  }
+
   async function runOnce(options = {}) {
     if (active) throw new Error('Telegram runtime cycle is already in progress.');
     active = true;
@@ -22,13 +32,12 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
         recovered = true;
       }
 
+      // Drain durable work before network I/O: a Telegram outage must not block
+      // updates already accepted into the local inbox.
+      let processed = await drainInbox();
       const polling = await poller.pollOnce(options);
-      let processed = 0;
-      while (true) {
-        const result = await processor.processOne();
-        if (!result.processed) break;
-        processed += 1;
-      }
+      processed += await drainInbox();
+
       return { polling, processed, inbox: await inbox.stats() };
     } finally {
       active = false;
