@@ -96,3 +96,27 @@ test('browser repository and Telegram finance adapter share one canonical profil
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test('repository adapter rejects malformed canonical profile responses and revisions', async () => {
+  const invalidRead = createProfileRepositoryAdapter({
+    readProfile: async () => ({ revision: -1, profile: null }),
+    writeProfile: async () => 1,
+  });
+  await assert.rejects(invalidRead.readProfile(), /некорректный ответ/);
+
+  const invalidWriteResult = createProfileRepositoryAdapter({
+    readProfile: async () => ({ revision: 0, profile: null }),
+    writeProfile: async () => 4,
+  });
+  await assert.rejects(
+    invalidWriteResult.writeProfile({}, [], {}, 0),
+    /некорректную ревизию после сохранения/,
+  );
+
+  const malformedCurrent = createProfileRepositoryAdapter({
+    readProfile: async () => ({ revision: 0, profile: [] }),
+    writeProfile: async () => 1,
+  });
+  await assert.rejects(malformedCurrent.writeProfile({}, [], {}, 0), /некорректный ответ/);
+});
