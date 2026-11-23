@@ -98,6 +98,31 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
       send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
       return;
     }
+    if (!originAllowed(request)) {
+      send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
+      return;
+    }
+    const origin = request.headers.origin;
+    if (origin) {
+      response.setHeader('access-control-allow-origin', origin);
+      response.setHeader('vary', 'Origin');
+    }
+    if (request.method === 'OPTIONS') {
+      if (!origin) {
+        send(response, 403, { error: 'Для предварительного запроса требуется локальный Origin.' });
+        return;
+      }
+      response.writeHead(204, {
+        'access-control-allow-methods': 'GET, PUT, OPTIONS',
+        'access-control-allow-headers': 'Authorization, Content-Type',
+        'access-control-max-age': '600',
+        'cache-control': 'no-store',
+        'vary': 'Origin',
+      });
+      response.end();
+      return;
+    }
+
     const authorization = String(request.headers.authorization || '');
     const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
     const expected = Buffer.from(accessToken, 'utf8');
@@ -107,11 +132,6 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
       send(response, 401, { error: 'Требуется действительный токен локального API.' });
       return;
     }
-    if (!originAllowed(request)) {
-      send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
-      return;
-    }
-
     const pathname = new URL(request.url || '/', 'http://localhost').pathname;
     if (request.method === 'GET' && pathname === '/api/health') {
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
