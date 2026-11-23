@@ -1,5 +1,5 @@
 import { mkdir, rename, rm, lstat, open, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const MAX_UPDATE_BYTES = 16 * 1024;
@@ -23,6 +23,9 @@ export function createInboxStore(filePath) {
     throw new TypeError('A durable inbox file path is required.');
   }
 
+  if (!isAbsolute(filePath)) {
+    throw new TypeError('A durable inbox file path must be absolute.');
+  }
   const path = resolve(filePath);
   let statePromise;
   let writeChain = Promise.resolve();
