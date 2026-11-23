@@ -20,7 +20,9 @@ function validateInboxCommand(item) {
     || typeof message.text !== 'string'
     || message.text.length === 0
     || message.text.length > 4096) {
-    throw new TypeError('Telegram inbox item failed the private-text command validation.');
+    const error = new TypeError('Telegram inbox item failed the private-text command validation.');
+    error.code = 'INVALID_TELEGRAM_INBOX_ITEM';
+    throw error;
   }
 }
 
@@ -28,7 +30,8 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
   if (!inbox || typeof inbox.nextPending !== 'function'
     || typeof inbox.markProcessing !== 'function'
     || typeof inbox.markPending !== 'function'
-    || typeof inbox.markCompleted !== 'function') {
+    || typeof inbox.markCompleted !== 'function'
+    || typeof inbox.markRejected !== 'function') {
     throw new TypeError('A compatible durable Telegram inbox is required.');
   }
   if (typeof applyUpdate !== 'function') throw new TypeError('A canonical domain update adapter is required.');
@@ -44,7 +47,12 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
       if (!await inbox.markProcessing(item.id)) return { processed: false, reason: 'claimed_elsewhere' };
 
       try {
-        validateInboxCommand(item);
+        try {
+          validateInboxCommand(item);
+        } catch (error) {
+          await inbox.markRejected(item.id, error?.message || 'Invalid inbox item');
+          throw error;
+        }
         const result = await applyUpdate({
           update: structuredClone(item.update),
           userId: item.userId,
