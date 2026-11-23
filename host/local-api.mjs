@@ -75,6 +75,26 @@ function readJson(request) {
   });
 }
 
+const ISO_EXPORT_DATE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+function isValidExportDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = ISO_EXPORT_DATE.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone, sign, offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+  const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
+  const offsetHour = Number(offsetHourText || 0), offsetMinute = Number(offsetMinuteText || 0);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 23 || offsetMinute > 59) return false;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, Number((fraction + '000').slice(0, 3)));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+    || date.getUTCHours() !== hour || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second) return false;
+  return Number.isFinite(Date.parse(value)) && (sign === '+' || sign === '-' || zone === 'Z');
+}
+
 function requestHostAllowed(request) {
   const rawHost = String(request.headers.host || '').toLowerCase();
   const host = rawHost.startsWith('[')
@@ -232,7 +252,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const payload = envelope?.payload;
         const hasExactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
           && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
-        const validExportDate = typeof envelope?.exportedAt === 'string'
+        const validExportDate = isValidExportDate(envelope?.exportedAt);
           && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(envelope.exportedAt)
           && Number.isFinite(Date.parse(envelope.exportedAt));
         if (!hasExactKeys(body, ['expectedRevision', 'envelope'])
