@@ -57,7 +57,11 @@ function privateTextEnvelope(update, userId) {
  */
 export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
   if (!inbox || typeof inbox.enqueue !== 'function') throw new TypeError('A durable inbox is required.');
-  if (typeof botId !== 'string' || !botId.trim()) throw new TypeError('A Telegram bot identity is required.');
+  if (typeof botId !== 'string' || !/^\d{1,16}$/.test(botId)
+    || !Number.isSafeInteger(Number(botId)) || Number(botId) <= 0) {
+    throw new TypeError('A valid numeric Telegram bot identity is required.');
+  }
+  botId = String(Number(botId));
   const allowed = normalizeAllowlist(allowlist);
 
   return Object.freeze({
