@@ -34,7 +34,7 @@ const sample = {
   id: 'inbox-1',
   key: 'bot-1:44',
   userId: '1001',
-  update: { update_id: 44, message: { text: 'income 100' } },
+  update: { update_id: 44, message: { message_id: 44, from: { id: 1001 }, chat: { id: 1001, type: 'private' }, text: 'income 100' } },
 };
 
 test('passes stable idempotency key and completes after adapter succeeds', async () => {
@@ -90,5 +90,19 @@ test('does not report success when durable completion fails', async () => {
   inbox.markCompleted = async () => false;
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { return { operationId: 'operation-8' }; } });
   await assert.rejects(processor.processOne(), /could not be marked completed/);
+  assert.equal(inbox.state.status, 'pending');
+});
+
+test('rejects malformed or tampered inbox payload before calling domain adapter', async () => {
+  const tampered = structuredClone(sample);
+  tampered.update.message.chat.id = 2002;
+  const inbox = makeInbox(tampered);
+  let called = false;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { called = true; return { operationId: 'should-not-exist' }; },
+  });
+  await assert.rejects(processor.processOne(), /private-text command validation/);
+  assert.equal(called, false);
   assert.equal(inbox.state.status, 'pending');
 });
