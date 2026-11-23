@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHash } from 'node:crypto';
 
-const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_BODY_BYTES = 34 * 1024 * 1024;
 const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 function send(response, status, payload) {
@@ -210,6 +210,72 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         });
       } catch {
         send(response, 500, { error: 'Не удалось получить статус Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/profile/import') {
+      const declaredLength = request.headers['content-length'];
+      if (declaredLength !== undefined && (!/^\\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
+        send(response, Number(declaredLength) > MAX_BODY_BYTES ? 413 : 400, { error: 'Некорректный или слишком большой Content-Length.' });
+        request.resume();
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        const envelope = body?.envelope;
+        const payload = envelope?.payload;
+        if (!body || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
+          || !envelope || envelope.format !== 'buildbook-profile-export' || envelope.version !== 1
+          || !Number.isSafeInteger(envelope.sourceSchemaVersion) || envelope.sourceSchemaVersion < 1
+          || typeof envelope.exportedAt !== 'string' || !Number.isFinite(Date.parse(envelope.exportedAt))
+          || !payload || typeof payload !== 'object' || Array.isArray(payload)
+          || !Object.hasOwn(payload, 'state') || !Object.hasOwn(payload, 'logs') || !Object.hasOwn(payload, 'photos')
+          || (payload.state !== null && (typeof payload.state !== 'object' || Array.isArray(payload.state)))
+          || !Array.isArray(payload.logs)
+          || (payload.photos === null || typeof payload.photos !== 'object' || Array.isArray(payload.photos))
+          || typeof envelope.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.sha256)) {
+          send(response, 400, { error: 'Файл импорта имеет неподдерживаемый или некорректный формат.' });
+          return;
+        }
+        const digest = createHash('sha256').update(JSON.stringify(payload), 'utf8').digest('hex');
+        const suppliedDigest = Buffer.from(envelope.sha256, 'ascii');
+        const expectedDigest = Buffer.from(digest, 'ascii');
+        if (suppliedDigest.length !== expectedDigest.length || !timingSafeEqual(suppliedDigest, expectedDigest)) {
+          send(response, 400, { error: 'Контрольная сумма файла импорта не совпадает.' });
+          return;
+        }
+        const current = await profileStore.read();
+        if (current.revision !== body.expectedRevision) {
+          const error = Object.assign(new Error('Профиль уже изменён. Повторно проверьте целевой профиль перед импортом.'), {
+            code: 'BUILD_BOOK_STORAGE_CONFLICT',
+            expectedRevision: body.expectedRevision,
+            currentRevision: current.revision,
+          });
+          throw error;
+        }
+        if (current.profile !== null) {
+          send(response, 409, { error: 'Импорт разрешён только в пустой профиль. Сначала сохраните резервную копию и используйте отдельную процедуру восстановления.', code: 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY' });
+          return;
+        }
+        const importedProfile = { state: payload.state, logs: payload.logs, photos: payload.photos };
+        const revision = await profileStore.write(importedProfile, body.expectedRevision);
+        send(response, 200, { revision, imported: true });
+      } catch (error) {
+        if (error.code === 'BUILD_BOOK_STORAGE_CONFLICT') {
+          send(response, 409, {
+            error: error.message,
+            code: error.code,
+            expectedRevision: error.expectedRevision,
+            currentRevision: error.currentRevision,
+          });
+          return;
+        }
+        send(response, error.status || 500, { error: error.status ? error.message : 'Не удалось импортировать профиль.' });
       }
       return;
     }
