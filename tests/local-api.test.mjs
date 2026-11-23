@@ -356,6 +356,25 @@ test('rejects extra import envelope fields and non-ISO dates before writing', as
   assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
 
+test('rejects impossible ISO calendar dates without writing a profile', async (t) => {
+  const { base, request } = await fixture(t);
+  const envelope = makeImportEnvelope({ state: {}, logs: [], photos: {} });
+  for (const exportedAt of [
+    '2026-02-30T10:00:00.000Z',
+    '2026-13-01T10:00:00.000Z',
+    '2026-01-01T25:00:00.000Z',
+    '2026-01-01T10:00:00+24:00',
+  ]) {
+    const response = await request(`${base}/api/profile/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedRevision: 0, envelope: { ...envelope, exportedAt } }),
+    });
+    assert.equal(response.status, 400);
+  }
+  assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
+});
+
 test('refuses normal import into a populated profile without changing it', async (t) => {
   const { base, request } = await fixture(t);
   await request(`${base}/api/profile`, {
