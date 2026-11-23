@@ -165,6 +165,12 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
       return;
     }
     if (request.method === 'PUT' && pathname === '/api/profile') {
+      const declaredLength = request.headers['content-length'];
+      if (declaredLength !== undefined && (!/^\\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
+        send(response, Number(declaredLength) > MAX_BODY_BYTES ? 413 : 400, { error: 'Некорректный или слишком большой Content-Length.' });
+        request.resume();
+        return;
+      }
       const contentType = String(request.headers['content-type'] || '')
         .split(';', 1)[0].trim().toLowerCase();
       if (contentType !== 'application/json') {
