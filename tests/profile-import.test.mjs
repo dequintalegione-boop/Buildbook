@@ -56,10 +56,9 @@ test('rejects malformed envelope fields and oversized payloads', async () => {
   const envelope = await exporter.createEnvelope({ state: {}, logs: [], photos: {} });
   await assert.rejects(importer.validateEnvelope({ ...envelope, sha256: 'xyz' }), /неверный формат/);
   await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt: 'bad-date' }), /некорректная дата/);
-  const oversized = await exporter.createEnvelope({
-    state: { data: 'x'.repeat(32 * 1024 * 1024 + 1) },
-    logs: [],
-    photos: {},
-  }).catch(error => error);
-  assert.match(oversized.message, /32 MiB/);
+  const oversized = {
+    ...envelope,
+    payload: { state: { data: 'x'.repeat(32 * 1024 * 1024 + 1) }, logs: [], photos: {} },
+  };
+  await assert.rejects(importer.validateEnvelope(oversized), /32 MiB/);
 });
