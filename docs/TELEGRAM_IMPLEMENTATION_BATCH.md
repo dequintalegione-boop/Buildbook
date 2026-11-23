@@ -36,12 +36,15 @@ Implemented in code:
 - The transaction builder maps commands to the existing transaction fields (kind i/e, date, amount, desc, cat, grp, acc, note); it uses existing default categories/groups (income: Заработок / Другое, expense: Общие расходы / Еда), account Наличные, and the host's local calendar date.
 - The profile finance adapter validates the transaction and commits it together with the Telegram idempotency key in one profile revision. Replayed keys return the committed operation ID.
 - The host can compose this adapter from a profileStore and defaults to the command builder. Invalid/unsupported commands are rejected instead of endlessly retrying and blocking the ordered inbox.
+- Added `host/buildbook-local-host.mjs` and `host/run-buildbook-local-host.mjs`: the local API and Telegram processor now share one profile-store instance in the combined host. The composition validates profile/lock/queue path separation and releases locks during shutdown.
+- Added authenticated `GET /api/telegram/status`, sanitized to a fixed allowlist of operational fields, plus `client.telegramStatus()`.
+- Added focused command/adapter test cases in `tests/telegram-finance-adapter.test.mjs` (not executed).
 - The UI-side profile repository adapter preserves host-owned profile metadata during saves and checks the expected revision first, preventing routine UI saves from silently dropping the Telegram idempotency ledger.
 
 Still blocked / incomplete:
-- The supplied profileStore must be the same canonical profile store used by the UI. The UI-side adapter can preserve host metadata, but it is not yet connected to the app's IndexedDB startup path. The current browser IndexedDB and separate host file are not yet unified; do not point the host at a second profile and call it integrated.
+- The combined host shares one profile store between API and Telegram, but the UI still starts with browser IndexedDB. The repository adapter is not yet wired into the app startup path; do not treat the UI and host as one live ledger until that switch/migration is implemented and exercised.
 - Category/account selection currently uses the app's known defaults; mapping to user-edited categories and accounts remains.
-- UI setup/status, safe token provisioning, browser-to-host migration, and service installation/autostart remain.
+- UI setup, safe token provisioning, browser-to-host migration, and service installation/autostart remain. Status is available from the authenticated local API but not yet displayed in the app.
 - Review and tests remain pending; tests have not been run per user instruction.
 
 ### Current command format
