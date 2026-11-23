@@ -41,7 +41,7 @@ export function readTelegramServiceConfig(env = process.env) {
   if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath)) {
     throw new TypeError('Telegram inbox and offset paths must be absolute.');
   }
-  if (resolve(inboxPath) === resolve(offsetPath)) {
+  if (resolve(inboxPath).toLowerCase() === resolve(offsetPath).toLowerCase()) {
     throw new TypeError('Telegram inbox and offset paths must be different files.');
   }
 
