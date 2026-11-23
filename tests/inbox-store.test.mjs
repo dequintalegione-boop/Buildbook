@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInboxStore } from '../host/inbox-store.mjs';
@@ -13,6 +13,39 @@ async function withStore(run) {
     await rm(directory, { recursive: true, force: true });
   }
 }
+
+test('rejects malformed or duplicate-key durable inbox records on load', async () => {
+  await withStore(async file => {
+    await writeFile(file, JSON.stringify({ version: 1, items: [null] }), 'utf8');
+    const inbox = createInboxStore(file);
+    await assert.rejects(inbox.stats(), /corrupt Telegram inbox file/i);
+  });
+  await withStore(async file => {
+    const item = {
+      id: 'one', key: 'bot-1:3', botId: 'bot-1', updateId: 3, userId: '1001',
+      update: { update_id: 3 }, status: 'pending', attempts: 0,
+      receivedAt: new Date().toISOString(), processedAt: null, lastError: null,
+    };
+    await writeFile(file, JSON.stringify({ version: 1, items: [item, { ...item, id: 'two' }] }), 'utf8');
+    const inbox = createInboxStore(file);
+    await assert.rejects(inbox.nextPending(), /corrupt Telegram inbox file/i);
+  });
+});
+
+test('refuses a symlink as the durable inbox file', async () => {
+  await withStore(async file => {
+    const external = file + '.external';
+    await writeFile(external, JSON.stringify({ version: 1, items: [] }), 'utf8');
+    try {
+      await symlink(external, file);
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return;
+      throw error;
+    }
+    const inbox = createInboxStore(file);
+    await assert.rejects(inbox.stats(), /regular file|special file/i);
+  });
+});
 
 test('enqueue is durable and duplicate Telegram updates are idempotent', async () => {
   await withStore(async file => {
