@@ -46,7 +46,9 @@ function readJson(request) {
       if (settled) return;
       let parsed;
       try {
-        parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const bytes = Buffer.concat(chunks);
+        const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        parsed = JSON.parse(text);
       } catch {
         fail('Ожидался корректный JSON.', 400);
         return;
