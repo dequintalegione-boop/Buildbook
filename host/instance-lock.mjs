@@ -1,4 +1,5 @@
-import { mkdirSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 
 /**
@@ -26,9 +27,11 @@ export function acquireInstanceLock(lockPath, { pid = process.pid } = {}) {
     throw error;
   }
 
+  const ownerToken = randomUUID();
   try {
     writeFileSync(resolve(path, 'owner.json'), JSON.stringify({
       pid,
+      ownerToken,
       startedAt: new Date().toISOString(),
     }), { flag: 'wx', mode: 0o600 });
   } catch (error) {
@@ -40,7 +43,15 @@ export function acquireInstanceLock(lockPath, { pid = process.pid } = {}) {
   return function releaseInstanceLock() {
     if (released) return;
     released = true;
-    unlinkSync(resolve(path, 'owner.json'));
+    const ownerPath = resolve(path, 'owner.json');
+    let owner;
+    try { owner = JSON.parse(readFileSync(ownerPath, 'utf8')); } catch {
+      throw new Error('Buildbook instance lock ownership could not be verified; lock was left in place.');
+    }
+    if (owner?.ownerToken !== ownerToken || owner?.pid !== pid) {
+      throw new Error('Buildbook instance lock ownership changed; lock was left in place.');
+    }
+    unlinkSync(ownerPath);
     rmdirSync(path);
   };
 }
