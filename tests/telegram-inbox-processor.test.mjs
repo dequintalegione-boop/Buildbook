@@ -66,11 +66,13 @@ test('returns failed adapter work to pending for retry', async () => {
   const inbox = makeInbox(sample);
   const processor = createTelegramInboxProcessor({
     inbox,
-    async applyUpdate() { throw new Error('storage unavailable'); },
+    async applyUpdate() { throw new Error('token=secret-value; user wrote private financial details'); },
   });
-  await assert.rejects(processor.processOne(), /storage unavailable/);
+  await assert.rejects(processor.processOne(), /token=secret-value/);
   assert.equal(inbox.state.status, 'pending');
-  assert.equal(inbox.state.error, 'storage unavailable');
+  assert.equal(inbox.state.error, 'Canonical adapter failed; retry scheduled.');
+  assert.equal(inbox.state.error.includes('secret-value'), false);
+  assert.equal(inbox.state.error.includes('private financial details'), false);
   assert.deepEqual(inbox.state.calls, ['processing', 'pending']);
 });
 
