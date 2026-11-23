@@ -50,11 +50,31 @@ test('transaction builder uses Buildbook transaction fields and host-local date'
     date: '2026-11-23',
     amount: 99.9,
     desc: 'Обед',
-    cat: 'Общие расходы',
-    grp: 'Еда',
-    acc: 'Наличные',
+    cat: 'Еда',
+    grp: 'Общие расходы',
+    acc: 'a1',
     note: 'Добавлено через Telegram',
   });
+});
+
+
+test('transaction builder resolves visible categories and account IDs from profile', () => {
+  const transaction = buildTelegramFinanceTransactionFromUpdate({
+    message: { text: '/income 25 Заказ' },
+  }, {
+    now: new Date(2026, 10, 23),
+    profile: {
+      state: {
+        categories: { i: { 'Другой доход': ['Услуги', 'Продажа'] } },
+        hiddenGroups: { i: [] },
+        hiddenCategories: { i: [] },
+        accounts: [{ id: 'cash-main', name: 'Наличные', open: 0 }],
+      },
+    },
+  });
+  assert.equal(transaction.grp, 'Другой доход');
+  assert.equal(transaction.cat, 'Услуги');
+  assert.equal(transaction.acc, 'cash-main');
 });
 
 test('profile adapter commits a transaction and its idempotency key together', async () => {
