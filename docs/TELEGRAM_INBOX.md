@@ -28,3 +28,14 @@ node --test tests/inbox-store.test.mjs
 ```
 
 The inbox test suite covers duplicate delivery, persistence across store instances, retry after failure, recovery after interruption, completed-item exclusion and numeric ID validation. The Telegram gate and poller suites cover allowlist filtering and durable checkpoint behavior. The processor suite covers completion, retry, and stable idempotency-key delivery.
+
+
+## Runtime coordinator
+
+`host/telegram-runtime.mjs` coordinates one service cycle: recover interrupted inbox entries once, poll Telegram, then process queued entries sequentially until the inbox is empty. It deliberately does not own timers or process startup; the host lifecycle must schedule cycles, provide cancellation, and enforce a single service process. If polling or domain processing fails, the cycle rejects so the host can apply retry/backoff policy. The runtime does not make the Telegram-to-finance path production-ready until the canonical storage adapter is connected.
+
+Run the coordinator tests with:
+
+```sh
+node --test tests/telegram-runtime.test.mjs
+```
