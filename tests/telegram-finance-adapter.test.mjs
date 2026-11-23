@@ -83,7 +83,7 @@ test('profile adapter commits a transaction and its idempotency key together', a
     profileStore: store,
     buildTransaction: () => ({
       kind: 'i', date: '2026-11-23', amount: 100, desc: 'Проверка',
-      cat: 'Заработок', grp: 'Другое', acc: 'Наличные',
+      cat: 'Другое', grp: 'Заработок', acc: 'a1',
     }),
   });
   const first = await applyUpdate({ update: {}, idempotencyKey: '12345:7' });
@@ -109,7 +109,7 @@ test('profile adapter refuses stale revision without writing', async () => {
     },
     buildTransaction: () => ({
       kind: 'e', date: '2026-11-23', amount: 1, desc: 'Тест',
-      cat: 'Общие расходы', grp: 'Еда',
+      cat: 'Еда', grp: 'Общие расходы', acc: 'a1',
     }),
   });
   await assert.rejects(() => applyUpdate({ update: {}, idempotencyKey: '12345:8' }), {
