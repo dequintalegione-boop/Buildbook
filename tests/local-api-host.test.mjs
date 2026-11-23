@@ -64,3 +64,18 @@ test('can restart the host after a completed stop', async (t) => {
   assert.equal(host.running, true);
   await host.stop();
 });
+
+test('serializes a stop requested during startup and allows a clean restart', async (t) => {
+  const host = await fixture(t);
+  const starting = host.start();
+  const stopping = host.stop();
+
+  await Promise.all([starting, stopping]);
+  assert.equal(host.running, false);
+
+  const restarted = await host.start();
+  assert.ok(restarted.port > 0);
+  assert.equal(host.running, true);
+  await host.stop();
+  assert.equal(host.running, false);
+});
