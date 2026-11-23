@@ -75,6 +75,11 @@ function decode(value) {
         || value.entries.some(entry => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string')) {
         throw new Error('Канонический профиль содержит некорректный экранированный объект.');
       }
+      const keys = new Set();
+      for (const [key] of value.entries) {
+        if (keys.has(key)) throw new Error('Канонический профиль содержит повторяющийся ключ экранированного объекта.');
+        keys.add(key);
+      }
       const result = {};
       for (const [key, item] of value.entries) setOwnDataProperty(result, key, decode(item));
       return result;
