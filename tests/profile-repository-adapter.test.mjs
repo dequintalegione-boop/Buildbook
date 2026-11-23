@@ -99,3 +99,37 @@ test('rejects malformed adapter inputs and malformed canonical profile', async (
   const adapter = createProfileRepositoryAdapter(fakeClient({ profile: [] }));
   await assert.rejects(adapter.readProfile(), /неверный формат/);
 });
+
+test('refuses stale UI saves before writing and preserves host-owned metadata', async () => {
+  let revision = 4;
+  let writes = 0;
+  const profile = {
+    state: { tx: [{ id: 'existing' }] },
+    logs: [],
+    photos: {},
+    telegram: { idempotency: { 'bot:1': 'op-1' } },
+  };
+  const client = {
+    async readProfile() { return { profile, revision }; },
+    async writeProfile(next, expectedRevision) {
+      writes++;
+      assert.equal(expectedRevision, revision);
+      return ++revision;
+    },
+  };
+  const adapter = createProfileRepositoryAdapter(client);
+
+  await assert.rejects(
+    adapter.writeProfile({ tx: [{ id: 'stale-ui' }] }, [], {}, 3),
+    error => error?.code === 'BUILD_BOOK_STORAGE_CONFLICT'
+      && error.expectedRevision === 3
+      && error.currentRevision === 4,
+  );
+  assert.equal(writes, 0);
+  assert.deepEqual(profile.telegram.idempotency, { 'bot:1': 'op-1' });
+
+  await adapter.writeProfile({ tx: [{ id: 'fresh-ui' }] }, [], {}, 4);
+  assert.equal(writes, 1);
+  assert.deepEqual(profile.telegram.idempotency, { 'bot:1': 'op-1' });
+  assert.deepEqual(profile.state, { tx: [{ id: 'fresh-ui' }] });
+});
