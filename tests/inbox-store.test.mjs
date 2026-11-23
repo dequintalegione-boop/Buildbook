@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInboxStore } from '../host/inbox-store.mjs';
@@ -125,7 +125,7 @@ test('inbox error summaries never persist arbitrary caller text', async () => {
     const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 14, userId: '1001', update: { message: 'income' } });
     await inbox.markProcessing(item.id);
     await inbox.markPending(item.id, 'token=secret; private amount=9000');
-    const pendingFile = JSON.parse(await (await import('node:fs/promises')).readFile(file, 'utf8'));
+    const pendingFile = JSON.parse(await readFile(file, 'utf8'));
     assert.equal(pendingFile.items[0].lastError, 'Telegram update processing failed; retry scheduled.');
     assert.doesNotMatch(JSON.stringify(pendingFile), /secret|9000/);
 
