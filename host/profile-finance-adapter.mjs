@@ -37,15 +37,26 @@ function validateProfile(profile) {
     error.code = 'BUILD_BOOK_FINANCE_STATE_UNAVAILABLE';
     throw error;
   }
-  if (profile.telegramOperations !== undefined
-    && (!Array.isArray(profile.telegramOperations)
-      || profile.telegramOperations.length > MAX_OPERATION_KEYS
-      || profile.telegramOperations.some(entry => !isRecord(entry)
-        || typeof entry.key !== 'string' || !KEY_PATTERN.test(entry.key)
-        || typeof entry.operationId !== 'string' || !entry.operationId))) {
-    const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
-    error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
-    throw error;
+  if (profile.telegramOperations !== undefined) {
+    const ledger = profile.telegramOperations;
+    const keys = new Set();
+    const operationIds = new Set();
+    if (!Array.isArray(ledger) || ledger.length > MAX_OPERATION_KEYS) {
+      const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
+      error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
+      throw error;
+    }
+    for (const entry of ledger) {
+      if (!isRecord(entry) || typeof entry.key !== 'string' || !KEY_PATTERN.test(entry.key)
+        || typeof entry.operationId !== 'string' || !entry.operationId
+        || keys.has(entry.key) || operationIds.has(entry.operationId)) {
+        const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
+        error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
+        throw error;
+      }
+      keys.add(entry.key);
+      operationIds.add(entry.operationId);
+    }
   }
 }
 
