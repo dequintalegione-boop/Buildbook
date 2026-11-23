@@ -22,6 +22,22 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function setOwnDataProperty(target, key, value) {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value,
+  });
+}
+
+function isBinaryDescriptor(value) {
+  return isPlainObject(value)
+    && value[BINARY_MARKER] === true
+    && value.encoding === 'base64'
+    && typeof value.data === 'string';
+}
+
 function encode(value) {
   if (value instanceof ArrayBuffer) {
     return { [BINARY_MARKER]: true, encoding: 'base64', data: bytesToBase64(new Uint8Array(value)) };
@@ -31,8 +47,16 @@ function encode(value) {
   }
   if (Array.isArray(value)) return value.map(encode);
   if (isPlainObject(value)) {
+    // Escape ordinary data that collides with our binary transport tag.
+    if (isBinaryDescriptor(value)) {
+      return {
+        [BINARY_MARKER]: true,
+        encoding: 'escaped-object',
+        entries: Object.entries(value).map(([key, item]) => [key, encode(item)]),
+      };
+    }
     const result = {};
-    for (const [key, item] of Object.entries(value)) result[key] = encode(item);
+    for (const [key, item] of Object.entries(value)) setOwnDataProperty(result, key, encode(item));
     return result;
   }
   return value;
@@ -41,12 +65,22 @@ function encode(value) {
 function decode(value) {
   if (Array.isArray(value)) return value.map(decode);
   if (isPlainObject(value)) {
-    if (value[BINARY_MARKER] === true && value.encoding === 'base64' && typeof value.data === 'string') {
+    if (isBinaryDescriptor(value)) {
       const bytes = base64ToBytes(value.data);
+      if (bytesToBase64(bytes) !== value.data) throw new Error('Канонический профиль содержит некорректный бинарный дескриптор.');
       return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     }
+    if (value[BINARY_MARKER] === true && value.encoding === 'escaped-object') {
+      if (!Array.isArray(value.entries)
+        || value.entries.some(entry => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string')) {
+        throw new Error('Канонический профиль содержит некорректный экранированный объект.');
+      }
+      const result = {};
+      for (const [key, item] of value.entries) setOwnDataProperty(result, key, decode(item));
+      return result;
+    }
     const result = {};
-    for (const [key, item] of Object.entries(value)) result[key] = decode(item);
+    for (const [key, item] of Object.entries(value)) setOwnDataProperty(result, key, decode(item));
     return result;
   }
   return value;
