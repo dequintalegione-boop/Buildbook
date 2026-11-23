@@ -1,18 +1,14 @@
 /**
- * Accepts Telegram updates only from explicitly allowed numeric user IDs.
- * Rejected updates are intentionally not persisted, keeping their message data
- * out of the local inbox and financial domain.
+ * Accepts only private-chat text messages from explicitly allowed Telegram users.
+ * Raw Telegram objects are untrusted input: persist a minimal, validated envelope
+ * rather than forwarding arbitrary fields (attachments, entities, chat metadata).
  */
 const USER_ID = /^\d{1,20}$/;
+const MAX_TEXT_LENGTH = 4096;
 
-function senderIdOf(update) {
-  const sender = update?.message?.from
-    ?? update?.edited_message?.from
-    ?? update?.callback_query?.from
-    ?? update?.inline_query?.from;
-  const id = sender?.id;
-  if (typeof id !== 'number' && typeof id !== 'string') return null;
-  const normalized = String(id);
+function numericId(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const normalized = String(value);
   return USER_ID.test(normalized) ? normalized : null;
 }
 
@@ -20,11 +16,34 @@ function normalizeAllowlist(allowlist) {
   if (!Array.isArray(allowlist)) throw new TypeError('Telegram allowlist must be an array of numeric user IDs.');
   const result = new Set();
   for (const id of allowlist) {
-    const normalized = String(id);
-    if (!USER_ID.test(normalized)) throw new TypeError('Telegram allowlist contains an invalid user ID.');
+    const normalized = numericId(id);
+    if (!normalized) throw new TypeError('Telegram allowlist contains an invalid user ID.');
     result.add(normalized);
   }
   return result;
+}
+
+function privateTextEnvelope(update, userId) {
+  const message = update?.message;
+  if (!message || message.chat?.type !== 'private') return null;
+
+  const chatId = numericId(message.chat?.id);
+  if (!chatId || chatId !== userId) return null;
+  if (typeof message.text !== 'string' || message.text.length === 0
+    || message.text.length > MAX_TEXT_LENGTH) return null;
+  if (!Number.isSafeInteger(message.message_id) || message.message_id < 0) return null;
+
+  // Do not persist the full Telegram object. The domain layer receives only
+  // the fields needed to interpret a private text command.
+  return {
+    update_id: update.update_id,
+    message: {
+      message_id: message.message_id,
+      from: { id: Number(userId) },
+      chat: { id: Number(chatId), type: 'private' },
+      text: message.text,
+    },
+  };
 }
 
 /**
@@ -38,18 +57,24 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
 
   return Object.freeze({
     async accept(update) {
-      const userId = senderIdOf(update);
+      const userId = numericId(update?.message?.from?.id);
       if (!userId || !allowed.has(userId)) {
         return { accepted: false, reason: 'not_allowed' };
+      }
+
+      const sanitizedUpdate = privateTextEnvelope(update, userId);
+      if (!sanitizedUpdate) {
+        return { accepted: false, reason: 'unsupported_update' };
       }
       if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
         throw new TypeError('A valid Telegram update_id is required.');
       }
+
       const result = await inbox.enqueue({
         botId,
         updateId: update.update_id,
         userId,
-        update,
+        update: sanitizedUpdate,
       });
       return { accepted: true, ...result };
     },
