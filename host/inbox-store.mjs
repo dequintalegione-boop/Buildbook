@@ -4,6 +4,12 @@ import { randomUUID } from 'node:crypto';
 
 const MAX_UPDATE_BYTES = 16 * 1024;
 
+function safeInboxError(fallback) {
+  return fallback === 'rejected'
+    ? 'Telegram update rejected by command validation.'
+    : 'Telegram update processing failed; retry scheduled.';
+}
+
 /**
  * Durable inbox for Telegram updates received by the local Buildbook host.
  *
@@ -146,7 +152,7 @@ export function createInboxStore(filePath) {
         const item = state.items.find(entry => entry.id === id);
         if (!item || item.status !== 'processing') return false;
         item.status = 'pending';
-        item.lastError = String(errorMessage || 'Processing failed').slice(0, 1000);
+        item.lastError = safeInboxError('pending');
         return true;
       });
     },
@@ -182,7 +188,7 @@ export function createInboxStore(filePath) {
         const item = state.items.find(entry => entry.id === id);
         if (!item || item.status !== 'processing') return false;
         item.status = 'rejected';
-        item.lastError = String(errorMessage || 'Invalid inbox item').slice(0, 1000);
+        item.lastError = safeInboxError('rejected');
         item.rejectedAt = new Date().toISOString();
         item.update = null;
         item.payloadPurgedAt = item.rejectedAt;
