@@ -68,13 +68,15 @@ export function createInboxStore(filePath) {
 
   return Object.freeze({
     async enqueue({ botId, updateId, userId, update }) {
-      const keyParts = [String(botId ?? '').trim(), String(updateId ?? '')];
-      const numericUpdateId = Number(keyParts[1]);
-      if (!/^\d{1,16}$/.test(keyParts[0]) || !/^\d+$/.test(keyParts[1])
+      const rawBotId = String(botId ?? '').trim();
+      const rawUpdateId = String(updateId ?? '');
+      const numericUpdateId = Number(rawUpdateId);
+      const keyParts = [String(Number(rawBotId)), String(numericUpdateId)];
+      if (!/^\d{1,16}$/.test(rawBotId) || !/^\d+$/.test(rawUpdateId)
         || !Number.isSafeInteger(numericUpdateId) || numericUpdateId < 0) {
         throw new TypeError('botId and a safe numeric Telegram updateId are required.');
       }
-      if (!/^\d+$/.test(String(userId ?? ''))) {
+      if (!/^\d{1,16}$/.test(String(userId ?? '')) || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0) {
         throw new TypeError('A numeric Telegram userId is required.');
       }
       if (!update || typeof update !== 'object' || Array.isArray(update)
