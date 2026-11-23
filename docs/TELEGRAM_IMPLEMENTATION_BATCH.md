@@ -36,9 +36,10 @@ Implemented in code:
 - The transaction builder maps commands to the existing transaction fields (kind i/e, date, amount, desc, cat, grp, acc, note); it uses existing default categories/groups (income: Заработок / Другое, expense: Общие расходы / Еда), account Наличные, and the host's local calendar date.
 - The profile finance adapter validates the transaction and commits it together with the Telegram idempotency key in one profile revision. Replayed keys return the committed operation ID.
 - The host can compose this adapter from a profileStore and defaults to the command builder. Invalid/unsupported commands are rejected instead of endlessly retrying and blocking the ordered inbox.
+- The UI-side profile repository adapter preserves host-owned profile metadata during saves and checks the expected revision first, preventing routine UI saves from silently dropping the Telegram idempotency ledger.
 
 Still blocked / incomplete:
-- The supplied profileStore must be the same canonical profile store used by the UI. The current browser IndexedDB and separate host file are not yet unified; do not point the host at a second profile and call it integrated.
+- The supplied profileStore must be the same canonical profile store used by the UI. The UI-side adapter can preserve host metadata, but it is not yet connected to the app's IndexedDB startup path. The current browser IndexedDB and separate host file are not yet unified; do not point the host at a second profile and call it integrated.
 - Category/account selection currently uses the app's known defaults; mapping to user-edited categories and accounts remains.
 - UI setup/status, safe token provisioning, browser-to-host migration, and service installation/autostart remain.
 - Review and tests remain pending; tests have not been run per user instruction.
