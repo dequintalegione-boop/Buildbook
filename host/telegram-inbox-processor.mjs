@@ -64,8 +64,18 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
           idempotencyKey: item.key,
           inboxItemId: item.id,
         });
-        const operationId = result?.operationId ?? result?.id ?? null;
-        const completed = await inbox.markCompleted(item.id, operationId);
+        const operationId = result?.operationId ?? result?.id;
+        const normalizedOperationId = typeof operationId === 'string'
+          ? operationId.trim()
+          : Number.isSafeInteger(operationId) && operationId >= 0
+            ? String(operationId)
+            : '';
+        if (!normalizedOperationId || normalizedOperationId.length > 256) {
+          const error = new Error('Canonical adapter did not return a valid committed Buildbook operation ID.');
+          error.code = 'MISSING_CANONICAL_OPERATION_ID';
+          throw error;
+        }
+        const completed = await inbox.markCompleted(item.id, normalizedOperationId);
         if (completed === false) {
           throw new Error('Telegram inbox item could not be marked completed; retry requires an idempotent domain adapter.');
         }
