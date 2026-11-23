@@ -10,10 +10,11 @@ The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled 
 - The gate persists a minimal envelope containing the update/message IDs, sender/chat IDs, private-chat type and text. It does not copy arbitrary Telegram fields, entities or attachment metadata into the inbox.
 - Telegram IDs are checked for safe integer representation before being normalized; text is limited to 4096 characters.
 - The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.
-- The processor validates the queued envelope again before calling the domain adapter: update IDs must match, sender/chat IDs must match the queued user, chat type must be private, and text must be non-empty and at most 4096 characters. A malformed or tampered inbox item is not passed to the domain adapter.
+- The processor validates the queued envelope again before calling the domain adapter: update IDs must match, sender/chat IDs must match the queued user, chat type must be private, and text must be non-empty and at most 4096 characters. A malformed or tampered inbox item is not passed to the domain adapter; it is quarantined as `rejected` rather than retried indefinitely.
 - The processor marks an item complete only after the domain adapter succeeds, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must enforce that key atomically with its domain write. The inbox cannot itself guarantee exactly-once financial writes.
 - Deduplicates by bot identity and Telegram update ID.
-- Tracks pending, processing and completed states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
+- Tracks pending, processing, completed and rejected states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
+- Invalid/tampered inbox envelopes are quarantined as `rejected` and their raw payload is purged; they are not retried. Adapter/storage failures remain `pending` for retry.
 - Recovers interrupted processing to pending after a host restart.
 - Exposes counts for the future Telegram status screen.
 - Does not itself write financial records. The processor must mark an item complete only after the canonical Buildbook storage adapter commits the operation.
