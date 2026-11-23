@@ -86,6 +86,8 @@ function originAllowed(request) {
   try {
     const parsed = new URL(origin);
     return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+      && !parsed.username && !parsed.password
+      && parsed.pathname === '/' && !parsed.search && !parsed.hash
       && ALLOWED_HOSTS.has(parsed.hostname.toLowerCase());
   } catch {
     return false;
