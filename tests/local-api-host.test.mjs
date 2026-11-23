@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
 import { createLocalApiHost } from '../host/local-api-host.mjs';
 
 const token = 'local-api-host-test-token-0123456789abcdef';
@@ -21,6 +22,29 @@ async function fixture(t, extra = {}) {
   t.after(() => host.stop());
   return host;
 }
+
+test('releases the profile lock when API bind fails and permits retry', async (t) => {
+  const blocker = createServer();
+  await new Promise((resolve, reject) => {
+    blocker.once('error', reject);
+    blocker.listen(0, '127.0.0.1', resolve);
+  });
+  const port = blocker.address().port;
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-bind-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const host = createLocalApiHost({
+    env: {
+      BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
+      BUILDBOOK_LOCAL_API_TOKEN: token,
+      BUILDBOOK_LOCAL_API_PORT: String(port),
+    },
+  });
+  t.after(() => host.stop());
+  await assert.rejects(host.start(), error => error.code === 'EADDRINUSE');
+  await new Promise(resolve => blocker.close(resolve));
+  const address = await host.start();
+  assert.equal(address.port, port);
+});
 
 test('exclusive profile lock prevents a second API host from sharing the canonical file', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-lock-'));
