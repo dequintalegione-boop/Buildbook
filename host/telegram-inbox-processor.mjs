@@ -66,7 +66,9 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
         }
         return { processed: true, itemId: item.id, operationId };
       } catch (error) {
-        await inbox.markPending(item.id, error?.message || 'Domain adapter failed');
+        if (error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
+          await inbox.markPending(item.id, error?.message || 'Domain adapter failed');
+        }
         throw error;
       }
     } finally {
