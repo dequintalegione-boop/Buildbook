@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInboxStore } from '../host/inbox-store.mjs';
@@ -25,6 +25,21 @@ test('enqueue is durable and duplicate Telegram updates are idempotent', async (
 
     const reopened = createInboxStore(file);
     assert.equal((await reopened.nextPending()).key, 'bot-1:42');
+  });
+});
+
+test('failed durable enqueue does not poison the in-memory dedupe snapshot', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    await inbox.stats(); // Load and cache the initial empty snapshot.
+    await mkdir(file); // Force atomic rename to fail after the temp write.
+    await assert.rejects(
+      inbox.enqueue({ botId: 'bot-1', updateId: 13, userId: '1001', update: { message: 'income' } })
+    );
+    await rm(file, { recursive: true, force: true });
+    const retry = await inbox.enqueue({ botId: 'bot-1', updateId: 13, userId: '1001', update: { message: 'income' } });
+    assert.equal(retry.inserted, true);
+    assert.equal((await inbox.nextPending()).key, 'bot-1:13');
   });
 });
 
