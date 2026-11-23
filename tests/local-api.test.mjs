@@ -96,3 +96,18 @@ test('returns 413 for request bodies above the configured limit', async (t) => {
   assert.equal(response.status, 413);
   assert.match((await response.json()).error, /превышает допустимый размер/);
 });
+
+test('serializes simultaneous writes with the same revision and preserves one winner', async (t) => {
+  const { base, request } = await fixture(t);
+  const put = marker => request(`${base}/api/profile`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, profile: { marker } }),
+  });
+
+  const responses = await Promise.all([put('first'), put('second')]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 409]);
+  const stored = await (await request(`${base}/api/profile`)).json();
+  assert.equal(stored.revision, 1);
+  assert.ok(['first', 'second'].includes(stored.profile.marker));
+});
