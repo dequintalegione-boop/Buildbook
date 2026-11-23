@@ -364,5 +364,11 @@ test('rejects stale import revisions and malformed import envelopes', async (t) 
     body: JSON.stringify({ expectedRevision: 0, envelope: { ...makeImportEnvelope(payload), sourceSchemaVersion: -1 } }),
   });
   assert.equal(malformed.status, 400);
+  const unsupported = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: { ...makeImportEnvelope(payload), sourceSchemaVersion: 6 } }),
+  });
+  assert.equal(unsupported.status, 400);
   assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
