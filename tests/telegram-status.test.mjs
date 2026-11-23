@@ -21,3 +21,12 @@ test('status redacts Telegram bot tokens from error messages', () => {
   assert.match(snapshot.lastError.message, /\[redacted Telegram token\]/);
   assert.doesNotMatch(snapshot.lastError.message, /secret_token/);
 });
+
+test('successful cycle clears prior error and resets failure streak', () => {
+  const status = createTelegramStatus();
+  status.error(new Error('temporary failure'));
+  status.cycle({ processed: 0, inbox: { pending: 0 } });
+  const snapshot = status.snapshot();
+  assert.equal(snapshot.lastError, null);
+  assert.equal(snapshot.consecutiveFailures, 0);
+});
