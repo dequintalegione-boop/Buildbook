@@ -54,6 +54,16 @@ test('starts a loopback API and serves the configured profile store', async (t) 
   assert.equal(host.running, false);
 });
 
+test('rejects a profile lock path that aliases the profile file', () => {
+  assert.throws(() => createLocalApiHost({
+    env: {
+      BUILDBOOK_PROFILE_PATH: '/tmp/profile.json',
+      BUILDBOOK_PROFILE_LOCK_PATH: '/tmp/profile.json',
+      BUILDBOOK_LOCAL_API_TOKEN: token,
+    },
+  }), /distinct from the canonical profile path/);
+});
+
 test('validates required host configuration and port range', () => {
   assert.throws(() => createLocalApiHost({ env: {} }), /BUILDBOOK_PROFILE_PATH is required/);
   assert.throws(() => createLocalApiHost({
