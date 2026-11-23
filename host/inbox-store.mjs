@@ -100,7 +100,7 @@ export function createInboxStore(filePath) {
           key,
           botId: keyParts[0],
           updateId: Number(keyParts[1]),
-          userId: String(userId),
+          userId: String(Number(userId)),
           update: structuredClone(update),
           status: 'pending',
           attempts: 0,
