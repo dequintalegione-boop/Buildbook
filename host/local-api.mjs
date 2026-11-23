@@ -103,7 +103,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, host = '127.0.0.1', port = 0 } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0 } = {}) {
   if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32
     || Buffer.byteLength(accessToken, 'utf8') > 4096) {
     throw new TypeError('Для локального API требуется секретный токен длиной от 32 до 4096 байт.');
@@ -168,6 +168,40 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
     }
     if (request.method === 'GET' && pathname === '/api/health') {
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/status') {
+      if (typeof getTelegramStatus !== 'function') {
+        send(response, 404, { error: 'Статус Telegram не подключён.' });
+        return;
+      }
+      try {
+        const raw = getTelegramStatus();
+        const queue = raw?.queue && typeof raw.queue === 'object' ? raw.queue : null;
+        const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+        const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
+        send(response, 200, {
+          running: raw?.running === true,
+          startedAt: timestamp(raw?.startedAt),
+          lastCycleAt: timestamp(raw?.lastCycleAt),
+          lastProcessed: count(raw?.lastProcessed),
+          consecutiveFailures: count(raw?.consecutiveFailures),
+          queue: queue ? {
+            total: count(queue.total),
+            pending: count(queue.pending),
+            processing: count(queue.processing),
+            completed: count(queue.completed),
+            rejected: count(queue.rejected),
+          } : null,
+          lastError: raw?.lastError ? {
+            code: 'TELEGRAM_SERVICE_ERROR',
+            message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
+            at: timestamp(raw.lastError.at),
+          } : null,
+        });
+      } catch {
+        send(response, 500, { error: 'Не удалось получить статус Telegram.' });
+      }
       return;
     }
     if (request.method === 'GET' && pathname === '/api/profile') {
