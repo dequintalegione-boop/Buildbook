@@ -28,6 +28,16 @@ test('rejects requests without a valid bearer token', async (t) => {
   assert.equal(response.status, 401);
 });
 
+test('sets restrictive browser security headers on API responses', async (t) => {
+  const { base, request } = await fixture(t);
+  const response = await request(`${base}/api/health`);
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
+  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'");
+});
+
 test('serves health and an empty profile', async (t) => {
   const { base, request } = await fixture(t);
   assert.deepEqual(await (await request(`${base}/api/health`)).json(), { ok: true, service: 'buildbook-local-host' });
