@@ -39,6 +39,9 @@ test('host factory composes service and durable inbox without starting network p
     });
     assert.equal(typeof host.service.start, 'function');
     assert.equal(host.service.running, false);
+    assert.equal(host.getStatus().running, false);
+    assert.equal(host.getStatus().queue, null);
+    assert.equal(JSON.stringify(host.getStatus()).includes('secret'), false);
     assert.equal(typeof host.inbox.enqueue, 'function');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -54,6 +57,20 @@ test('host factory rejects overlapping storage and lock paths', () => {
       config: cfg,
       async applyUpdate() { return { operationId: 'op-1' }; },
     }), /must be distinct/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('host factory rejects relative lock paths even when config is hand-built', () => {
+  const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
+  try {
+    const cfg = config(root);
+    cfg.instanceLockPath = 'relative.lock';
+    assert.throws(() => createTelegramHostService({
+      config: cfg,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /must be absolute/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
