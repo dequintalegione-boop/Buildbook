@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -41,8 +41,16 @@ export function createInboxStore(filePath) {
   async function persist(state) {
     await mkdir(dirname(path), { recursive: true });
     const temporaryPath = path + '.' + randomUUID() + '.tmp';
-    await writeFile(temporaryPath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600 });
-    await rename(temporaryPath, path);
+    try {
+      // mode is applied when the temp file is created; rename then preserves
+      // its restrictive permissions for the durable inbox, including updates.
+      await writeFile(temporaryPath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await rename(temporaryPath, path);
+    } catch (error) {
+      // A failed write must not leave plaintext Telegram messages in a temp file.
+      await rm(temporaryPath, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   function mutate(change) {
