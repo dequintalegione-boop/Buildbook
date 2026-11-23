@@ -10,15 +10,27 @@ async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
-  const api = createLocalApiServer({ profileStore: store });
+  const token = 'test-local-api-token-0123456789abcdef';
+  const api = createLocalApiServer({ profileStore: store, accessToken: token });
   const address = await api.listen();
   t.after(() => api.close());
-  return { api, base: `http://127.0.0.1:${address.port}` };
+  const base = `http://127.0.0.1:${address.port}`;
+  const request = (url, options = {}) => fetch(url, {
+    ...options,
+    headers: { authorization: `Bearer ${token}`, ...(options.headers || {}) },
+  });
+  return { api, base, request };
 }
 
-test('serves health and an empty profile', async (t) => {
+test('rejects requests without a valid bearer token', async (t) => {
   const { base } = await fixture(t);
-  assert.deepEqual(await (await fetch(`${base}/api/health`)).json(), { ok: true, service: 'buildbook-local-host' });
+  const response = await fetch(`${base}/api/health`);
+  assert.equal(response.status, 401);
+});
+
+test('serves health and an empty profile', async (t) => {
+  const { base, request } = await fixture(t);
+  assert.deepEqual(await (await request(`${base}/api/health`)).json(), { ok: true, service: 'buildbook-local-host' });
   assert.deepEqual(await (await fetch(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
 
