@@ -133,7 +133,7 @@ export function createInboxStore(filePath) {
     async markPending(id, errorMessage) {
       return mutate(state => {
         const item = state.items.find(entry => entry.id === id);
-        if (!item || item.status === 'completed') return false;
+        if (!item || item.status !== 'processing') return false;
         item.status = 'pending';
         item.lastError = String(errorMessage || 'Processing failed').slice(0, 1000);
         return true;
@@ -152,7 +152,8 @@ export function createInboxStore(filePath) {
       return mutate(state => {
         const item = state.items.find(entry => entry.id === id);
         if (!item) return false;
-        if (item.status === 'completed') return true;
+        if (item.status === 'completed') return item.operationId === normalizedOperationId;
+        if (item.status !== 'processing') return false;
         item.status = 'completed';
         item.operationId = normalizedOperationId;
         item.processedAt = new Date().toISOString();
@@ -168,7 +169,7 @@ export function createInboxStore(filePath) {
     async markRejected(id, errorMessage) {
       return mutate(state => {
         const item = state.items.find(entry => entry.id === id);
-        if (!item || item.status === 'completed') return false;
+        if (!item || item.status !== 'processing') return false;
         item.status = 'rejected';
         item.lastError = String(errorMessage || 'Invalid inbox item').slice(0, 1000);
         item.rejectedAt = new Date().toISOString();
