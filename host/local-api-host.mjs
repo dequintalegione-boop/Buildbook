@@ -33,21 +33,30 @@ export function createLocalApiHost({ env = process.env } = {}) {
   let startPromise = null;
   let stopPromise = null;
 
+  function start() {
+    if (stopPromise) return stopPromise.then(start);
+    if (address) return Promise.resolve(address);
+    if (startPromise) return startPromise;
+    startPromise = api.listen().then(value => {
+      address = value;
+      return value;
+    }).finally(() => { startPromise = null; });
+    return startPromise;
+  }
+
+  function stop() {
+    if (stopPromise) return stopPromise;
+    stopPromise = (async () => {
+      if (startPromise) await startPromise.catch(() => {});
+      await api.close();
+      address = null;
+    })().finally(() => { stopPromise = null; });
+    return stopPromise;
+  }
+
   return Object.freeze({
-    start() {
-      if (address) return Promise.resolve(address);
-      if (startPromise) return startPromise;
-      startPromise = api.listen().then(value => {
-        address = value;
-        return value;
-      }).finally(() => { startPromise = null; });
-      return startPromise;
-    },
-    stop() {
-      if (stopPromise) return stopPromise;
-      stopPromise = api.close().then(() => { address = null; }).finally(() => { stopPromise = null; });
-      return stopPromise;
-    },
+    start,
+    stop,
     get running() { return address !== null; },
   });
 }
