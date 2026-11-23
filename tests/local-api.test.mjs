@@ -433,3 +433,32 @@ test('rejects stale import revisions and malformed import envelopes', async (t) 
   assert.equal(unsupported.status, 400);
   assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
+
+
+test('validates ISO 8601 export timezone offsets at the import boundary', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: {}, logs: [], photos: {} };
+  for (const exportedAt of [
+    '2026-11-23T00:00:00+14:01',
+    '2026-11-23T00:00:00-15:00',
+    '2026-11-23T00:00:00+23:59',
+  ]) {
+    const envelope = makeImportEnvelope(payload);
+    envelope.exportedAt = exportedAt;
+    const response = await request(`${base}/api/profile/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expectedRevision: 0, envelope }),
+    });
+    assert.equal(response.status, 400, exportedAt);
+  }
+
+  const envelope = makeImportEnvelope(payload);
+  envelope.exportedAt = '2026-11-23T00:00:00+14:00';
+  const accepted = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope }),
+  });
+  assert.equal(accepted.status, 200);
+});
