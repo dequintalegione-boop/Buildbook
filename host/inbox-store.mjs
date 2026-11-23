@@ -57,13 +57,23 @@ export function createInboxStore(filePath) {
 
   function mutate(change) {
     const operation = writeChain.then(async () => {
-      const state = await load();
-      const result = await change(state);
-      await persist(state);
+      const current = await load();
+      // Never mutate the cached snapshot before the durable replacement succeeds.
+      // If disk persistence fails, later duplicate checks must not observe an
+      // update that was never safely stored.
+      const draft = structuredClone(current);
+      const result = await change(draft);
+      await persist(draft);
+      statePromise = Promise.resolve(draft);
       return result;
     });
     writeChain = operation.catch(() => {});
     return operation;
+  }
+
+  function readConsistent(read) {
+    const pendingWrites = writeChain;
+    return pendingWrites.then(async () => read(await load()));
   }
 
   return Object.freeze({
@@ -114,9 +124,10 @@ export function createInboxStore(filePath) {
     },
 
     async nextPending() {
-      const state = await load();
-      const item = state.items.find(entry => entry.status === 'pending');
-      return item ? structuredClone(item) : null;
+      return readConsistent(state => {
+        const item = state.items.find(entry => entry.status === 'pending');
+        return item ? structuredClone(item) : null;
+      });
     },
 
     async markProcessing(id) {
@@ -193,12 +204,13 @@ export function createInboxStore(filePath) {
     },
 
     async stats() {
-      const state = await load();
-      const result = { total: state.items.length, pending: 0, processing: 0, completed: 0, rejected: 0 };
-      for (const item of state.items) {
-        if (Object.hasOwn(result, item.status)) result[item.status] += 1;
-      }
-      return result;
+      return readConsistent(state => {
+        const result = { total: state.items.length, pending: 0, processing: 0, completed: 0, rejected: 0 };
+        for (const item of state.items) {
+          if (Object.hasOwn(result, item.status)) result[item.status] += 1;
+        }
+        return result;
+      });
     }
   });
 }
