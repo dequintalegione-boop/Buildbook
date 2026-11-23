@@ -32,13 +32,15 @@ The inbox test suite covers duplicate delivery, persistence across store instanc
 
 ## Runtime coordinator
 
-`host/telegram-runtime.mjs` coordinates one service cycle: recover interrupted inbox entries once, poll Telegram, then process queued entries sequentially until the inbox is empty. It deliberately does not own timers or process startup; the host lifecycle must schedule cycles, provide cancellation, and enforce a single service process. If polling or domain processing fails, the cycle rejects so the host can apply retry/backoff policy. The runtime does not make the Telegram-to-finance path production-ready until the canonical storage adapter is connected.
+`host/telegram-runtime.mjs` coordinates one service cycle: recover interrupted inbox entries once, process already-queued entries, poll Telegram, then process newly accepted entries. Draining the inbox before network I/O means a Telegram outage does not block work already received and durably saved. It deliberately does not own timers or process startup; the host lifecycle must schedule cycles, provide cancellation, and enforce a single service process. If polling or domain processing fails, the cycle rejects so the host can apply retry/backoff policy. The runtime does not make the Telegram-to-finance path production-ready until the canonical storage adapter is connected.
 
-Run the coordinator tests with:
+Run the complete Node.js unit-test set (including the Telegram gate, poller, processor, runtime, service, config and storage tests) with:
 
 ```sh
-node --test tests/telegram-runtime.test.mjs
+node --test tests/*.test.mjs
 ```
+
+The CI host-test job runs this same command.
 
 
 ## Host configuration
