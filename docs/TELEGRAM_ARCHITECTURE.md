@@ -3,7 +3,7 @@
 ## Components
 
 1. **Buildbook UI** — configuration and monitoring only. It must not contain the bot token or implement Telegram polling.
-2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status. The host composition factory requires an injected canonical domain adapter and uses a fail-closed exclusive instance lock. It exposes an in-memory status snapshot with a fixed generic error code/message (no arbitrary exception text or caller-supplied error code), but no browser status endpoint yet. A signal-lifecycle wrapper is available for an already-composed host; it does not load secrets or supply the missing canonical adapter. OS-level installation/autostart and a standalone executable entrypoint remain separate work.
+2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status. The host composition accepts either an injected canonical domain adapter or a profile store plus the validated finance builder. `host/buildbook-local-host.mjs` composes the local API and Telegram service with the same profile-store instance and exclusive locks; `host/run-buildbook-local-host.mjs` is the combined entrypoint. The authenticated local API exposes a sanitized Telegram status endpoint. OS-level installation/autostart remains separate work.
 3. **Telegram adapter** — converts Telegram updates and callback actions into validated domain commands.
 4. **Buildbook storage adapter** — the only component allowed to persist financial operations. It must target the same canonical data store used by the app.
 5. **Host adapter boundary** — separates local process lifecycle and transport from the domain/inbox logic, so a remote host can be substituted later.
@@ -28,7 +28,7 @@
 ## Token and configuration
 
 - The bot token is a secret and must be stored by the host service in an OS-protected local secret store or a restricted local configuration file, never in the web app bundle, browser localStorage, or Git.
-- The UI may submit the token to the local service during setup over a loopback-only interface. The service must not return the token in status responses or logs.
+- The current local API uses a host-only bearer token and does not yet provide UI setup or token provisioning. The service must not return the token in status responses or logs.
 - Bind the local control API to loopback only; protect configuration-changing requests against cross-site requests and validate the expected local origin.
 - Allowlist entries are numeric Telegram user IDs, normalized and validated by the service.
 
@@ -36,7 +36,7 @@
 
 The current app uses browser IndexedDB, which is unavailable to a separate background process when the browser is closed. The local service therefore cannot safely write financial records into the current browser database directly.
 
-Before implementing the Telegram-to-finance write path, choose and test a shared canonical storage boundary. The preferred direction is a local host API/storage adapter that can serve both the app and Telegram service, with a compatibility path for the existing standalone/browser-only mode. Do not silently create a second independent ledger.
+The combined local host now shares one file-backed profile store between its API and Telegram processor. The browser UI still initializes directly from IndexedDB; the repository adapter is not yet wired into app startup, and a recoverable migration/bootstrap path is not complete. Until that is finished, do not treat the browser UI and host as one live ledger or enable Telegram writes against a separate profile.
 
 ## Outage caveat
 
