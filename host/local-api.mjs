@@ -157,7 +157,7 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
     let pathname;
     try {
       const requestUrl = new URL(request.url || '/', 'http://localhost');
-      if (requestUrl.origin !== 'http://localhost') {
+      if (requestUrl.origin !== 'http://localhost' || requestUrl.search || requestUrl.hash) {
         send(response, 400, { error: 'Некорректный адрес запроса.' });
         return;
       }
