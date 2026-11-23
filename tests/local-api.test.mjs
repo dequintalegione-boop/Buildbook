@@ -71,3 +71,16 @@ test('refuses to bind the API to a non-loopback interface', () => {
     host: '0.0.0.0',
   }), /loopback/);
 });
+
+
+test('returns 413 for request bodies above the configured limit', async (t) => {
+  const { base } = await fixture(t);
+  const oversized = JSON.stringify({ expectedRevision: 0, profile: { data: 'x'.repeat(8 * 1024 * 1024) } });
+  const response = await fetch(`${base}/api/profile`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: oversized,
+  });
+  assert.equal(response.status, 413);
+  assert.match((await response.json()).error, /превышает допустимый размер/);
+});
