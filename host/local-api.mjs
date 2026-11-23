@@ -70,8 +70,14 @@ function readJson(request) {
 
 function requestHostAllowed(request) {
   const rawHost = String(request.headers.host || '').toLowerCase();
-  const host = rawHost.startsWith('[') ? rawHost.slice(0, rawHost.indexOf(']') + 1) : rawHost.split(':')[0];
-  return ALLOWED_HOSTS.has(host);
+  const host = rawHost.startsWith('[')
+    ? rawHost.slice(0, rawHost.indexOf(']') + 1)
+    : rawHost.split(':')[0];
+  const suffix = rawHost.startsWith('[')
+    ? rawHost.slice(rawHost.indexOf(']') + 1)
+    : rawHost.slice(rawHost.indexOf(':') + 1);
+  const validPort = suffix === '' || /^:\\d{1,5}$/.test(suffix);
+  return validPort && ALLOWED_HOSTS.has(host);
 }
 
 function originAllowed(request) {
