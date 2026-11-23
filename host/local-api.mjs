@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
+import { timingSafeEqual } from 'node:crypto';
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
@@ -81,7 +82,10 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, host = '127.0.0.1', port = 0 } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, host = '127.0.0.1', port = 0 } = {}) {
+  if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32) {
+    throw new TypeError('Для локального API требуется секретный токен длиной не менее 32 байт.');
+  }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
   }
@@ -90,7 +94,20 @@ export function createLocalApiServer({ profileStore, host = '127.0.0.1', port = 
   }
 
   const server = createServer(async (request, response) => {
-    if (!requestHostAllowed(request) || !originAllowed(request)) {
+    if (!requestHostAllowed(request)) {
+      send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
+      return;
+    }
+    const authorization = String(request.headers.authorization || '');
+    const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    const expected = Buffer.from(accessToken, 'utf8');
+    const supplied = Buffer.from(suppliedToken, 'utf8');
+    const tokenMatches = supplied.length === expected.length && timingSafeEqual(supplied, expected);
+    if (!tokenMatches) {
+      send(response, 401, { error: 'Требуется действительный токен локального API.' });
+      return;
+    }
+    if (!originAllowed(request)) {
       send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
       return;
     }
