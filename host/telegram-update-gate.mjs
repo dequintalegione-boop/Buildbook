@@ -18,6 +18,7 @@ function numericId(value) {
 
 function normalizeAllowlist(allowlist) {
   if (!Array.isArray(allowlist)) throw new TypeError('Telegram allowlist must be an array of numeric user IDs.');
+  if (allowlist.length > 100) throw new TypeError('Telegram allowlist cannot exceed 100 user IDs.');
   const result = new Set();
   for (const id of allowlist) {
     const normalized = numericId(id);
