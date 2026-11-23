@@ -119,6 +119,24 @@ test('invalid sender IDs and update IDs are rejected', async () => {
 });
 
 
+test('inbox error summaries never persist arbitrary caller text', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 14, userId: '1001', update: { message: 'income' } });
+    await inbox.markProcessing(item.id);
+    await inbox.markPending(item.id, 'token=secret; private amount=9000');
+    const pendingFile = JSON.parse(await (await import('node:fs/promises')).readFile(file, 'utf8'));
+    assert.equal(pendingFile.items[0].lastError, 'Telegram update processing failed; retry scheduled.');
+    assert.doesNotMatch(JSON.stringify(pendingFile), /secret|9000/);
+
+    await inbox.markProcessing(item.id);
+    await inbox.markRejected(item.id, 'user text with private details');
+    const rejectedFile = JSON.parse(await (await import('node:fs/promises')).readFile(file, 'utf8'));
+    assert.equal(rejectedFile.items[0].lastError, 'Telegram update rejected by command validation.');
+    assert.doesNotMatch(JSON.stringify(rejectedFile), /private details/);
+  });
+});
+
 test('rejected inbox records are terminal and excluded from pending work', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
