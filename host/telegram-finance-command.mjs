@@ -59,3 +59,18 @@ export function buildTelegramFinanceTransaction(command, { now = new Date() } = 
     note: 'Добавлено через Telegram',
   };
 }
+/** Build the finance transaction directly from the sanitized Telegram envelope. */
+export function buildTelegramFinanceTransactionFromUpdate(update, options) {
+  const command = parseTelegramFinanceCommand(update?.message?.text);
+  if (!command) {
+    const error = commandError('Сообщение не является поддерживаемой финансовой командой.');
+    error.permanent = true;
+    throw error;
+  }
+  try {
+    return buildTelegramFinanceTransaction(command, options);
+  } catch (error) {
+    error.permanent = true;
+    throw error;
+  }
+}
