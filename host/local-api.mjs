@@ -93,7 +93,7 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
     throw new TypeError('Локальный API разрешено привязывать только к loopback-интерфейсу.');
   }
 
-  const server = createServer(async (request, response) => {
+  const server = createServer({ maxHeaderSize: 8 * 1024 }, async (request, response) => {
     if (!requestHostAllowed(request)) {
       send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
       return;
@@ -176,6 +176,11 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
     }
     send(response, 404, { error: 'Маршрут не найден.' });
   });
+
+  // Bound slow-client resource use even when the caller never finishes a request.
+  server.headersTimeout = 10_000;
+  server.requestTimeout = 30_000;
+  server.keepAliveTimeout = 5_000;
 
   return Object.freeze({
     server,
