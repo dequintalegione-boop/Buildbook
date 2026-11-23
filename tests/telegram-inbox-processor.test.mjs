@@ -83,3 +83,12 @@ test('does not call adapter when inbox is empty or claim fails', async () => {
 test('rejects missing canonical adapter', () => {
   assert.throws(() => createTelegramInboxProcessor({ inbox: {} }), /durable Telegram inbox/);
 });
+
+
+test('does not report success when durable completion fails', async () => {
+  const inbox = makeInbox(sample);
+  inbox.markCompleted = async () => false;
+  const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { return { operationId: 'operation-8' }; } });
+  await assert.rejects(processor.processOne(), /could not be marked completed/);
+  assert.equal(inbox.state.status, 'pending');
+});
