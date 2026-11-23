@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
@@ -51,6 +51,15 @@ test('rejects malformed profile values and invalid expected revisions', async (t
   const { store } = await fixture(t);
   await assert.rejects(store.write([], 0), TypeError);
   await assert.rejects(store.write({}, -1), TypeError);
+});
+
+test('refuses to read a canonical profile path that is a symbolic link', async (t) => {
+  const { file, store } = await fixture(t);
+  const external = file + '.external';
+  await writeFile(external, JSON.stringify({ version: 1, revision: 4, profile: { marker: 'outside' } }), 'utf8');
+  t.after(() => rm(external, { force: true }));
+  await symlink(external, file);
+  await assert.rejects(store.read(), /обычным файлом|ссылкой/i);
 });
 
 test('refuses to silently replace a malformed canonical profile file', async (t) => {
