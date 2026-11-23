@@ -97,10 +97,16 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
         return { processed: true, itemId: item.id, operationId };
       } catch (error) {
         if (error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
-          const safeMessage = 'Canonical adapter failed; retry scheduled.';
-          // Do not persist arbitrary exception text: adapters may include user data,
-          // request bodies, filesystem paths, or credentials in error messages.
-          await inbox.markPending(item.id, safeMessage);
+          if (error?.permanent === true) {
+            // Unsupported or malformed user commands are terminal; retrying them
+            // forever would block every later item in the ordered inbox.
+            await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.');
+          } else {
+            const safeMessage = 'Canonical adapter failed; retry scheduled.';
+            // Do not persist arbitrary exception text: adapters may include user data,
+            // request bodies, filesystem paths, or credentials in error messages.
+            await inbox.markPending(item.id, safeMessage);
+          }
         }
         throw error;
       }
