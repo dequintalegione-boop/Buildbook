@@ -207,3 +207,18 @@ test('rejects invalid request timeout configuration', () => {
     assert.throws(() => createLocalProfileClient({ accessToken: token, requestTimeoutMs }), /Тайм-аут локального API/);
   }
 });
+
+test('keeps the timeout active while reading the response body', async () => {
+  const client = createLocalProfileClient({
+    accessToken: token,
+    requestTimeoutMs: 5,
+    fetchImpl: async (_url, options) => ({
+      ok: true,
+      status: 200,
+      json: () => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+      }),
+    }),
+  });
+  await assert.rejects(client.health(), error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT');
+});
