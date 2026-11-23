@@ -7,6 +7,7 @@ import { createTelegramRuntime } from './telegram-runtime.mjs';
 import { createTelegramService } from './telegram-service.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramStatus } from './telegram-status.mjs';
+import { isAbsolute, resolve } from 'node:path';
 
 /**
  * Compose the Telegram host from validated host-only configuration and the
@@ -32,6 +33,14 @@ export function createTelegramHostService({
     || typeof config.offsetPath !== 'string'
     || typeof config.instanceLockPath !== 'string') {
     throw new TypeError('Telegram host config is incomplete.');
+  }
+  if (config.allowedUserIds.length < 1 || config.allowedUserIds.length > 100) {
+    throw new TypeError('Telegram host allowlist must contain 1–100 user IDs.');
+  }
+  const paths = [config.inboxPath, config.offsetPath, config.instanceLockPath];
+  if (paths.some(path => !isAbsolute(path))) throw new TypeError('Telegram host data paths must be absolute.');
+  if (new Set(paths.map(path => resolve(path).toLowerCase())).size !== paths.length) {
+    throw new TypeError('Telegram host inbox, offset and instance-lock paths must be distinct.');
   }
 
   const status = createTelegramStatus();
