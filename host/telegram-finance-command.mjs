@@ -48,9 +48,10 @@ export function buildTelegramFinanceTransaction(command, { now = new Date() } = 
     throw commandError('Некорректная финансовая команда.');
   }
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError('now must be a valid Date.');
+  const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   return {
     kind: command.kind,
-    date: now.toISOString().slice(0, 10),
+    date,
     amount: command.amount,
     desc: command.desc.trim(),
     cat: 'Прочее',
