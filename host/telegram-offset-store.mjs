@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -11,6 +11,8 @@ export function createTelegramOffsetStore(filePath) {
   if (typeof filePath !== 'string' || !filePath.trim()) {
     throw new TypeError('A Telegram offset file path is required.');
   }
+  if (!isAbsolute(filePath)) throw new TypeError('A Telegram offset path must be absolute.');
+  filePath = resolve(filePath);
   let chain = Promise.resolve();
 
   const serialize = operation => {
