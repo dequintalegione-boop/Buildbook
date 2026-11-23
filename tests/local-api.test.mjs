@@ -74,6 +74,21 @@ test('reports stale revision as HTTP 409 without replacing data', async (t) => {
   assert.deepEqual((await (await request(`${base}/api/profile`)).json()).profile, { marker: 'current' });
 });
 
+test('allows authenticated browser clients to preflight profile import POST', async (t) => {
+  const { base } = await fixture(t);
+  const response = await fetch(`${base}/api/profile/import`, {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'http://localhost:43127',
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(response.status, 204);
+  assert.match(response.headers.get('access-control-allow-methods'), /POST/);
+  assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:43127');
+});
+
 test('rejects query and fragment components in local API request targets', async (t) => {
   const { base, request } = await fixture(t);
   assert.equal((await request(`${base}/api/health?token=not-accepted`)).status, 400);
