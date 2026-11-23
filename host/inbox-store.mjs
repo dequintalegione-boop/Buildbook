@@ -6,15 +6,17 @@ const MAX_UPDATE_BYTES = 16 * 1024;
 const MAX_INBOX_FILE_BYTES = 64 * 1024 * 1024;
 
 async function readUtf8Bounded(handle, maxBytes) {
-  const buffer = Buffer.alloc(maxBytes + 1);
-  let offset = 0;
-  while (offset < buffer.length) {
-    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+  const chunks = [];
+  let total = 0;
+  while (total <= maxBytes) {
+    const buffer = Buffer.alloc(Math.min(64 * 1024, maxBytes - total + 1));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, total);
     if (bytesRead === 0) break;
-    offset += bytesRead;
+    total += bytesRead;
+    if (total > maxBytes) throw new RangeError('BOUNDED_FILE_LIMIT');
+    chunks.push(buffer.subarray(0, bytesRead));
   }
-  if (offset > maxBytes) throw new RangeError('Telegram inbox file exceeds the allowed size.');
-  return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset));
+  return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, total));
 }
 
 function safeInboxError(fallback) {
@@ -101,7 +103,8 @@ export function createInboxStore(filePath) {
             if (openedInfo.size > MAX_INBOX_FILE_BYTES) {
               throw new Error('Telegram inbox file exceeds the allowed size.');
             }
-            text = await readUtf8Bounded(handle, MAX_INBOX_FILE_BYTES);
+            try { text = await readUtf8Bounded(handle, MAX_INBOX_FILE_BYTES); }
+            catch (error) { if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Telegram inbox file exceeds the allowed size.'); throw error; }
           } finally {
             await handle.close();
           }
