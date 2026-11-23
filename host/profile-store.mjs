@@ -5,15 +5,17 @@ import { randomUUID } from 'node:crypto';
 const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
 
 async function readUtf8Bounded(handle, maxBytes) {
-  const buffer = Buffer.alloc(maxBytes + 1);
-  let offset = 0;
-  while (offset < buffer.length) {
-    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+  const chunks = [];
+  let total = 0;
+  while (total <= maxBytes) {
+    const buffer = Buffer.alloc(Math.min(64 * 1024, maxBytes - total + 1));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, total);
     if (bytesRead === 0) break;
-    offset += bytesRead;
+    total += bytesRead;
+    if (total > maxBytes) throw new RangeError('BOUNDED_FILE_LIMIT');
+    chunks.push(buffer.subarray(0, bytesRead));
   }
-  if (offset > maxBytes) throw new RangeError('Файл профиля превышает допустимый размер.');
-  return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset));
+  return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, total));
 }
 
 /**
@@ -52,7 +54,8 @@ export function createProfileStore(filePath) {
           throw new Error('Файл профиля был заменён во время чтения; операция отклонена.');
         }
         if (openedInfo.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
-        text = await readUtf8Bounded(handle, MAX_PROFILE_BYTES + 1024);
+        try { text = await readUtf8Bounded(handle, MAX_PROFILE_BYTES + 1024); }
+        catch (error) { if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Файл профиля превышает допустимый размер.'); throw error; }
       } finally {
         await handle.close();
       }
