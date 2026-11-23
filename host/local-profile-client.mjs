@@ -1,4 +1,5 @@
 const DEFAULT_BASE_URL = 'http://127.0.0.1:43127';
+const MAX_PROFILE_REQUEST_BYTES = 8 * 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 function normalizeBaseUrl(value) {
@@ -75,12 +76,22 @@ export function createLocalProfileClient({
       return result;
     },
     async writeProfile(profile, expectedRevision) {
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+        throw new TypeError('Профиль для сохранения должен быть объектом.');
+      }
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
         throw new Error('Для сохранения профиля нужна корректная ревизия.');
       }
+      let body;
+      try { body = JSON.stringify({ profile, expectedRevision }); } catch {
+        throw new TypeError('Профиль должен содержать только сериализуемые JSON-данные.');
+      }
+      if (typeof body !== 'string' || new TextEncoder().encode(body).byteLength > MAX_PROFILE_REQUEST_BYTES) {
+        throw new RangeError('Размер запроса профиля превышает допустимые 8 MiB.');
+      }
       const result = await request('/api/profile', {
         method: 'PUT',
-        body: JSON.stringify({ profile, expectedRevision }),
+        body,
       });
       if (!result || !Number.isSafeInteger(result.revision) || result.revision !== expectedRevision + 1) {
         throw new Error('Локальный сервис вернул некорректную ревизию после сохранения.');
