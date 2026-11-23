@@ -93,6 +93,19 @@ test('reads profile and sends bearer token to local API', async () => {
   assert.deepEqual(await client.readProfile(), { revision: 4, profile: { state: { tx: [] } } });
 });
 
+test('rejects invalid or oversized profiles before sending a request', async () => {
+  let calls = 0;
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: async () => { calls += 1; throw new Error('must not be called'); },
+  });
+  await assert.rejects(client.writeProfile([], 0), /должен быть объектом/);
+  const cyclic = {}; cyclic.self = cyclic;
+  await assert.rejects(client.writeProfile(cyclic, 0), /сериализуемые JSON-данные/);
+  await assert.rejects(client.writeProfile({ payload: 'x'.repeat(8 * 1024 * 1024) }, 0), /8 MiB/);
+  assert.equal(calls, 0);
+});
+
 test('writes with optimistic revision and returns next revision', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
