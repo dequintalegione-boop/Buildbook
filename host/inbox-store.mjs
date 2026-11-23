@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, lstat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -72,7 +72,10 @@ export function createInboxStore(filePath) {
     if (!statePromise) {
       statePromise = (async () => {
         try {
-          const info = await stat(path);
+          const info = await lstat(path);
+          if (info.isSymbolicLink() || !info.isFile()) {
+            throw new Error('Telegram inbox path must be a regular file, not a link or special file.');
+          }
           if (info.size > MAX_INBOX_FILE_BYTES) {
             throw new Error('Telegram inbox file exceeds the allowed size.');
           }
