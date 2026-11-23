@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 const MAX_OPERATION_KEYS = 100_000;
-const KEY_PATTERN = /^\d{1,16}:\d+$/;
+const KEY_PATTERN = /^[1-9]\d{0,15}:(?:0|[1-9]\d*)$/;
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -15,6 +15,8 @@ function validateTransaction(value) {
   if (!isRecord(value)
     || !['i', 'e'].includes(value.kind)
     || typeof value.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.date)
+    || !Number.isFinite(Date.parse(value.date + 'T00:00:00Z'))
+    || new Date(value.date + 'T00:00:00Z').toISOString().slice(0, 10) !== value.date
     || !Number.isFinite(value.amount) || value.amount <= 0
     || typeof value.desc !== 'string' || !value.desc.trim() || value.desc.length > 500
     || typeof value.cat !== 'string' || value.cat.length > 200
@@ -93,6 +95,11 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
     const operationId = typeof transaction.id === 'string' && transaction.id.trim()
       ? transaction.id
       : randomUUID();
+    if (profile.state.tx.some(item => item && item.id === operationId)) {
+      const error = new Error('Buildbook transaction ID already exists.');
+      error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
+      throw error;
+    }
     if (profile.state.tx.some(item => item && item.id === operationId)) {
       const error = new Error('Buildbook transaction ID already exists.');
       error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
