@@ -2,6 +2,8 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+const MAX_UPDATE_BYTES = 16 * 1024;
+
 /**
  * Durable inbox for Telegram updates received by the local Buildbook host.
  *
@@ -75,7 +77,16 @@ export function createInboxStore(filePath) {
       if (!/^\\d+$/.test(String(userId ?? ''))) {
         throw new TypeError('A numeric Telegram userId is required.');
       }
-      if (update === undefined) throw new TypeError('The Telegram update payload is required.');
+      if (!update || typeof update !== 'object' || Array.isArray(update)) {
+        throw new TypeError('The Telegram update payload must be an object.');
+      }
+      let serializedUpdate;
+      try { serializedUpdate = JSON.stringify(update); } catch {
+        throw new TypeError('The Telegram update payload must be JSON-serializable.');
+      }
+      if (typeof serializedUpdate !== 'string' || Buffer.byteLength(serializedUpdate, 'utf8') > MAX_UPDATE_BYTES) {
+        throw new TypeError('The Telegram update payload exceeds the allowed size.');
+      }
       const key = keyParts.join(':');
 
       return mutate(state => {
