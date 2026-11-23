@@ -3,7 +3,7 @@
 ## Components
 
 1. **Buildbook UI** — configuration and monitoring only. It must not contain the bot token or implement Telegram polling.
-2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status.
+2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status. The host composition factory requires an injected canonical domain adapter and uses a fail-closed exclusive instance lock; OS-level installation/autostart remains separate work.
 3. **Telegram adapter** — converts Telegram updates and callback actions into validated domain commands.
 4. **Buildbook storage adapter** — the only component allowed to persist financial operations. It must target the same canonical data store used by the app.
 5. **Host adapter boundary** — separates local process lifecycle and transport from the domain/inbox logic, so a remote host can be substituted later.
