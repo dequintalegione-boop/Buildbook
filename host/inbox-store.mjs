@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, lstat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, lstat, open, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -72,14 +72,25 @@ export function createInboxStore(filePath) {
     if (!statePromise) {
       statePromise = (async () => {
         try {
-          const info = await lstat(path);
-          if (info.isSymbolicLink() || !info.isFile()) {
+          const pathInfo = await lstat(path);
+          if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
             throw new Error('Telegram inbox path must be a regular file, not a link or special file.');
           }
-          if (info.size > MAX_INBOX_FILE_BYTES) {
-            throw new Error('Telegram inbox file exceeds the allowed size.');
+          const handle = await open(path, 'r');
+          let text;
+          try {
+            const openedInfo = await handle.stat();
+            if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+              throw new Error('Telegram inbox file changed during read; refusing persisted updates.');
+            }
+            if (openedInfo.size > MAX_INBOX_FILE_BYTES) {
+              throw new Error('Telegram inbox file exceeds the allowed size.');
+            }
+            text = await handle.readFile({ encoding: 'utf8' });
+          } finally {
+            await handle.close();
           }
-          const parsed = JSON.parse(await readFile(path, 'utf8'));
+          const parsed = JSON.parse(text);
           if (!isValidState(parsed)) {
             throw new Error('Unsupported or corrupt Telegram inbox file.');
           }
