@@ -154,6 +154,17 @@ test('writes with optimistic revision and returns next revision', async () => {
   assert.equal(await client.writeProfile({ marker: 'new' }, 8), 9);
 });
 
+test('rejects exhausted revisions before profile writes or imports', async () => {
+  let calls = 0;
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: async () => { calls += 1; throw new Error('must not be called'); },
+  });
+  await assert.rejects(client.writeProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректную ревизию/);
+  await assert.rejects(client.importProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректную ревизию/);
+  assert.equal(calls, 0);
+});
+
 test('preserves revision conflicts as typed errors', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
