@@ -33,17 +33,18 @@ The current browser app stores its profile in IndexedDB, while the Telegram host
 
 Implemented in code:
 - A strict command parser accepts /income, /expense, /доход, and /расход with a positive amount (up to two decimal places) and description.
-- The transaction builder maps commands to the existing transaction fields (kind i/e, date, amount, desc, cat, grp, acc, note); it uses existing default categories/groups (income: Заработок / Другое, expense: Общие расходы / Еда), account Наличные, and the host's local calendar date.
+- The transaction builder maps commands to the existing transaction fields (kind i/e, date, amount, desc, cat, grp, acc, note); it resolves the currently visible category and group from the canonical profile (preferring income group Заработок/category Другое and expense group Общие расходы/category Еда), stores the selected account ID (preferring Наличные), and uses the host's local calendar date.
 - The profile finance adapter validates the transaction and commits it together with the Telegram idempotency key in one profile revision. Replayed keys return the committed operation ID.
 - The host can compose this adapter from a profileStore and defaults to the command builder. Invalid/unsupported commands are rejected instead of endlessly retrying and blocking the ordered inbox.
 - Added `host/buildbook-local-host.mjs` and `host/run-buildbook-local-host.mjs`: the local API and Telegram processor now share one profile-store instance in the combined host. The composition validates profile/lock/queue path separation and releases locks during shutdown.
 - Added authenticated `GET /api/telegram/status`, sanitized to a fixed allowlist of operational fields, plus `client.telegramStatus()`.
+- Telegram transaction mapping now reads the canonical profile context, filters hidden groups/categories, chooses a currently available category and account, and writes the account ID (not the display name).
 - Added focused command/adapter test cases in `tests/telegram-finance-adapter.test.mjs` (not executed).
 - The UI-side profile repository adapter preserves host-owned profile metadata during saves and checks the expected revision first, preventing routine UI saves from silently dropping the Telegram idempotency ledger.
 
 Still blocked / incomplete:
 - The combined host shares one profile store between API and Telegram, but the UI still starts with browser IndexedDB. The repository adapter is not yet wired into the app startup path; do not treat the UI and host as one live ledger until that switch/migration is implemented and exercised.
-- Category/account selection currently uses the app's known defaults; mapping to user-edited categories and accounts remains.
+- Category/group and account selection now resolve against the canonical profile, including hidden-category filtering and account IDs. User-configurable default choices and explicit account selection in command syntax remain.
 - UI setup, safe token provisioning, browser-to-host migration, and service installation/autostart remain. Status is available from the authenticated local API but not yet displayed in the app.
 - Review and tests remain pending; tests have not been run per user instruction.
 
