@@ -57,7 +57,7 @@ The service lifecycle tests also verify that stop cancels an interval wait promp
 - `BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS` — comma-separated numeric Telegram user IDs.
 - `BUILDBOOK_TELEGRAM_INBOX_PATH`, `BUILDBOOK_TELEGRAM_OFFSET_PATH` and `BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH` — distinct absolute paths in the user's private application-data directory.
 
-Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. The composition factory can start the polling lifecycle once a canonical finance adapter is supplied; OS service installation and autostart are still not implemented. Its in-memory status snapshot exposes running state, last successful cycle, queue counts, processed count and a redacted last error without exposing the bot token.
+Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. The composition factory can start the polling lifecycle once a canonical finance adapter is supplied; OS service installation, autostart and a standalone executable entrypoint are still not implemented. Its in-memory status snapshot exposes running state, last successful cycle, queue counts, processed count and a redacted last error without exposing the bot token. Status is not yet persisted or served to the browser UI.
 
 Run its tests with:
 
