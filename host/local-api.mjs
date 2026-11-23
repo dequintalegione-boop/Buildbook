@@ -86,7 +86,7 @@ function isValidExportDate(value) {
   const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
   const offsetHour = Number(offsetHourText || 0), offsetMinute = Number(offsetMinuteText || 0);
   if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
-    || offsetHour > 23 || offsetMinute > 59) return false;
+    || offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
   const date = new Date(0);
   date.setUTCFullYear(year, month - 1, day);
   date.setUTCHours(hour, minute, second, Number((fraction + '000').slice(0, 3)));
