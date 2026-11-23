@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
  *
  * This module deliberately does not create financial records. An item may only be
  * marked complete after the canonical Buildbook storage adapter commits its effect.
+ * Completed items retain their idempotency metadata but discard raw Telegram content.
  */
 export function createInboxStore(filePath) {
   if (!filePath || typeof filePath !== 'string') {
@@ -58,10 +59,10 @@ export function createInboxStore(filePath) {
   return Object.freeze({
     async enqueue({ botId, updateId, userId, update }) {
       const keyParts = [String(botId ?? '').trim(), String(updateId ?? '')];
-      if (!keyParts[0] || !/^\d+$/.test(keyParts[1])) {
+      if (!keyParts[0] || !/^\\d+$/.test(keyParts[1])) {
         throw new TypeError('botId and a numeric Telegram updateId are required.');
       }
-      if (!/^\d+$/.test(String(userId ?? ''))) {
+      if (!/^\\d+$/.test(String(userId ?? ''))) {
         throw new TypeError('A numeric Telegram userId is required.');
       }
       if (update === undefined) throw new TypeError('The Telegram update payload is required.');
@@ -124,6 +125,10 @@ export function createInboxStore(filePath) {
         item.operationId = operationId == null ? null : String(operationId);
         item.processedAt = new Date().toISOString();
         item.lastError = null;
+        // Financial effects are committed by now; remove raw chat text and
+        // attachments from the durable inbox while preserving dedupe metadata.
+        item.update = null;
+        item.payloadPurgedAt = item.processedAt;
         return true;
       });
     },
