@@ -1,5 +1,6 @@
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
+import { acquireInstanceLock } from './instance-lock.mjs';
 
 function requiredEnv(env, key) {
   const value = String(env[key] ?? '').trim();
@@ -24,6 +25,8 @@ function readPort(env) {
  */
 export function createLocalApiHost({ env = process.env } = {}) {
   const profilePath = requiredEnv(env, 'BUILDBOOK_PROFILE_PATH');
+  const lockPath = String(env.BUILDBOOK_PROFILE_LOCK_PATH || (profilePath + '.api-lock')).trim();
+  if (!lockPath.startsWith('/')) throw new TypeError('BUILDBOOK_PROFILE_LOCK_PATH must be an absolute path.');
   const accessToken = requiredEnv(env, 'BUILDBOOK_LOCAL_API_TOKEN');
   const host = String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim();
   const port = readPort(env);
@@ -32,14 +35,24 @@ export function createLocalApiHost({ env = process.env } = {}) {
   let address = null;
   let startPromise = null;
   let stopPromise = null;
+  let releaseLock = null;
 
   function start() {
     if (stopPromise) return stopPromise.then(start);
     if (address) return Promise.resolve(address);
     if (startPromise) return startPromise;
-    startPromise = api.listen().then(value => {
+    startPromise = Promise.resolve().then(() => {
+      releaseLock = acquireInstanceLock(lockPath);
+      return api.listen();
+    }).then(value => {
       address = value;
       return value;
+    }).catch(error => {
+      if (releaseLock) {
+        try { releaseLock(); } catch {}
+        releaseLock = null;
+      }
+      throw error;
     }).finally(() => { startPromise = null; });
     return startPromise;
   }
@@ -50,6 +63,10 @@ export function createLocalApiHost({ env = process.env } = {}) {
       if (startPromise) await startPromise.catch(() => {});
       await api.close();
       address = null;
+      if (releaseLock) {
+        releaseLock();
+        releaseLock = null;
+      }
     })().finally(() => { stopPromise = null; });
     return stopPromise;
   }
