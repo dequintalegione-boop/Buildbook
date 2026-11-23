@@ -141,6 +141,13 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         'access-control-allow-headers': 'Authorization, Content-Type',
         'access-control-max-age': '600',
         'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'x-frame-options': 'DENY',
+        'referrer-policy': 'no-referrer',
+        'cross-origin-resource-policy': 'same-origin',
+        'cross-origin-opener-policy': 'same-origin',
+        'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+        'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
         'vary': 'Origin',
       });
       response.end();
