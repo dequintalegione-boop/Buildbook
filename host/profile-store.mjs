@@ -75,7 +75,16 @@ export function createProfileStore(filePath) {
     await mkdir(dirname(target), { recursive: true });
     const temp = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`);
     try {
-      await writeFile(temp, JSON.stringify(value), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+      // Flush the complete temporary profile before the atomic rename. This
+      // narrows the crash window where a successful write could still be only
+      // in the OS page cache; the canonical path is never partially written.
+      const handle = await open(temp, 'wx', 0o600);
+      try {
+        await handle.writeFile(JSON.stringify(value), 'utf8');
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
       await rename(temp, target);
     } catch (error) {
       await unlink(temp).catch(() => {});
