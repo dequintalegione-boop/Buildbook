@@ -166,3 +166,43 @@ test('supports authenticated browser preflight only from loopback origins', asyn
   assert.equal(denied.status, 403);
   assert.equal(denied.headers.get('access-control-allow-origin'), null);
 });
+
+
+test('rejects opaque file origins and malformed origins before checking credentials', async (t) => {
+  const { base } = await fixture(t);
+  const opaque = await fetch(`${base}/api/health`, { headers: { origin: 'null' } });
+  assert.equal(opaque.status, 403);
+  const malformed = await fetch(`${base}/api/health`, { headers: { origin: 'http://localhost.evil.example' } });
+  assert.equal(malformed.status, 403);
+});
+
+test('rejects non-loopback Host headers even with a valid token', async (t) => {
+  const { base } = await fixture(t);
+  const response = await fetch(`${base}/api/health`, {
+    headers: { host: 'attacker.example', authorization: 'Bearer test-local-api-token-0123456789abcdef' },
+  });
+  assert.equal(response.status, 403);
+});
+
+test('rejects bearer tokens with altered scheme, extra whitespace, or trailing data', async (t) => {
+  const { base } = await fixture(t);
+  for (const authorization of [
+    'bearer test-local-api-token-0123456789abcdef',
+    'Bearer  test-local-api-token-0123456789abcdef',
+    'Bearer test-local-api-token-0123456789abcdef extra',
+  ]) {
+    const response = await fetch(`${base}/api/health`, { headers: { authorization } });
+    assert.equal(response.status, 401);
+  }
+});
+
+test('applies browser isolation headers to successful and rejected API responses', async (t) => {
+  const { base } = await fixture(t);
+  for (const response of [
+    await fetch(`${base}/api/health`),
+    await fetch(`${base}/api/health`, { headers: { origin: 'https://attacker.example' } }),
+  ]) {
+    assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+  }
+});
