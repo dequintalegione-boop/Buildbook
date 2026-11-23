@@ -131,6 +131,29 @@ test('rejects malformed or tampered inbox payload before calling domain adapter'
 });
 
 
+test('adapter receives only the normalized private-text envelope', async () => {
+  const tampered = structuredClone(sample);
+  tampered.update.privateMetadata = 'must-not-forward';
+  tampered.update.message.extra = { secret: 'must-not-forward' };
+  const inbox = makeInbox(tampered);
+  let received;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate(input) { received = input.update; return { operationId: 'operation-safe' }; },
+  });
+  await processor.processOne();
+  assert.deepEqual(received, {
+    update_id: 44,
+    message: {
+      message_id: 44,
+      from: { id: 1001 },
+      chat: { id: 1001, type: 'private' },
+      text: 'income 100',
+    },
+  });
+  assert.equal(JSON.stringify(received).includes('must-not-forward'), false);
+});
+
 test('malformed inbox items are quarantined rather than retried', async () => {
   const tampered = structuredClone(sample);
   tampered.update.message.chat.id = 2002;
