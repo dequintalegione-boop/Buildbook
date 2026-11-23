@@ -1,8 +1,9 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const MAX_UPDATE_BYTES = 16 * 1024;
+const MAX_INBOX_FILE_BYTES = 64 * 1024 * 1024;
 
 function safeInboxError(fallback) {
   return fallback === 'rejected'
@@ -32,6 +33,10 @@ export function createInboxStore(filePath) {
     if (!statePromise) {
       statePromise = (async () => {
         try {
+          const info = await stat(path);
+          if (info.size > MAX_INBOX_FILE_BYTES) {
+            throw new Error('Telegram inbox file exceeds the allowed size.');
+          }
           const parsed = JSON.parse(await readFile(path, 'utf8'));
           if (parsed?.version !== 1 || !Array.isArray(parsed.items)) {
             throw new Error('Unsupported or corrupt Telegram inbox file.');
@@ -49,10 +54,14 @@ export function createInboxStore(filePath) {
   async function persist(state) {
     await mkdir(dirname(path), { recursive: true });
     const temporaryPath = path + '.' + randomUUID() + '.tmp';
+    const serialized = JSON.stringify(state);
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_INBOX_FILE_BYTES) {
+      throw new Error('Telegram inbox capacity reached; refusing an unsafe oversized write.');
+    }
     try {
       // mode is applied when the temp file is created; rename then preserves
       // its restrictive permissions for the durable inbox, including updates.
-      await writeFile(temporaryPath, JSON.stringify(state), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await writeFile(temporaryPath, serialized, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
       await rename(temporaryPath, path);
     } catch (error) {
       // A failed write must not leave plaintext Telegram messages in a temp file.
