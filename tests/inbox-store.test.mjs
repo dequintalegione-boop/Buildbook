@@ -14,6 +14,10 @@ async function withStore(run) {
   }
 }
 
+test('requires an absolute durable inbox path', () => {
+  assert.throws(() => createInboxStore('relative/inbox.json'), /path must be absolute/i);
+});
+
 test('rejects malformed or duplicate-key durable inbox records on load', async () => {
   await withStore(async file => {
     await writeFile(file, JSON.stringify({ version: 1, items: [null] }), 'utf8');
