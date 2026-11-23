@@ -83,6 +83,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       let previousUpdateId = null;
       for (const update of payload.result) {
         if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0
+          || update.update_id >= Number.MAX_SAFE_INTEGER
           || (previousUpdateId !== null && update.update_id <= previousUpdateId)) {
           throw new Error('Telegram returned invalid or unordered update IDs.');
         }
