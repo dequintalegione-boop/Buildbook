@@ -29,4 +29,5 @@ test('rejects missing secrets, malformed allowlists, and unsafe paths', () => {
 test('validates numeric runtime options', () => {
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS: '51' }), /between 0 and 50/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INTERVAL_MS: '1.5' }), /integer/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_RETRY_BASE_MS: '5000', BUILDBOOK_TELEGRAM_RETRY_MAX_MS: '1000' }), /at least the retry base/);
 });
