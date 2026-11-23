@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createLocalApiHost } from '../host/local-api-host.mjs';
+
+const token = 'local-api-host-test-token-0123456789abcdef';
+
+async function fixture(t, extra = {}) {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const host = createLocalApiHost({
+    env: {
+      BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
+      BUILDBOOK_LOCAL_API_TOKEN: token,
+      BUILDBOOK_LOCAL_API_PORT: '0',
+      ...extra,
+    },
+  });
+  t.after(() => host.stop());
+  return host;
+}
+
+test('starts a loopback API and serves the configured profile store', async (t) => {
+  const host = await fixture(t);
+  const address = await host.start();
+  assert.equal(host.running, true);
+  const response = await fetch(`http://127.0.0.1:${address.port}/api/profile`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { revision: 0, profile: null });
+  await host.stop();
+  assert.equal(host.running, false);
+});
+
+test('validates required host configuration and port range', () => {
+  assert.throws(() => createLocalApiHost({ env: {} }), /BUILDBOOK_PROFILE_PATH is required/);
+  assert.throws(() => createLocalApiHost({
+    env: {
+      BUILDBOOK_PROFILE_PATH: '/tmp/profile.json',
+      BUILDBOOK_LOCAL_API_TOKEN: token,
+      BUILDBOOK_LOCAL_API_PORT: '70000',
+    },
+  }), /between 0 and 65535/);
+});
+
+test('supports repeated start and stop calls without opening extra listeners', async (t) => {
+  const host = await fixture(t);
+  const [first, second] = await Promise.all([host.start(), host.start()]);
+  assert.equal(first.port, second.port);
+  assert.equal(host.running, true);
+  await Promise.all([host.stop(), host.stop()]);
+  assert.equal(host.running, false);
+});
