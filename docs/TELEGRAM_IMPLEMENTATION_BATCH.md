@@ -31,4 +31,21 @@ The current browser app stores its profile in IndexedDB, while the Telegram host
 
 ## Current status
 
-The host inbox, allowlist, polling, lifecycle primitives, and local profile API exist. The canonical finance adapter, shared storage boundary, UI setup/status integration, and service installation/autostart are not complete. Tests have not been run.
+Implemented in code:
+- A strict command parser accepts /income, /expense, /доход, and /расход with a positive amount (up to two decimal places) and description.
+- The transaction builder maps commands to the existing transaction fields (kind i/e, date, amount, desc, cat, grp, acc, note); the date follows the host's local timezone.
+- The profile finance adapter validates the transaction and commits it together with the Telegram idempotency key in one profile revision. Replayed keys return the committed operation ID.
+- The host can compose this adapter from a profileStore and defaults to the command builder. Invalid/unsupported commands are rejected instead of endlessly retrying and blocking the ordered inbox.
+
+Still blocked / incomplete:
+- The supplied profileStore must be the same canonical profile store used by the UI. The current browser IndexedDB and separate host file are not yet unified; do not point the host at a second profile and call it integrated.
+- Category/account selection currently uses defaults (Прочее / Наличные); mapping to configured categories and accounts remains.
+- UI setup/status, safe token provisioning, browser-to-host migration, and service installation/autostart remain.
+- Review and tests remain pending; tests have not been run per user instruction.
+
+### Current command format
+
+- /доход 1250.50 Продажа
+- /расход 450 Обед
+
+Unknown or malformed commands are terminally rejected so they do not block later inbox items. The host-local calendar date is used for new entries.
