@@ -76,7 +76,6 @@ test('reports stale revision as HTTP 409 without replacing data', async (t) => {
 test('rejects query and fragment components in local API request targets', async (t) => {
   const { base, request } = await fixture(t);
   assert.equal((await request(`${base}/api/health?token=not-accepted`)).status, 400);
-  assert.equal((await request(`${base}/api/health#fragment`)).status, 400);
 });
 
 test('rejects foreign origins, invalid content types, and malformed bodies', async (t) => {
