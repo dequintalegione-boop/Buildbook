@@ -189,3 +189,21 @@ test('rejects malformed profile responses', async () => {
   });
   await assert.rejects(client.readProfile(), /некорректный профиль/);
 });
+
+test('bounds request time and reports timeout distinctly', async () => {
+  const client = createLocalProfileClient({
+    accessToken: token,
+    requestTimeoutMs: 5,
+    fetchImpl: (_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+    }),
+  });
+  await assert.rejects(client.health(), error =>
+    error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT' && /отведённого времени/.test(error.message));
+});
+
+test('rejects invalid request timeout configuration', () => {
+  for (const requestTimeoutMs of [0, -1, 1.5, 120001, NaN]) {
+    assert.throws(() => createLocalProfileClient({ accessToken: token, requestTimeoutMs }), /Тайм-аут локального API/);
+  }
+});
