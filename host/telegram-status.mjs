@@ -1,11 +1,8 @@
 function safeError(error) {
   // Exception messages can contain raw Telegram text, local paths, request
   // URLs, or credentials. Keep only a constrained code and a fixed message.
-  const code = typeof error?.code === 'string' && /^[A-Z0-9_:-]{1,80}$/.test(error.code)
-    ? error.code
-    : 'TELEGRAM_SERVICE_ERROR';
   return {
-    code,
+    code: 'TELEGRAM_SERVICE_ERROR',
     message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
   };
 }
