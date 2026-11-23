@@ -15,6 +15,8 @@ function send(response, status, payload) {
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
     'cross-origin-resource-policy': 'same-origin',
+    'cross-origin-opener-policy': 'same-origin',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=()',
     'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
   });
   response.end(body);
