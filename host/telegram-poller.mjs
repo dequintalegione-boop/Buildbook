@@ -3,6 +3,48 @@
  * update gate has durably accepted every allowlisted update in the batch.
  * Supply a secret bot token from host-only configuration; never from the UI.
  */
+const MAX_TELEGRAM_RESPONSE_BYTES = 1024 * 1024;
+
+async function readTelegramJson(response) {
+  const declaredLength = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_TELEGRAM_RESPONSE_BYTES) {
+    await response.body?.cancel?.().catch(() => {});
+    throw new Error('Telegram response exceeds the allowed size.');
+  }
+  if (!response.body?.getReader) {
+    const text = await response.text();
+    if (Buffer.byteLength(text, 'utf8') > MAX_TELEGRAM_RESPONSE_BYTES) {
+      throw new Error('Telegram response exceeds the allowed size.');
+    }
+    try { return JSON.parse(text); } catch {
+      throw new Error('Telegram returned invalid JSON.');
+    }
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_TELEGRAM_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error('Telegram response exceeds the allowed size.');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks, total).toString('utf8'));
+  } catch {
+    throw new Error('Telegram returned invalid JSON.');
+  }
+}
+
 export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = globalThis.fetch, timeoutSeconds = 25 } = {}) {
   if (typeof botToken !== 'string' || !botToken.trim()) throw new TypeError('Telegram bot token is required.');
   if (!gate || typeof gate.accept !== 'function') throw new TypeError('A Telegram update gate is required.');
@@ -35,7 +77,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
 
       const response = await fetchImpl(url, { method: 'GET', signal });
       if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
-      const payload = await response.json();
+      const payload = await readTelegramJson(response);
       if (!payload?.ok || !Array.isArray(payload.result)) throw new Error('Telegram returned an invalid getUpdates response.');
 
       let accepted = 0;
