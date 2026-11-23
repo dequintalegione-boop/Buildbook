@@ -111,3 +111,27 @@ test('serializes simultaneous writes with the same revision and preserves one wi
   assert.equal(stored.revision, 1);
   assert.ok(['first', 'second'].includes(stored.profile.marker));
 });
+
+
+test('supports authenticated browser preflight only from loopback origins', async (t) => {
+  const { base } = await fixture(t);
+  const allowed = await fetch(`${base}/api/profile`, {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'http://localhost:5173',
+      'access-control-request-method': 'PUT',
+      'access-control-request-headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get('access-control-allow-origin'), 'http://localhost:5173');
+  assert.match(allowed.headers.get('access-control-allow-methods'), /PUT/);
+  assert.match(allowed.headers.get('access-control-allow-headers'), /Authorization/);
+
+  const denied = await fetch(`${base}/api/profile`, {
+    method: 'OPTIONS',
+    headers: { origin: 'https://attacker.example', 'access-control-request-method': 'PUT' },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.headers.get('access-control-allow-origin'), null);
+});
