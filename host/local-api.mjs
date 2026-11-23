@@ -216,7 +216,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     }
     if (request.method === 'POST' && pathname === '/api/profile/import') {
       const declaredLength = request.headers['content-length'];
-      if (declaredLength !== undefined && (!/^\\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
+      if (declaredLength !== undefined && (!/^\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
         send(response, Number(declaredLength) > MAX_BODY_BYTES ? 413 : 400, { error: 'Некорректный или слишком большой Content-Length.' });
         request.resume();
         return;
@@ -233,7 +233,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const hasExactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
           && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
         const validExportDate = typeof envelope?.exportedAt === 'string'
-          && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(envelope.exportedAt)
+          && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(envelope.exportedAt)
           && Number.isFinite(Date.parse(envelope.exportedAt));
         if (!hasExactKeys(body, ['expectedRevision', 'envelope'])
           || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
