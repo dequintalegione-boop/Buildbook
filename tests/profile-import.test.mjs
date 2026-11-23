@@ -58,6 +58,20 @@ test('rejects oversized raw JSON before parsing and non-ISO export dates', async
   await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt: 'November 23, 2026' }), /некорректная дата/);
 });
 
+test('rejects impossible calendar dates even when Date.parse normalizes them', async () => {
+  const { exporter, importer } = await loadHelpers();
+  const envelope = await exporter.createEnvelope({ state: {}, logs: [], photos: {} });
+  for (const exportedAt of [
+    '2026-02-30T10:00:00.000Z',
+    '2026-13-01T10:00:00.000Z',
+    '2026-01-01T25:00:00.000Z',
+    '2026-01-01T10:00:00+24:00',
+  ]) {
+    await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt }), /некорректная дата/);
+  }
+  await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, '2026-02-30T10:00:00.000Z'), /Некорректная дата/);
+});
+
 test('rejects malformed envelope fields and oversized payloads', async () => {
   const { exporter, importer } = await loadHelpers();
   const envelope = await exporter.createEnvelope({ state: {}, logs: [], photos: {} });
