@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -287,4 +288,81 @@ test('preflight responses carry the same browser isolation headers', async (t) =
   assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
   assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'");
+});
+
+function makeImportEnvelope(payload, sourceSchemaVersion = 5) {
+  return {
+    format: 'buildbook-profile-export',
+    version: 1,
+    sourceSchemaVersion,
+    exportedAt: '2026-11-23T00:00:00.000Z',
+    payload,
+    sha256: createHash('sha256').update(JSON.stringify(payload), 'utf8').digest('hex'),
+  };
+}
+
+test('imports a valid profile export into an empty canonical profile', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: { tx: [{ id: 'from-backup', amount: 125 }] }, logs: [], photos: {} };
+  const response = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { revision: 1, imported: true });
+  assert.deepEqual((await (await request(`${base}/api/profile`)).json()).profile, payload);
+});
+
+test('rejects profile import with a modified payload or unsupported envelope', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: {}, logs: [], photos: {} };
+  const envelope = makeImportEnvelope(payload);
+  envelope.payload.state.tampered = true;
+  const tampered = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope }),
+  });
+  assert.equal(tampered.status, 400);
+  assert.match((await tampered.json()).error, /Контрольная сумма/);
+  assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
+});
+
+test('refuses normal import into a populated profile without changing it', async (t) => {
+  const { base, request } = await fixture(t);
+  await request(`${base}/api/profile`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, profile: { marker: 'keep' } }),
+  });
+  const payload = { state: {}, logs: [], photos: {} };
+  const response = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 1, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY');
+  assert.deepEqual((await (await request(`${base}/api/profile`)).json()).profile, { marker: 'keep' });
+});
+
+test('rejects stale import revisions and malformed import envelopes', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: {}, logs: [], photos: {} };
+  const stale = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 2, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');
+
+  const malformed = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: { ...makeImportEnvelope(payload), sourceSchemaVersion: -1 } }),
+  });
+  assert.equal(malformed.status, 400);
+  assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
