@@ -152,7 +152,9 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
       return;
     }
     if (request.method === 'PUT' && pathname === '/api/profile') {
-      if (!String(request.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+      const contentType = String(request.headers['content-type'] || '')
+        .split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
         send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
         return;
       }
