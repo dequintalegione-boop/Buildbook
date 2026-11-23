@@ -2,6 +2,18 @@ import { mkdir, rename, unlink, writeFile, lstat, open } from 'node:fs/promises'
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+async function readUtf8Bounded(handle, maxBytes) {
+  const buffer = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  if (offset > maxBytes) throw new Error('Telegram offset file exceeds the allowed size.');
+  return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset));
+}
+
 /**
  * File-backed Telegram polling checkpoint. Persisting an offset acknowledges
  * all updates below it on Telegram's next getUpdates request, so callers must
@@ -35,7 +47,7 @@ export function createTelegramOffsetStore(filePath) {
           throw new Error('Telegram offset file changed during read; refusing the checkpoint.');
         }
         if (openedInfo.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
-        text = await handle.readFile({ encoding: 'utf8' });
+        text = await readUtf8Bounded(handle, 1024);
       } finally {
         await handle.close();
       }
