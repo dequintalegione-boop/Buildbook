@@ -26,6 +26,7 @@ export function createTelegramService({
   retryMaxMs = 60000,
   onCycle = () => {},
   onError = () => {},
+  acquireInstanceLock = null,
 } = {}) {
   if (!runtime || typeof runtime.runOnce !== 'function') throw new TypeError('A Telegram runtime is required.');
   for (const [name, value] of Object.entries({ intervalMs, retryBaseMs, retryMaxMs })) {
@@ -33,9 +34,11 @@ export function createTelegramService({
   }
   if (retryMaxMs < retryBaseMs) throw new TypeError('retryMaxMs must be at least retryBaseMs.');
   if (typeof onCycle !== 'function' || typeof onError !== 'function') throw new TypeError('Service callbacks must be functions.');
+  if (acquireInstanceLock !== null && typeof acquireInstanceLock !== 'function') throw new TypeError('acquireInstanceLock must be a function.');
 
   let controller = null;
   let loopPromise = null;
+  let releaseInstanceLock = null;
 
   async function loop(signal) {
     let failures = 0;
@@ -61,10 +64,24 @@ export function createTelegramService({
   return Object.freeze({
     start() {
       if (loopPromise) return loopPromise;
+      // Acquire synchronously before exposing a running lifecycle. The supplied
+      // lock callback must fail closed if another process owns the service.
+      try {
+        releaseInstanceLock = acquireInstanceLock ? acquireInstanceLock() : null;
+        if (releaseInstanceLock && typeof releaseInstanceLock !== 'function') {
+          throw new TypeError('Instance-lock acquisition must return a release function.');
+        }
+      } catch (error) {
+        releaseInstanceLock = null;
+        throw error;
+      }
       controller = new AbortController();
       loopPromise = loop(controller.signal).finally(() => {
-        controller = null;
-        loopPromise = null;
+        try { releaseInstanceLock?.(); } finally {
+          releaseInstanceLock = null;
+          controller = null;
+          loopPromise = null;
+        }
       });
       return loopPromise;
     },
