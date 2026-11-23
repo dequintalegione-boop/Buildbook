@@ -100,11 +100,6 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
       error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
       throw error;
     }
-    if (profile.state.tx.some(item => item && item.id === operationId)) {
-      const error = new Error('Buildbook transaction ID already exists.');
-      error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
-      throw error;
-    }
     const committedTransaction = { ...transaction, id: operationId };
 
     profile.state.tx.push(committedTransaction);
