@@ -82,6 +82,12 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
     const prior = ledger.find(entry => entry.key === idempotencyKey);
     if (prior) return { operationId: prior.operationId, duplicate: true };
 
+    if (ledger.length >= MAX_OPERATION_KEYS) {
+      const error = new RangeError('Telegram idempotency ledger reached its configured limit.');
+      error.code = 'TELEGRAM_OPERATION_LEDGER_FULL';
+      throw error;
+    }
+
     const transaction = await buildTransaction(cloneJson(update));
     validateTransaction(transaction);
     const operationId = typeof transaction.id === 'string' && transaction.id.trim()
