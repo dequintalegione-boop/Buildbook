@@ -57,7 +57,7 @@ test('supports repeated start and stop calls without opening extra listeners', a
 
 test('can restart the host after a completed stop', async (t) => {
   const host = await fixture(t);
-  const first = await host.start();
+  await host.start();
   await host.stop();
   const second = await host.start();
   assert.ok(second.port > 0);
