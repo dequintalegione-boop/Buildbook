@@ -4,6 +4,7 @@
   const FORMAT = 'buildbook-profile-export';
   const VERSION = 1;
   const SOURCE_SCHEMA_VERSION = 5;
+  const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
 
   function requireRecord(value, label) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -33,7 +34,19 @@
       throw new Error('В этой среде недоступна безопасная контрольная сумма SHA-256.');
     }
     const payload = copyPayload(profile);
-    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    let serialized;
+    try {
+      serialized = JSON.stringify(payload);
+    } catch (_) {
+      throw new TypeError('Профиль должен содержать только сериализуемые JSON-данные.');
+    }
+    if (typeof serialized !== 'string') {
+      throw new TypeError('Профиль не удалось преобразовать в JSON.');
+    }
+    const bytes = new TextEncoder().encode(serialized);
+    if (bytes.byteLength > MAX_PROFILE_BYTES) {
+      throw new RangeError('Размер профиля превышает допустимые 32 MiB.');
+    }
     const digest = await global.crypto.subtle.digest('SHA-256', bytes);
     const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
     return {
