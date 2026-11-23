@@ -1,4 +1,17 @@
 const DEFAULT_BASE_URL = 'http://127.0.0.1:43127';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+function normalizeBaseUrl(value) {
+  let url;
+  try { url = new URL(String(value)); } catch (_) {
+    throw new Error('Локальный API должен иметь корректный адрес loopback.');
+  }
+  if (url.protocol !== 'http:' || !LOOPBACK_HOSTS.has(url.hostname.toLowerCase()) ||
+      url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Локальный API разрешён только по HTTP на localhost, 127.0.0.1 или ::1.');
+  }
+  return url.origin;
+}
 
 export function createLocalProfileClient({
   baseUrl = DEFAULT_BASE_URL,
@@ -9,7 +22,7 @@ export function createLocalProfileClient({
     throw new Error('Для подключения к локальному профилю нужен API-токен длиной не менее 32 байт.');
   }
   if (typeof fetchImpl !== 'function') throw new Error('Fetch API недоступен.');
-  const base = String(baseUrl).replace(/\/+$/, '');
+  const base = normalizeBaseUrl(baseUrl);
 
   async function request(path, options = {}) {
     let response;
