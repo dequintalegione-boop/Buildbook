@@ -6,6 +6,7 @@ import { createTelegramInboxProcessor } from './telegram-inbox-processor.mjs';
 import { createTelegramRuntime } from './telegram-runtime.mjs';
 import { createTelegramService } from './telegram-service.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
+import { createTelegramStatus } from './telegram-status.mjs';
 
 /**
  * Compose the Telegram host from validated host-only configuration and the
@@ -33,6 +34,7 @@ export function createTelegramHostService({
     throw new TypeError('Telegram host config is incomplete.');
   }
 
+  const status = createTelegramStatus();
   const inbox = createInboxStore(config.inboxPath);
   const offsetStore = createTelegramOffsetStore(config.offsetPath);
   const gate = createTelegramUpdateGate({ inbox, botId: config.botId, allowlist: config.allowedUserIds });
@@ -51,10 +53,21 @@ export function createTelegramHostService({
     intervalMs: config.intervalMs,
     retryBaseMs: config.retryBaseMs,
     retryMaxMs: config.retryMaxMs,
-    onCycle,
-    onError,
+    onCycle(result) {
+      status.cycle(result);
+      try { onCycle(result); } catch (error) { status.error(error); }
+    },
+    onError(error, context) {
+      status.error(error);
+      try { onError(error, context); } catch {}
+    },
     acquireInstanceLock: () => acquireInstanceLock(config.instanceLockPath),
   });
 
-  return Object.freeze({ service, inbox });
+  return Object.freeze({
+    service,
+    inbox,
+    status,
+    getStatus() { return status.snapshot({ running: service.running }); },
+  });
 }
