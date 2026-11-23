@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, unlink, writeFile, lstat } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile, lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -23,12 +23,23 @@ export function createTelegramOffsetStore(filePath) {
 
   async function readOffset() {
     try {
-      const info = await lstat(filePath);
-      if (info.isSymbolicLink() || !info.isFile()) {
+      const pathInfo = await lstat(filePath);
+      if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
         throw new Error('Telegram offset path must be a regular file, not a link or special file.');
       }
-      if (info.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
-      const parsed = JSON.parse(await readFile(filePath, 'utf8'));
+      const handle = await open(filePath, 'r');
+      let text;
+      try {
+        const openedInfo = await handle.stat();
+        if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+          throw new Error('Telegram offset file changed during read; refusing the checkpoint.');
+        }
+        if (openedInfo.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
+        text = await handle.readFile({ encoding: 'utf8' });
+      } finally {
+        await handle.close();
+      }
+      const parsed = JSON.parse(text);
       if (parsed?.version !== 1 || !(parsed.offset === null || Number.isSafeInteger(parsed.offset) && parsed.offset >= 0)) {
         throw new Error('Unsupported or corrupt Telegram offset file.');
       }
