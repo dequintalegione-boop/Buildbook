@@ -7,6 +7,7 @@ const valid = {
   BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: '1001, 1002,1001',
   BUILDBOOK_TELEGRAM_INBOX_PATH: '/home/test/.local/share/buildbook/telegram-inbox.json',
   BUILDBOOK_TELEGRAM_OFFSET_PATH: '/home/test/.local/share/buildbook/telegram-offset.json',
+  BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: '/home/test/.local/share/buildbook/telegram-service.lock',
 };
 
 test('parses host-only configuration and deduplicates allowlist IDs', () => {
@@ -23,7 +24,9 @@ test('rejects missing secrets, malformed allowlists, and unsafe paths', () => {
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_BOT_TOKEN: '' }), /is required/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: '1001, nope' }), /numeric IDs/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INBOX_PATH: 'data/inbox.json' }), /absolute/);
-  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_OFFSET_PATH: valid.BUILDBOOK_TELEGRAM_INBOX_PATH }), /different files/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_OFFSET_PATH: valid.BUILDBOOK_TELEGRAM_INBOX_PATH }), /different/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: valid.BUILDBOOK_TELEGRAM_OFFSET_PATH }), /different/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: 'relative.lock' }), /absolute/);
 });
 
 test('validates numeric runtime options', () => {
