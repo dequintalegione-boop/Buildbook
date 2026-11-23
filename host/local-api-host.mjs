@@ -1,6 +1,7 @@
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
+import { isAbsolute } from 'node:path';
 
 function requiredEnv(env, key) {
   const value = String(env[key] ?? '').trim();
@@ -26,7 +27,7 @@ function readPort(env) {
 export function createLocalApiHost({ env = process.env } = {}) {
   const profilePath = requiredEnv(env, 'BUILDBOOK_PROFILE_PATH');
   const lockPath = String(env.BUILDBOOK_PROFILE_LOCK_PATH || (profilePath + '.api-lock')).trim();
-  if (!lockPath.startsWith('/')) throw new TypeError('BUILDBOOK_PROFILE_LOCK_PATH must be an absolute path.');
+  if (!isAbsolute(lockPath)) throw new TypeError('BUILDBOOK_PROFILE_LOCK_PATH must be an absolute path.');
   const accessToken = requiredEnv(env, 'BUILDBOOK_LOCAL_API_TOKEN');
   const host = String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim();
   const port = readPort(env);
