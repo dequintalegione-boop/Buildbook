@@ -29,6 +29,45 @@ export function createInboxStore(filePath) {
 
   const emptyState = () => ({ version: 1, items: [] });
 
+  function isValidItem(item) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const botId = item.botId;
+    const userId = item.userId;
+    if (typeof item.id !== 'string' || !item.id || item.id.length > 128
+      || typeof botId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(botId)
+      || !Number.isSafeInteger(item.updateId) || item.updateId < 0
+      || item.key !== botId + ':' + String(item.updateId)
+      || typeof userId !== 'string' || !/^\d{1,16}$/.test(userId)
+      || String(Number(userId)) !== userId || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0
+      || !['pending', 'processing', 'completed', 'rejected'].includes(item.status)
+      || !Number.isSafeInteger(item.attempts) || item.attempts < 0
+      || typeof item.receivedAt !== 'string' || !Number.isFinite(Date.parse(item.receivedAt))
+      || !(item.processedAt === null || typeof item.processedAt === 'string')
+      || !(item.lastError === null || typeof item.lastError === 'string' && item.lastError.length <= 256)) return false;
+    if (item.status === 'pending' || item.status === 'processing') {
+      return !!item.update && typeof item.update === 'object' && !Array.isArray(item.update);
+    }
+    if (item.update !== null || typeof item.payloadPurgedAt !== 'string'
+      || !Number.isFinite(Date.parse(item.payloadPurgedAt))) return false;
+    if (item.status === 'completed') {
+      return typeof item.operationId === 'string' && item.operationId.length > 0 && item.operationId.length <= 256
+        && typeof item.processedAt === 'string' && Number.isFinite(Date.parse(item.processedAt));
+    }
+    return typeof item.rejectedAt === 'string' && Number.isFinite(Date.parse(item.rejectedAt));
+  }
+
+  function isValidState(value) {
+    if (!value || value.version !== 1 || !Array.isArray(value.items)) return false;
+    const ids = new Set();
+    const keys = new Set();
+    for (const item of value.items) {
+      if (!isValidItem(item) || ids.has(item.id) || keys.has(item.key)) return false;
+      ids.add(item.id);
+      keys.add(item.key);
+    }
+    return true;
+  }
+
   async function load() {
     if (!statePromise) {
       statePromise = (async () => {
@@ -38,7 +77,7 @@ export function createInboxStore(filePath) {
             throw new Error('Telegram inbox file exceeds the allowed size.');
           }
           const parsed = JSON.parse(await readFile(path, 'utf8'));
-          if (parsed?.version !== 1 || !Array.isArray(parsed.items)) {
+          if (!isValidState(parsed)) {
             throw new Error('Unsupported or corrupt Telegram inbox file.');
           }
           return parsed;
