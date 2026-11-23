@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTelegramRuntime } from '../host/telegram-runtime.mjs';
 
-test('recovers once, polls, then drains accepted inbox items sequentially', async () => {
+test('recovers once, drains existing items, polls, then drains new items sequentially', async () => {
   const calls = [];
   let pending = 2;
   const inbox = {
     async recoverInterrupted() { calls.push('recover'); },
     async stats() { return { pending }; },
   };
-  const poller = { async pollOnce() { calls.push('poll'); return { received: 2, accepted: 2 }; } };
+  const poller = { async pollOnce() { calls.push('poll'); pending += 1; return { received: 1, accepted: 1 }; } };
   const processor = {
     async processOne() {
       calls.push('process');
@@ -20,11 +20,34 @@ test('recovers once, polls, then drains accepted inbox items sequentially', asyn
   };
   const runtime = createTelegramRuntime({ inbox, poller, processor });
   const first = await runtime.runOnce();
-  assert.equal(first.processed, 2);
-  assert.deepEqual(calls, ['recover', 'poll', 'process', 'process', 'process']);
+  assert.equal(first.processed, 3);
+  assert.deepEqual(calls, ['recover', 'process', 'process', 'process', 'poll', 'process']);
   calls.length = 0;
   await runtime.runOnce();
-  assert.deepEqual(calls, ['poll', 'process']);
+  assert.deepEqual(calls, ['process', 'poll', 'process']);
+});
+
+test('drains already accepted updates even when Telegram polling fails', async () => {
+  const calls = [];
+  let pending = 1;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return { pending }; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); throw new Error('Telegram unavailable'); } },
+    processor: {
+      async processOne() {
+        calls.push('process');
+        if (!pending) return { processed: false };
+        pending -= 1;
+        return { processed: true };
+      },
+    },
+  });
+
+  await assert.rejects(runtime.runOnce(), /Telegram unavailable/);
+  assert.deepEqual(calls, ['process', 'process', 'poll']);
 });
 
 test('does not poll again while a cycle is active', async () => {
