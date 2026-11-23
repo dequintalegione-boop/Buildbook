@@ -29,11 +29,13 @@ Design contract only. The browser UI remains on IndexedDB until the import path,
 
 ## Import envelope
 
+The current host import endpoint is `POST /api/profile/import` (authenticated, loopback-only). It accepts the version-1 envelope below only for source schema version 5 and imports only into an empty canonical profile. The API body limit is 34 MiB; the profile store independently enforces its 32 MiB profile limit. The endpoint returns a revision on success, HTTP 409 for a populated target or revision conflict, and rejects unsupported schemas or checksum mismatches without writing.
+
 The envelope should contain only:
 - a fixed format identifier and version;
 - source schema version and export timestamp;
 - profile state, logs, and photos;
-- a deterministic integrity digest over the canonical serialized payload.
+- a lowercase SHA-256 integrity digest over `JSON.stringify(payload)`.
 
 It must not contain a caller-selected destination path, host metadata, Telegram inbox records, tokens, API credentials, or arbitrary executable content. The host computes its own destination and revision.
 
@@ -48,8 +50,7 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 
 ## Implementation sequence
 
-1. Add a versioned export/import envelope and shared validation helpers.
-2. Add a host import operation that is authenticated, loopback-only, bounded, and compare-and-swap guarded.
+1. [Implemented] Add a version-1 import envelope validator and authenticated host import operation; accept only schema version 5, verify SHA-256, require an empty target, and use revision compare-and-swap.
 3. Add an explicit UI backup/export step and confirmation screen.
 4. Add host import preview and confirmation, with no automatic startup migration.
 5. Add a storage-mode selector that is enabled only after successful read-back verification.
