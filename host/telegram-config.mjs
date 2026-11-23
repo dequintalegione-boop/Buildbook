@@ -27,10 +27,12 @@ export function readTelegramServiceConfig(env = process.env) {
   if (!tokenMatch) throw new TypeError('BUILDBOOK_TELEGRAM_BOT_TOKEN has an invalid format.');
 
   const allowlistRaw = requiredString(env, 'BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS');
-  const allowedUserIds = [...new Set(allowlistRaw.split(',').map(value => value.trim()))];
-  if (!allowedUserIds.length || allowedUserIds.some(value => !/^\d+$/.test(value))) {
-    throw new TypeError('BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS must be comma-separated numeric IDs.');
+  const rawUserIds = allowlistRaw.split(',').map(value => value.trim());
+  if (!rawUserIds.length || rawUserIds.length > 100 || rawUserIds.some(value => !/^\\d{1,16}$/.test(value)
+    || !Number.isSafeInteger(Number(value)) || Number(value) <= 0)) {
+    throw new TypeError('BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS must contain 1–100 positive numeric IDs.');
   }
+  const allowedUserIds = [...new Set(rawUserIds.map(value => String(Number(value))))];
 
   const inboxPath = requiredString(env, 'BUILDBOOK_TELEGRAM_INBOX_PATH');
   const offsetPath = requiredString(env, 'BUILDBOOK_TELEGRAM_OFFSET_PATH');
