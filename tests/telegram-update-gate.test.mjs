@@ -17,7 +17,7 @@ function privateMessage({ updateId = 1, userId = 1001, chatId = userId, text = '
   return {
     update_id: updateId,
     message: {
-      message_id: updateId,
+      message_id: typeof updateId === 'number' ? updateId : 1,
       from: { id: userId },
       chat: { id: chatId, type: 'private' },
       text,
