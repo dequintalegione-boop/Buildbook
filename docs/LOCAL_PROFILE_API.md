@@ -33,6 +33,22 @@ node host/run-local-api.mjs
 
 API принимает JSON до 8 MiB. Ошибки формата возвращаются как 400, неподдерживаемый тип содержимого — 415. Каждый запрос требует `Authorization: Bearer <accessToken>`; токен должен быть не короче 32 байт. Сравнение токена выполняется constant-time. Запросы с посторонним `Origin` или `Host` отклоняются. Сервис разрешено привязывать только к loopback-интерфейсу, не к LAN или публичному адресу.
 
+## Клиентский транспортный модуль
+
+`host/local-profile-client.mjs` — браузерный транспортный клиент для health/read/write. Он принимает API-токен только через аргумент создания клиента, не сохраняет его и не помещает в URL. Ошибки сети получают код `BUILD_BOOK_LOCAL_API_UNAVAILABLE`, а конфликт ревизии сохраняет HTTP 409 и код `BUILD_BOOK_STORAGE_CONFLICT`.
+
+Пример использования из доверенного bootstrap-кода:
+
+```js
+import { createLocalProfileClient } from './host/local-profile-client.mjs';
+
+const client = createLocalProfileClient({ accessToken: tokenFromSecureBootstrap });
+const { profile, revision } = await client.readProfile();
+const nextRevision = await client.writeProfile(profile, revision);
+```
+
+Этот модуль не является безопасным bootstrap токена и пока не подключён к интерфейсу/IndexedDB. Не передавайте токен из URL, общего профиля, репозитория приложения или Telegram-бота. Запросы из `file://` остаются неподдержанными до решения CORS/origin и безопасной выдачи секрета.
+
 ## Граница безопасности
 
 Это локальный транспортный слой с обязательным секретом доступа, но пока без безопасной выдачи и ротации токена. Токен API и токен Telegram-бота — разные секреты: токен бота никогда не должен попадать в этот API или клиентский код. Защита от вредоносного процесса под тем же пользователем и безопасный bootstrap токена остаются отдельными задачами.
