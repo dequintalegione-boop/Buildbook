@@ -44,12 +44,18 @@ function readJson(request) {
     });
     request.on('end', () => {
       if (settled) return;
+      let parsed;
       try {
-        settled = true;
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       } catch {
         fail('Ожидался корректный JSON.', 400);
+        return;
       }
+      settled = true;
+      resolve(parsed);
+    });
+    request.on('aborted', () => {
+      fail('Клиент прервал отправку запроса.', 400);
     });
     request.on('error', error => {
       if (!settled) {
