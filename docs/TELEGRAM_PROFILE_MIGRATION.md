@@ -2,7 +2,7 @@
 
 ## Status
 
-Design contract only. The browser UI remains on IndexedDB until the import path, startup selection, and recovery behavior are implemented and reviewed. Telegram finance writes must remain disabled while the UI and host can use different profiles.
+The authenticated host import endpoint and browser-side export-envelope utility are implemented. The utility is `client/profile-export.js` and exposes `BuildbookProfileExport.createEnvelope(profile)` / `serialize(profile)`; it emits only state, logs, and photos, computes SHA-256 with Web Crypto, and does not include host metadata or credentials. It is not yet loaded by the app or connected to a download/confirmation UI. The browser UI remains on IndexedDB until backup verification, import preview/confirmation, read-back verification, startup selection, and recovery behavior are implemented and reviewed. Telegram finance writes must remain disabled while the UI and host can use different profiles.
 
 ## Safety invariants
 
