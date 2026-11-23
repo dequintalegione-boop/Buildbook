@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile, unlink, stat } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile, unlink, lstat } from 'node:fs/promises';
 import { dirname, basename, join, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -26,7 +26,10 @@ export function createProfileStore(filePath) {
 
   async function readDisk() {
     try {
-      const info = await stat(target);
+      const info = await lstat(target);
+      if (info.isSymbolicLink() || !info.isFile()) {
+        throw new Error('Файл профиля должен быть обычным файлом, не ссылкой или специальным объектом.');
+      }
       if (info.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
       const text = await readFile(target, 'utf8');
       const parsed = JSON.parse(text);
