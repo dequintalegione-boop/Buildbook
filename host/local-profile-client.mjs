@@ -89,7 +89,7 @@ export function createLocalProfileClient({
       if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
         throw new TypeError('Для импорта нужен проверенный конверт файла переноса.');
       }
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision === Number.MAX_SAFE_INTEGER) {
         throw new Error('Для импорта нужна корректная ревизия целевого профиля.');
       }
       let body;
@@ -110,7 +110,7 @@ export function createLocalProfileClient({
       if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
         throw new TypeError('Профиль для сохранения должен быть объектом.');
       }
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision === Number.MAX_SAFE_INTEGER) {
         throw new Error('Для сохранения профиля нужна корректная ревизия.');
       }
       let body;
