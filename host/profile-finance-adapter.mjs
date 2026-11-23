@@ -83,43 +83,54 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
       throw error;
     }
 
-    const current = await profileStore.read();
-    if (!current || !Number.isSafeInteger(current.revision) || current.revision < 0 || !isRecord(current.profile)) {
-      const error = new Error('Canonical Buildbook profile is not initialized.');
-      error.code = 'BUILD_BOOK_PROFILE_UNAVAILABLE';
-      throw error;
+    // Revision conflicts are safe to retry: the store uses compare-and-swap,
+    // and the idempotency key is checked again after every fresh read.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await profileStore.read();
+      if (!current || !Number.isSafeInteger(current.revision) || current.revision < 0 || !isRecord(current.profile)) {
+        const error = new Error('Canonical Buildbook profile is not initialized.');
+        error.code = 'BUILD_BOOK_PROFILE_UNAVAILABLE';
+        throw error;
+      }
+
+      const profile = cloneJson(current.profile);
+      validateProfile(profile);
+      const ledger = profile.telegramOperations || [];
+      const prior = ledger.find(entry => entry.key === idempotencyKey);
+      if (prior) return { operationId: prior.operationId, duplicate: true };
+
+      if (ledger.length >= MAX_OPERATION_KEYS) {
+        const error = new RangeError('Telegram idempotency ledger reached its configured limit.');
+        error.code = 'TELEGRAM_OPERATION_LEDGER_FULL';
+        throw error;
+      }
+
+      // Builders must be pure: on a revision conflict they may be called again
+      // with a refreshed profile so category/account changes are respected.
+      const transaction = await buildTransaction(cloneJson(update), {
+        profile: cloneJson(profile),
+        idempotencyKey,
+      });
+      validateTransaction(transaction);
+      const operationId = typeof transaction.id === 'string' && transaction.id.trim()
+        ? transaction.id
+        : randomUUID();
+      if (profile.state.tx.some(item => item && item.id === operationId)) {
+        const error = new Error('Buildbook transaction ID already exists.');
+        error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
+        throw error;
+      }
+      const committedTransaction = { ...transaction, id: operationId };
+
+      profile.state.tx.push(committedTransaction);
+      profile.telegramOperations = [...ledger, { key: idempotencyKey, operationId }];
+      try {
+        const revision = await profileStore.write(profile, current.revision);
+        return { operationId, revision, duplicate: false };
+      } catch (error) {
+        if (error?.code !== 'BUILD_BOOK_STORAGE_CONFLICT' || attempt === 2) throw error;
+      }
     }
-
-    const profile = cloneJson(current.profile);
-    validateProfile(profile);
-    const ledger = profile.telegramOperations || [];
-    const prior = ledger.find(entry => entry.key === idempotencyKey);
-    if (prior) return { operationId: prior.operationId, duplicate: true };
-
-    if (ledger.length >= MAX_OPERATION_KEYS) {
-      const error = new RangeError('Telegram idempotency ledger reached its configured limit.');
-      error.code = 'TELEGRAM_OPERATION_LEDGER_FULL';
-      throw error;
-    }
-
-    const transaction = await buildTransaction(cloneJson(update), {
-      profile: cloneJson(profile),
-      idempotencyKey,
-    });
-    validateTransaction(transaction);
-    const operationId = typeof transaction.id === 'string' && transaction.id.trim()
-      ? transaction.id
-      : randomUUID();
-    if (profile.state.tx.some(item => item && item.id === operationId)) {
-      const error = new Error('Buildbook transaction ID already exists.');
-      error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
-      throw error;
-    }
-    const committedTransaction = { ...transaction, id: operationId };
-
-    profile.state.tx.push(committedTransaction);
-    profile.telegramOperations = [...ledger, { key: idempotencyKey, operationId }];
-    const revision = await profileStore.write(profile, current.revision);
-    return { operationId, revision, duplicate: false };
+    throw new Error('Canonical profile changed repeatedly; retry the Telegram operation later.');
   };
 }
