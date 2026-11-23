@@ -252,7 +252,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const payload = envelope?.payload;
         const hasExactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
           && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
-        const validExportDate = isValidExportDate(envelope?.exportedAt);
+        const validExportDate = isValidExportDate(envelope?.exportedAt)
           && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(envelope.exportedAt)
           && Number.isFinite(Date.parse(envelope.exportedAt));
         if (!hasExactKeys(body, ['expectedRevision', 'envelope'])
