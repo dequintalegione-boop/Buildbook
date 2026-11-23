@@ -1,14 +1,13 @@
-const TOKEN_PATTERN = /bot\d+:[A-Za-z0-9_-]+/gi;
-
 function safeError(error) {
-  const message = String(error?.message || 'Telegram service error.')
-    .replace(TOKEN_PATTERN, '[redacted Telegram token]')
-    .replace(/[\r\n\t]+/g, ' ')
-    .slice(0, 500);
+  // Exception messages can contain raw Telegram text, local paths, request
+  // URLs, or credentials. Keep only a constrained code and a fixed message.
   const code = typeof error?.code === 'string' && /^[A-Z0-9_:-]{1,80}$/.test(error.code)
     ? error.code
     : 'TELEGRAM_SERVICE_ERROR';
-  return { code, message };
+  return {
+    code,
+    message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
+  };
 }
 
 /** In-memory operational snapshot. Never stores the bot token or raw updates. */
