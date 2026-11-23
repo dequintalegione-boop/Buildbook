@@ -21,7 +21,7 @@ The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled 
 
 ## Important boundaries
 
-- The service must run as a single writer for this JSON store. Multi-process coordination/locking is not implemented.
+- The service must run as a single writer for this JSON store. `host/instance-lock.mjs` now provides an exclusive directory lock, and `host/telegram-host-service.mjs` wires it into lifecycle startup. A lock collision fails closed. Stale locks are not automatically reclaimed; an operator must verify the owning process has exited before removing one.
 - The JSON file must live in a user-private application data directory, not in the repository, web root or synchronized cloud folder.
 - The temporary-file rename protects against partial file writes, but this is not a transactional database and does not provide multi-file atomic commits.
 - This layer alone cannot guarantee capture while the host is offline longer than Telegram's update retention window.
@@ -51,13 +51,13 @@ The service lifecycle tests also verify that stop cancels an interval wait promp
 
 ## Host configuration
 
-`host/telegram-config.mjs` reads the host-only environment settings and validates them before a service is constructed. Required variables:
+`host/telegram-config.mjs` reads the host-only environment settings and validates them before a service is constructed. `host/telegram-host-service.mjs` composes inbox, gate, poller, processor, runtime and lifecycle. It refuses construction without an injected canonical domain adapter; it does not create financial records itself. Required variables:
 
 - `BUILDBOOK_TELEGRAM_BOT_TOKEN` — bot token; keep it only in the host environment/secret store.
 - `BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS` — comma-separated numeric Telegram user IDs.
-- `BUILDBOOK_TELEGRAM_INBOX_PATH` and `BUILDBOOK_TELEGRAM_OFFSET_PATH` — distinct absolute paths in the user's private application-data directory.
+- `BUILDBOOK_TELEGRAM_INBOX_PATH`, `BUILDBOOK_TELEGRAM_OFFSET_PATH` and `BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH` — distinct absolute paths in the user's private application-data directory.
 
-Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. It is configuration validation only; it does not yet start or install a background service.
+Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. The composition factory can start the polling lifecycle once a canonical finance adapter is supplied; OS service installation and autostart are still not implemented.
 
 Run its tests with:
 
