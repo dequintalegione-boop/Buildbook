@@ -5,6 +5,8 @@
   const VERSION = 1;
   const SOURCE_SCHEMA_VERSION = 5;
   const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
+  const MAX_FILE_BYTES = 34 * 1024 * 1024;
+  const ISO_EXPORT_DATE = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/;
   const HEX_SHA256 = /^[a-f0-9]{64}$/;
 
   function record(value, label) {
@@ -28,7 +30,7 @@
     if (input.sourceSchemaVersion !== SOURCE_SCHEMA_VERSION) {
       throw new Error('Версия схемы профиля в файле не поддерживается.');
     }
-    if (typeof input.exportedAt !== 'string' || !Number.isFinite(Date.parse(input.exportedAt))) {
+    if (typeof input.exportedAt !== 'string' || !ISO_EXPORT_DATE.test(input.exportedAt) || !Number.isFinite(Date.parse(input.exportedAt))) {
       throw new Error('В файле указана некорректная дата экспорта.');
     }
     if (typeof input.sha256 !== 'string' || !HEX_SHA256.test(input.sha256)) {
@@ -80,6 +82,11 @@
 
   async function parseAndValidate(text) {
     if (typeof text !== 'string') throw new TypeError('Содержимое файла должно быть текстом.');
+    // Reject oversized input before JSON.parse allocates the object graph.
+    if (text.length > MAX_FILE_BYTES) throw new RangeError('Размер файла превышает допустимые 34 MiB.');
+    if (typeof TextEncoder !== 'function' || new TextEncoder().encode(text).byteLength > MAX_FILE_BYTES) {
+      throw new RangeError('Размер файла превышает допустимые 34 MiB.');
+    }
     let parsed;
     try { parsed = JSON.parse(text); } catch (_) {
       throw new Error('Файл импорта не содержит корректный JSON.');
