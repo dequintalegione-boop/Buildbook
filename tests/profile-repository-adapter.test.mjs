@@ -68,6 +68,22 @@ test('round-trips marker-shaped application data and own __proto__ keys safely',
   assert.equal(Object.prototype.polluted, undefined);
 });
 
+test('rejects duplicate keys in escaped transport objects', async () => {
+  const profile = {
+    state: {},
+    logs: [],
+    photos: {
+      image: {
+        __buildbookBinaryV1: true,
+        encoding: 'escaped-object',
+        entries: [['same', 1], ['same', 2]],
+      },
+    },
+  };
+  const adapter = createProfileRepositoryAdapter(fakeClient({ profile, revision: 1 }));
+  await assert.rejects(adapter.readProfile(), /повторяющийся ключ экранированного объекта/);
+});
+
 test('rejects non-canonical base64 binary descriptors from the API', async () => {
   const profile = {
     state: {},
