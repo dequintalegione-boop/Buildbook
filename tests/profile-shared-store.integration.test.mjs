@@ -72,6 +72,25 @@ test('browser repository and Telegram finance adapter share one canonical profil
     assert.deepEqual(canonical.profile.telegramOperations, [
       { key: '12345:88', operationId: telegramResult.operationId },
     ]);
+
+    // A tab holding revision 2 must not overwrite the Telegram commit at revision 3.
+    await assert.rejects(
+      repository.writeProfile(
+        { tx: [{ id: 'stale-ui-overwrite' }] },
+        [],
+        {},
+        appRevision,
+      ),
+      error => error?.code === 'BUILD_BOOK_STORAGE_CONFLICT'
+        && error.expectedRevision === appRevision
+        && error.currentRevision === telegramResult.revision,
+    );
+    const afterStaleSave = await client.readProfile();
+    assert.equal(afterStaleSave.revision, 3);
+    assert.deepEqual(
+      afterStaleSave.profile.state.tx.map(item => item.id),
+      ['ui-transaction', telegramResult.operationId],
+    );
   } finally {
     await server.close();
     await rm(directory, { recursive: true, force: true });
