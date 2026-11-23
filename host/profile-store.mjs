@@ -1,8 +1,20 @@
-import { mkdir, readFile, rename, writeFile, unlink, lstat, open } from 'node:fs/promises';
+import { mkdir, rename, writeFile, unlink, lstat, open } from 'node:fs/promises';
 import { dirname, basename, join, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
+
+async function readUtf8Bounded(handle, maxBytes) {
+  const buffer = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  if (offset > maxBytes) throw new RangeError('Файл профиля превышает допустимый размер.');
+  return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset));
+}
 
 /**
  * File-backed canonical profile store for the local Buildbook host.
@@ -40,7 +52,7 @@ export function createProfileStore(filePath) {
           throw new Error('Файл профиля был заменён во время чтения; операция отклонена.');
         }
         if (openedInfo.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
-        text = await handle.readFile({ encoding: 'utf8' });
+        text = await readUtf8Bounded(handle, MAX_PROFILE_BYTES + 1024);
       } finally {
         await handle.close();
       }
