@@ -5,6 +5,18 @@ import { randomUUID } from 'node:crypto';
 const MAX_UPDATE_BYTES = 16 * 1024;
 const MAX_INBOX_FILE_BYTES = 64 * 1024 * 1024;
 
+async function readUtf8Bounded(handle, maxBytes) {
+  const buffer = Buffer.alloc(maxBytes + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  if (offset > maxBytes) throw new RangeError('Telegram inbox file exceeds the allowed size.');
+  return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, offset));
+}
+
 function safeInboxError(fallback) {
   return fallback === 'rejected'
     ? 'Telegram update rejected by command validation.'
@@ -89,7 +101,7 @@ export function createInboxStore(filePath) {
             if (openedInfo.size > MAX_INBOX_FILE_BYTES) {
               throw new Error('Telegram inbox file exceeds the allowed size.');
             }
-            text = await handle.readFile({ encoding: 'utf8' });
+            text = await readUtf8Bounded(handle, MAX_INBOX_FILE_BYTES);
           } finally {
             await handle.close();
           }
