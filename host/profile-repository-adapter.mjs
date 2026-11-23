@@ -115,7 +115,24 @@ export function createProfileRepositoryAdapter(client) {
       };
     },
     async writeProfile(state, logs, photos, expectedRevision) {
-      const profile = encode({ state, logs, photos });
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        throw new TypeError('Для сохранения профиля нужна корректная ревизия.');
+      }
+      // Preserve host-owned metadata (including the Telegram idempotency ledger)
+      // when the UI saves its own state. Never merge across a stale revision:
+      // that would overwrite a concurrent finance operation.
+      const current = await client.readProfile();
+      if (current.revision !== expectedRevision) {
+        const error = new Error('Профиль уже изменён другим клиентом. Обновите данные и повторите сохранение.');
+        error.name = 'BuildbookStorageConflictError';
+        error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+        error.expectedRevision = expectedRevision;
+        error.currentRevision = current.revision;
+        throw error;
+      }
+      const base = current.profile === null ? {} : current.profile;
+      if (!isPlainObject(base)) throw new Error('Канонический профиль имеет неверный формат.');
+      const profile = encode({ ...base, state, logs, photos });
       return client.writeProfile(profile, expectedRevision);
     },
     async close() {},
