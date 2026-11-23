@@ -7,6 +7,7 @@ import { createTelegramRuntime } from './telegram-runtime.mjs';
 import { createTelegramService } from './telegram-service.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramStatus } from './telegram-status.mjs';
+import { createProfileFinanceAdapter } from './profile-finance-adapter.mjs';
 import { isAbsolute, resolve } from 'node:path';
 
 /**
@@ -18,14 +19,24 @@ import { isAbsolute, resolve } from 'node:path';
 export function createTelegramHostService({
   config,
   applyUpdate,
+  profileStore,
+  buildTransaction,
   fetchImpl = globalThis.fetch,
   onCycle = () => {},
   onError = () => {},
 } = {}) {
   if (!config || typeof config !== 'object') throw new TypeError('Validated Telegram host config is required.');
-  if (typeof applyUpdate !== 'function') {
-    throw new TypeError('The canonical Buildbook finance adapter is required before Telegram processing can start.');
+  const hasInjectedAdapter = typeof applyUpdate === 'function';
+  const hasProfileAdapter = profileStore && typeof buildTransaction === 'function';
+  if (hasInjectedAdapter === Boolean(hasProfileAdapter)) {
+    throw new TypeError('Provide exactly one of applyUpdate or both profileStore and buildTransaction.');
   }
+  if (hasProfileAdapter && (typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function')) {
+    throw new TypeError('profileStore must expose read() and write() methods.');
+  }
+  const canonicalApplyUpdate = hasInjectedAdapter
+    ? applyUpdate
+    : createProfileFinanceAdapter({ profileStore, buildTransaction });
   if (typeof config.botToken !== 'string' || !config.botToken
     || typeof config.botId !== 'string' || !config.botId
     || !Array.isArray(config.allowedUserIds)
@@ -54,7 +65,7 @@ export function createTelegramHostService({
     fetchImpl,
     timeoutSeconds: config.timeoutSeconds,
   });
-  const processor = createTelegramInboxProcessor({ inbox, applyUpdate });
+  const processor = createTelegramInboxProcessor({ inbox, applyUpdate: canonicalApplyUpdate });
   const runtime = createTelegramRuntime({ inbox, poller, processor });
 
   const service = createTelegramService({
