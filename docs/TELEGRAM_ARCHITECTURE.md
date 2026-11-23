@@ -14,6 +14,7 @@
 - Use the Telegram update ID plus bot identity as a unique idempotency key.
 - Process updates in order; persist the outcome and resulting Buildbook operation ID atomically where the storage design permits.
 - If operation persistence fails, keep the inbox item pending and retry with bounded backoff; do not acknowledge it as completed in the UI.
+- The canonical adapter must return a non-empty committed Buildbook operation ID (string or safe non-negative integer); missing/invalid IDs keep the inbox item pending. The inbox store independently rejects completion without this ID.
 - On restart, resume pending items and skip items already committed.
 - Verify the sender's numeric Telegram user ID against the allowlist before parsing or acting on the message. Unauthorized updates are ignored and are not written into the financial domain.
 - Keep a minimal technical record for rejected/accepted update processing; avoid retaining unnecessary message text or personal data.
