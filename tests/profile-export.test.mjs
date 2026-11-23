@@ -40,6 +40,8 @@ test('rejects malformed profile fields and invalid export timestamps', async () 
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, 'not-a-date'), /дата экспорта/);
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: {}, photos: {} }), /массивом/);
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: [] }), /Фотографии/);
+  const cyclic = {}; cyclic.self = cyclic;
+  await assert.rejects(exporter.createEnvelope({ state: cyclic, logs: [], photos: {} }), /сериализуемые JSON-данные/);
 });
 
 
