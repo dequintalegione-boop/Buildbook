@@ -13,6 +13,7 @@
 - Store each accepted Telegram update durably before advancing the Telegram polling offset.
 - Inbox mutations use copy-on-write snapshots: a failed disk replacement must leave the cached deduplication state unchanged, so retrying the same update cannot be mistaken for a durable duplicate.
 - Inbox storage itself replaces caller-supplied processing/rejection error text with fixed summaries; sanitization does not depend on every caller remembering to redact.
+- The durable inbox has a 64 MiB file ceiling checked on load and before atomic replacement; when full it fails closed rather than consuming unbounded disk or acknowledging unpersisted updates.
 - Enforce inbox state transitions (`pending → processing → pending|completed|rejected`); completed/rejected records are terminal, and repeated completion is idempotent only for the same operation ID.
 - Use the Telegram update ID plus bot identity as a unique idempotency key.
 - Process updates in order; persist the outcome and resulting Buildbook operation ID atomically where the storage design permits.
