@@ -81,6 +81,7 @@ test('does not call adapter when inbox is empty or claim fails', async () => {
     async markProcessing() { return false; },
     async markPending() {},
     async markCompleted() {},
+    async markRejected() {},
   };
   const processor = createTelegramInboxProcessor({ inbox: empty, async applyUpdate() { called = true; } });
   assert.deepEqual(await processor.processOne(), { processed: false, reason: 'empty' });
@@ -97,7 +98,7 @@ test('does not report success when durable completion fails', async () => {
   inbox.markCompleted = async () => false;
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { return { operationId: 'operation-8' }; } });
   await assert.rejects(processor.processOne(), /could not be marked completed/);
-  assert.equal(inbox.state.status, 'rejected');
+  assert.equal(inbox.state.status, 'pending');
 });
 
 test('rejects malformed or tampered inbox payload before calling domain adapter', async () => {
@@ -111,7 +112,7 @@ test('rejects malformed or tampered inbox payload before calling domain adapter'
   });
   await assert.rejects(processor.processOne(), /private-text command validation/);
   assert.equal(called, false);
-  assert.equal(inbox.state.status, 'pending');
+  assert.equal(inbox.state.status, 'rejected');
 });
 
 
