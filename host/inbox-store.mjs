@@ -141,12 +141,20 @@ export function createInboxStore(filePath) {
     },
 
     async markCompleted(id, operationId) {
+      const normalizedOperationId = typeof operationId === 'string'
+        ? operationId.trim()
+        : Number.isSafeInteger(operationId) && operationId >= 0
+          ? String(operationId)
+          : '';
+      if (!normalizedOperationId || normalizedOperationId.length > 256) {
+        throw new TypeError('A valid committed Buildbook operation ID is required to complete an inbox item.');
+      }
       return mutate(state => {
         const item = state.items.find(entry => entry.id === id);
         if (!item) return false;
         if (item.status === 'completed') return true;
         item.status = 'completed';
-        item.operationId = operationId == null ? null : String(operationId);
+        item.operationId = normalizedOperationId;
         item.processedAt = new Date().toISOString();
         item.lastError = null;
         // Financial effects are committed by now; remove raw chat text and
