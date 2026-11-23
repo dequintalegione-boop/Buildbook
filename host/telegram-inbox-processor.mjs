@@ -31,7 +31,10 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
           inboxItemId: item.id,
         });
         const operationId = result?.operationId ?? result?.id ?? null;
-        await inbox.markCompleted(item.id, operationId);
+        const completed = await inbox.markCompleted(item.id, operationId);
+        if (completed === false) {
+          throw new Error('Telegram inbox item could not be marked completed; retry requires an idempotent domain adapter.');
+        }
         return { processed: true, itemId: item.id, operationId };
       } catch (error) {
         await inbox.markPending(item.id, error?.message || 'Domain adapter failed');
