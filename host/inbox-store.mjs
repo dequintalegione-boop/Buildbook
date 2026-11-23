@@ -101,7 +101,7 @@ export function createInboxStore(filePath) {
           botId: keyParts[0],
           updateId: Number(keyParts[1]),
           userId: String(Number(userId)),
-          update: structuredClone(update),
+          update: JSON.parse(serializedUpdate),
           status: 'pending',
           attempts: 0,
           receivedAt: new Date().toISOString(),
