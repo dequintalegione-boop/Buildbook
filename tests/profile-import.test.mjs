@@ -51,6 +51,13 @@ test('rejects extra envelope or payload fields rather than silently importing th
   await assert.rejects(importer.validateEnvelope(altered), /неподдерживаемые поля/);
 });
 
+test('rejects oversized raw JSON before parsing and non-ISO export dates', async () => {
+  const { exporter, importer } = await loadHelpers();
+  const envelope = await exporter.createEnvelope({ state: {}, logs: [], photos: {} });
+  await assert.rejects(importer.parseAndValidate(' '.repeat(34 * 1024 * 1024 + 1)), /34 MiB/);
+  await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt: 'November 23, 2026' }), /некорректная дата/);
+});
+
 test('rejects malformed envelope fields and oversized payloads', async () => {
   const { exporter, importer } = await loadHelpers();
   const envelope = await exporter.createEnvelope({ state: {}, logs: [], photos: {} });
