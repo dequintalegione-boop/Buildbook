@@ -1,6 +1,8 @@
 const DEFAULT_BASE_URL = 'http://127.0.0.1:43127';
 const MAX_PROFILE_REQUEST_BYTES = 8 * 1024 * 1024;
 const MAX_IMPORT_REQUEST_BYTES = 34 * 1024 * 1024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_REQUEST_TIMEOUT_MS = 120_000;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 function normalizeBaseUrl(value) {
@@ -19,19 +21,26 @@ export function createLocalProfileClient({
   baseUrl = DEFAULT_BASE_URL,
   accessToken,
   fetchImpl = globalThis.fetch,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 } = {}) {
   if (typeof accessToken !== 'string' || new TextEncoder().encode(accessToken).length < 32
     || new TextEncoder().encode(accessToken).length > 4096) {
     throw new Error('Для подключения к локальному профилю нужен API-токен длиной от 32 до 4096 байт.');
   }
   if (typeof fetchImpl !== 'function') throw new Error('Fetch API недоступен.');
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > MAX_REQUEST_TIMEOUT_MS) {
+    throw new RangeError('Тайм-аут локального API должен быть целым числом от 1 до 120000 мс.');
+  }
   const base = normalizeBaseUrl(baseUrl);
 
   async function request(path, options = {}) {
     let response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error('Local API request timed out')), requestTimeoutMs);
     try {
       response = await fetchImpl(base + path, {
         ...options,
+        signal: controller.signal,
         // The bearer token must never follow a redirect or accompany ambient
         // cookies/referrer data to another origin.
         redirect: 'error',
@@ -45,10 +54,14 @@ export function createLocalProfileClient({
         },
       });
     } catch (error) {
-      const wrapped = new Error('Локальный сервис Buildbook недоступен. Проверьте, запущен ли он.');
+      const wrapped = new Error(controller.signal.aborted
+        ? 'Локальный сервис Buildbook не ответил за отведённое время.'
+        : 'Локальный сервис Buildbook недоступен. Проверьте, запущен ли он.');
       wrapped.cause = error;
-      wrapped.code = 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
+      wrapped.code = controller.signal.aborted ? 'BUILD_BOOK_LOCAL_API_TIMEOUT' : 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
       throw wrapped;
+    } finally {
+      clearTimeout(timeout);
     }
     let payload = null;
     try { payload = await response.json(); } catch (_) {}
