@@ -134,3 +134,40 @@ test('refuses stale UI saves before writing and preserves host-owned metadata', 
   assert.deepEqual(profile.telegram.idempotency, { 'bot:1': 'op-1' });
   assert.deepEqual(profile.state, { tx: [{ id: 'fresh-ui' }] });
 });
+
+
+test('rejects malformed canonical read responses and invalid next revisions', async () => {
+  const malformedRead = createProfileRepositoryAdapter({
+    async readProfile() { return { profile: null, revision: -1 }; },
+    async writeProfile() { return 1; },
+  });
+  await assert.rejects(malformedRead.readProfile(), /некорректный ответ/);
+
+  const malformedProfile = createProfileRepositoryAdapter({
+    async readProfile() { return { profile: [], revision: 0 }; },
+    async writeProfile() { return 1; },
+  });
+  await assert.rejects(malformedProfile.writeProfile({}, [], {}, 0), /некорректный ответ/);
+
+  const badRevision = createProfileRepositoryAdapter({
+    async readProfile() { return { profile: null, revision: 0 }; },
+    async writeProfile() { return 2; },
+  });
+  await assert.rejects(
+    badRevision.writeProfile({}, [], {}, 0),
+    /некорректную ревизию после сохранения/,
+  );
+});
+
+test('rejects exhausted revision before contacting the canonical API', async () => {
+  let calls = 0;
+  const adapter = createProfileRepositoryAdapter({
+    async readProfile() { calls++; return { profile: null, revision: Number.MAX_SAFE_INTEGER }; },
+    async writeProfile() { calls++; return Number.MAX_SAFE_INTEGER; },
+  });
+  await assert.rejects(
+    adapter.writeProfile({}, [], {}, Number.MAX_SAFE_INTEGER),
+    /корректную ревизию/,
+  );
+  assert.equal(calls, 0);
+});
