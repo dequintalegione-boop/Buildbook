@@ -206,3 +206,70 @@ test('applies browser isolation headers to successful and rejected API responses
     assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
   }
 });
+
+
+test('sanitizes Telegram status and never returns arbitrary error text or secret fields', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-status-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const store = createProfileStore(join(dir, 'profile.json'));
+  const token = 'test-local-api-token-0123456789abcdef';
+  const api = createLocalApiServer({
+    profileStore: store,
+    accessToken: token,
+    getTelegramStatus: () => ({
+      running: true,
+      startedAt: '2026-11-23T10:00:00.000Z',
+      lastCycleAt: '2026-11-23T10:00:01.000Z',
+      lastProcessed: 3,
+      consecutiveFailures: 1,
+      queue: { total: 4, pending: 1, processing: 1, completed: 2, rejected: 0, rawUpdate: 'private text' },
+      lastError: { at: '2026-11-23T10:00:02.000Z', message: 'BOT_TOKEN=secret and private message' },
+      botToken: 'secret-token',
+      allowedUserIds: ['123456'],
+    }),
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = `http://127.0.0.1:${address.port}`;
+  const unauthorized = await fetch(`${base}/api/telegram/status`);
+  assert.equal(unauthorized.status, 401);
+  const response = await fetch(`${base}/api/telegram/status`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes('secret-token'), false);
+  assert.equal(body.includes('private text'), false);
+  assert.equal(body.includes('BOT_TOKEN=secret'), false);
+  assert.equal(body.includes('allowedUserIds'), false);
+  assert.equal(body.includes('rawUpdate'), false);
+  assert.deepEqual(JSON.parse(body), {
+    running: true,
+    startedAt: '2026-11-23T10:00:00.000Z',
+    lastCycleAt: '2026-11-23T10:00:01.000Z',
+    lastProcessed: 3,
+    consecutiveFailures: 1,
+    queue: { total: 4, pending: 1, processing: 1, completed: 2, rejected: 0 },
+    lastError: {
+      code: 'TELEGRAM_SERVICE_ERROR',
+      message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
+      at: '2026-11-23T10:00:02.000Z',
+    },
+  });
+});
+
+test('does not invoke Telegram status callback for unauthenticated requests', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-status-auth-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let calls = 0;
+  const api = createLocalApiServer({
+    profileStore: createProfileStore(join(dir, 'profile.json')),
+    accessToken: 'test-local-api-token-0123456789abcdef',
+    getTelegramStatus: () => { calls += 1; return { running: true }; },
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const response = await fetch(`http://127.0.0.1:${address.port}/api/telegram/status`);
+  assert.equal(response.status, 401);
+  assert.equal(calls, 0);
+});
