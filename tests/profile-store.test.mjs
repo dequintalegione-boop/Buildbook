@@ -52,3 +52,13 @@ test('rejects malformed profile values and invalid expected revisions', async (t
   await assert.rejects(store.write([], 0), TypeError);
   await assert.rejects(store.write({}, -1), TypeError);
 });
+
+test('refuses to silently replace a malformed canonical profile file', async (t) => {
+  const { file, store } = await fixture(t);
+  await store.write({ marker: 'valid' }, 0);
+  await (await import('node:fs/promises')).writeFile(file, '{"version":99,"revision":4,"profile":{}}', 'utf8');
+
+  await assert.rejects(store.read(), /unknown or damaged format|неизвестный или повреждённый формат/i);
+  await assert.rejects(store.write({ marker: 'replacement' }, 4), /unknown or damaged format|неизвестный или повреждённый формат/i);
+  assert.match(await readFile(file, 'utf8'), /"version":99/);
+});
