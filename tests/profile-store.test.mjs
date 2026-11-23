@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
@@ -76,4 +76,13 @@ test('refuses to silently replace a malformed canonical profile file', async (t)
   await assert.rejects(store.read(), /unknown or damaged format|неизвестный или повреждённый формат/i);
   await assert.rejects(store.write({ marker: 'replacement' }, 4), /unknown or damaged format|неизвестный или повреждённый формат/i);
   assert.match(await readFile(file, 'utf8'), /"version":99/);
+});
+
+
+test('creates canonical profile files with owner-only permissions on POSIX', async (t) => {
+  if (process.platform === 'win32') return;
+  const { file, store } = await fixture(t);
+  await store.write({ marker: 'private' }, 0);
+  const info = await stat(file);
+  assert.equal(info.mode & 0o077, 0);
 });
