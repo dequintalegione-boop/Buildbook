@@ -51,6 +51,31 @@ test('preserves typed-array byte range instead of serializing its entire backing
   assert.deepEqual(Array.from(new Uint8Array(loaded.photos.image)), [1, 2]);
 });
 
+test('round-trips marker-shaped application data and own __proto__ keys safely', async () => {
+  const markerCollision = JSON.parse('{"__buildbookBinaryV1":true,"encoding":"base64","data":"AQI="}');
+  const protoKey = JSON.parse('{"__proto__":{"polluted":true}}');
+  const client = fakeClient();
+  const adapter = createProfileRepositoryAdapter(client);
+  await adapter.writeProfile({ markerCollision, protoKey }, [], {}, 0);
+  const loaded = await adapter.readProfile();
+
+  assert.deepEqual(loaded.state.markerCollision, markerCollision);
+  assert.deepEqual(loaded.state.protoKey, protoKey);
+  assert.equal(Object.getPrototypeOf(loaded.state.protoKey), Object.prototype);
+  assert.equal(Object.hasOwn(loaded.state.protoKey, '__proto__'), true);
+  assert.equal(Object.prototype.polluted, undefined);
+});
+
+test('rejects non-canonical base64 binary descriptors from the API', async () => {
+  const profile = {
+    state: {},
+    logs: [],
+    photos: { image: { __buildbookBinaryV1: true, encoding: 'base64', data: 'AQI' } },
+  };
+  const adapter = createProfileRepositoryAdapter(fakeClient({ profile, revision: 1 }));
+  await assert.rejects(adapter.readProfile(), /некорректный бинарный дескриптор/);
+});
+
 test('rejects malformed adapter inputs and malformed canonical profile', async () => {
   assert.throws(() => createProfileRepositoryAdapter(null), /клиент/);
   const adapter = createProfileRepositoryAdapter(fakeClient({ profile: [] }));
