@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -47,7 +47,7 @@ export function createTelegramOffsetStore(filePath) {
           await writeFile(temporary, JSON.stringify({ version: 1, offset }), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
           await rename(temporary, filePath);
         } catch (error) {
-          await import('node:fs/promises').then(fs => fs.unlink(temporary)).catch(() => {});
+          await unlink(temporary).catch(() => {});
           throw error;
         }
         return offset;
