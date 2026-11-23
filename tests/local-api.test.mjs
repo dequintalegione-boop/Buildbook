@@ -78,6 +78,22 @@ test('rejects query and fragment components in local API request targets', async
   assert.equal((await request(`${base}/api/health?token=not-accepted`)).status, 400);
 });
 
+test('accepts UTF-8 JSON charset and rejects other content type parameters', async (t) => {
+  const { base, request } = await fixture(t);
+  const accepted = await request(`${base}/api/profile`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ expectedRevision: 0, profile: { marker: 'utf8' } }),
+  });
+  assert.equal(accepted.status, 200);
+  const rejected = await request(`${base}/api/profile`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json; charset=iso-8859-1' },
+    body: '{}',
+  });
+  assert.equal(rejected.status, 415);
+});
+
 test('rejects foreign origins, invalid content types, and malformed bodies', async (t) => {
   const { base, request } = await fixture(t);
   const foreign = await request(`${base}/api/profile`, { headers: { origin: 'https://example.com' } });
