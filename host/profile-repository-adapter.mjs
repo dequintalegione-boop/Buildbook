@@ -47,7 +47,7 @@ function encode(value) {
   }
   if (Array.isArray(value)) return value.map(encode);
   if (isPlainObject(value)) {
-    // Escape ordinary data that collides with our binary transport tag.
+    // Escape ordinary data that collides with either reserved transport tag.
     if (value[BINARY_MARKER] === true && (value.encoding === 'base64' && typeof value.data === 'string' || value.encoding === 'escaped-object')) {
       return {
         [BINARY_MARKER]: true,
