@@ -21,9 +21,16 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
     running = true;
     try {
       const offset = await offsetStore.read();
+      if (offset !== null && (!Number.isSafeInteger(offset) || offset < 0)) {
+        throw new TypeError('Telegram offset store returned an invalid checkpoint.');
+      }
+
       const url = new URL(`https://api.telegram.org/bot${botToken}/getUpdates`);
       url.searchParams.set('timeout', String(timeoutSeconds));
-      url.searchParams.set('allowed_updates', JSON.stringify(['message', 'edited_message', 'callback_query', 'inline_query']));
+      // The receiver currently supports only new private text messages.
+      // Requesting other update types adds unnecessary input surface and can
+      // advance the checkpoint past updates the command gate cannot process.
+      url.searchParams.set('allowed_updates', JSON.stringify(['message']));
       if (offset !== null) url.searchParams.set('offset', String(offset));
 
       const response = await fetchImpl(url, { method: 'GET', signal });
