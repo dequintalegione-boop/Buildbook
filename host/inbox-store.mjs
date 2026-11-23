@@ -3,7 +3,6 @@ import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const MAX_UPDATE_BYTES = 16 * 1024;
-const MAX_INBOX_ITEMS = 100_000;
 
 /**
  * Durable inbox for Telegram updates received by the local Buildbook host.
@@ -93,9 +92,6 @@ export function createInboxStore(filePath) {
       return mutate(state => {
         const existing = state.items.find(item => item.key === key);
         if (existing) return { inserted: false, item: structuredClone(existing) };
-        if (state.items.length >= MAX_INBOX_ITEMS) {
-          throw new Error('Telegram inbox reached its configured capacity.');
-        }
         const item = {
           id: randomUUID(),
           key,
