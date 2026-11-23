@@ -53,6 +53,12 @@ test('rejects malformed profile values and invalid expected revisions', async (t
   await assert.rejects(store.write({}, -1), TypeError);
 });
 
+test('reads canonical profile through the verified opened file handle', async (t) => {
+  const { store } = await fixture(t);
+  await store.write({ marker: 'stable' }, 0);
+  assert.deepEqual(await store.read(), { revision: 1, profile: { marker: 'stable' } });
+});
+
 test('refuses to read a canonical profile path that is a symbolic link', async (t) => {
   const { file, store } = await fixture(t);
   const external = file + '.external';
