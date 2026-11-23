@@ -18,8 +18,9 @@ export function createLocalProfileClient({
   accessToken,
   fetchImpl = globalThis.fetch,
 } = {}) {
-  if (typeof accessToken !== 'string' || new TextEncoder().encode(accessToken).length < 32) {
-    throw new Error('Для подключения к локальному профилю нужен API-токен длиной не менее 32 байт.');
+  if (typeof accessToken !== 'string' || new TextEncoder().encode(accessToken).length < 32
+    || new TextEncoder().encode(accessToken).length > 4096) {
+    throw new Error('Для подключения к локальному профилю нужен API-токен длиной от 32 до 4096 байт.');
   }
   if (typeof fetchImpl !== 'function') throw new Error('Fetch API недоступен.');
   const base = normalizeBaseUrl(baseUrl);
