@@ -76,3 +76,17 @@ test('invalid sender IDs and update IDs are rejected', async () => {
     await assert.rejects(inbox.enqueue({ botId: 'bot-1', updateId: 1, userId: 'not-a-number', update: {} }), /numeric Telegram userId/);
   });
 });
+
+
+test('rejected inbox records are terminal and excluded from pending work', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 10, userId: '1001', update: { message: 'tampered' } });
+    await inbox.markProcessing(item.id);
+    assert.equal(await inbox.markRejected(item.id, 'invalid envelope'), true);
+    assert.equal(await inbox.nextPending(), null);
+    assert.equal((await inbox.stats()).rejected, 1);
+    const reopened = createInboxStore(file);
+    assert.equal(await reopened.nextPending(), null);
+  });
+});
