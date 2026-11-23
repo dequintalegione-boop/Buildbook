@@ -15,10 +15,13 @@ test('status exposes operational counts without retaining raw update data', () =
 
 test('status never retains arbitrary exception details', () => {
   const status = createTelegramStatus();
-  status.error(new Error('token=secret_value; local path=/home/user/private; Telegram text=rent 900'));
+  const error = new Error('token=secret_value; local path=/home/user/private; Telegram text=rent 900');
+  error.code = 'TOKEN_SECRET_123';
+  status.error(error);
   const snapshot = status.snapshot();
   assert.equal(snapshot.consecutiveFailures, 1);
   assert.equal(snapshot.lastError.message, 'Ошибка сервиса Telegram; подробности исключения не сохраняются.');
+  assert.equal(snapshot.lastError.code, 'TELEGRAM_SERVICE_ERROR');
   assert.doesNotMatch(snapshot.lastError.message, /secret_value|private|rent 900/);
 });
 
