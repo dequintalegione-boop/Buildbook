@@ -104,6 +104,10 @@ export function createProfileRepositoryAdapter(client) {
   return Object.freeze({
     async readProfile() {
       const result = await client.readProfile();
+      if (!isPlainObject(result) || !Number.isSafeInteger(result.revision) || result.revision < 0
+        || !(result.profile === null || isPlainObject(result.profile))) {
+        throw new Error('Канонический профильный API вернул некорректный ответ.');
+      }
       const profile = result.profile;
       if (profile === null) return { state: undefined, logs: undefined, photos: undefined, revision: result.revision };
       if (!isPlainObject(profile)) throw new Error('Канонический профиль имеет неверный формат.');
@@ -115,13 +119,17 @@ export function createProfileRepositoryAdapter(client) {
       };
     },
     async writeProfile(state, logs, photos, expectedRevision) {
-      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision === Number.MAX_SAFE_INTEGER) {
         throw new TypeError('Для сохранения профиля нужна корректная ревизия.');
       }
       // Preserve host-owned metadata (including the Telegram idempotency ledger)
       // when the UI saves its own state. Never merge across a stale revision:
       // that would overwrite a concurrent finance operation.
       const current = await client.readProfile();
+      if (!isPlainObject(current) || !Number.isSafeInteger(current.revision) || current.revision < 0
+        || !(current.profile === null || isPlainObject(current.profile))) {
+        throw new Error('Канонический профильный API вернул некорректный ответ.');
+      }
       if (current.revision !== expectedRevision) {
         const error = new Error('Профиль уже изменён другим клиентом. Обновите данные и повторите сохранение.');
         error.name = 'BuildbookStorageConflictError';
@@ -133,7 +141,11 @@ export function createProfileRepositoryAdapter(client) {
       const base = current.profile === null ? {} : decode(current.profile);
       if (!isPlainObject(base)) throw new Error('Канонический профиль имеет неверный формат.');
       const profile = encode({ ...base, state, logs, photos });
-      return client.writeProfile(profile, expectedRevision);
+      const nextRevision = await client.writeProfile(profile, expectedRevision);
+      if (nextRevision !== expectedRevision + 1) {
+        throw new Error('Канонический профильный API вернул некорректную ревизию после сохранения.');
+      }
+      return nextRevision;
     },
     async close() {},
   });
