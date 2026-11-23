@@ -36,9 +36,11 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const normalizedProfilePaths = new Set([resolve(profilePath), profileLockPath].map(path => path.toLowerCase()));
   if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
+  let telegram = null;
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
+    getTelegramStatus: () => telegram ? telegram.getStatus() : { running: false },
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
   });
@@ -48,7 +50,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
     }
   }
-  const telegram = createTelegramHostService({
+  telegram = createTelegramHostService({
     config: telegramConfig,
     profileStore,
     fetchImpl,
