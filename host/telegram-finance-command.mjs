@@ -13,7 +13,7 @@ function commandError(message, code = 'INVALID_TELEGRAM_FINANCE_COMMAND') {
 }
 
 function parseAmount(raw) {
-  if (!/^(?:0|[1-9]\\d{0,8})(?:[.,]\\d{1,2})?$/.test(raw)) return null;
+  if (!/^(?:0|[1-9]\d{0,8})(?:[.,]\d{1,2})?$/.test(raw)) return null;
   const amount = Number(raw.replace(',', '.'));
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const cents = Math.round(amount * 100);
@@ -26,12 +26,12 @@ export function parseTelegramFinanceCommand(text) {
   if (typeof text !== 'string') return null;
   const trimmed = text.trim();
   if (!trimmed.startsWith('/')) return null;
-  const match = /^(\\/[^\\s@]+)(?:@([A-Za-z0-9_]+))?(?:\\s+([\\s\\S]*))?$/.exec(trimmed);
+  const match = /^(\/[^\s@]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
   if (!match) return null;
   const kind = COMMANDS.get(match[1].toLowerCase());
   if (!kind) return null;
-  const payload = String(match[3] || '').trim();
-  const split = /^([^\\s]+)\\s+([\\s\\S]+)$/.exec(payload);
+  const payload = String(match[2] || '').trim();
+  const split = /^([^\s]+)\s+([\s\S]+)$/.exec(payload);
   if (!split) throw commandError('Формат: /доход 1250 Описание или /расход 450 Описание.');
   const amount = parseAmount(split[1]);
   if (amount === null) throw commandError('Сумма должна быть положительным числом, максимум 2 знака после запятой.');
