@@ -54,8 +54,8 @@ export function buildTelegramFinanceTransaction(command, { now = new Date() } = 
     date,
     amount: command.amount,
     desc: command.desc.trim(),
-    cat: 'Прочее',
-    grp: 'Прочее',
+    cat: command.kind === 'i' ? 'Заработок' : 'Общие расходы',
+    grp: command.kind === 'i' ? 'Другое' : 'Еда',
     acc: 'Наличные',
     note: 'Добавлено через Telegram',
   };
