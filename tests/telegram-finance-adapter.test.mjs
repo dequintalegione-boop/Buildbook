@@ -96,6 +96,44 @@ test('profile adapter commits a transaction and its idempotency key together', a
   assert.equal(snapshot.profile.telegramOperations.length, 1);
 });
 
+
+test('revision retry detects a concurrently committed idempotency key', async () => {
+  let revision = 1;
+  let profile = { state: { tx: [] }, telegramOperations: [] };
+  let writes = 0;
+  const store = {
+    async read() { return { revision, profile: structuredClone(profile) }; },
+    async write(next, expectedRevision) {
+      writes += 1;
+      assert.equal(expectedRevision, revision);
+      if (writes === 1) {
+        profile = {
+          state: { tx: [{ id: 'already-committed', kind: 'i', amount: 10 }] },
+          telegramOperations: [{ key: '12345:9', operationId: 'already-committed' }],
+        };
+        revision += 1;
+        const error = new Error('concurrent write');
+        error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+        throw error;
+      }
+      profile = structuredClone(next);
+      revision += 1;
+      return revision;
+    },
+  };
+  const applyUpdate = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: () => ({
+      kind: 'i', date: '2026-11-23', amount: 10, desc: 'Дубликат',
+      cat: 'Другое', grp: 'Заработок', acc: 'a1',
+    }),
+  });
+  const result = await applyUpdate({ update: {}, idempotencyKey: '12345:9' });
+  assert.deepEqual(result, { operationId: 'already-committed', duplicate: true });
+  assert.equal(writes, 1);
+  assert.equal(profile.state.tx.length, 1);
+});
+
 test('profile adapter refuses stale revision without writing', async () => {
   const store = makeStore({ state: { tx: [] } });
   const applyUpdate = createProfileFinanceAdapter({
