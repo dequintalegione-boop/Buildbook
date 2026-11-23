@@ -29,6 +29,12 @@ export function createLocalProfileClient({
     try {
       response = await fetchImpl(base + path, {
         ...options,
+        // The bearer token must never follow a redirect or accompany ambient
+        // cookies/referrer data to another origin.
+        redirect: 'error',
+        credentials: 'omit',
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer',
         headers: {
           authorization: 'Bearer ' + accessToken,
           ...(options.body ? { 'content-type': 'application/json' } : {}),
