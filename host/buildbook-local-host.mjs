@@ -8,7 +8,7 @@ import { readTelegramServiceConfig } from './telegram-config.mjs';
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
   if (raw == null || raw === '') return 43127;
-  if (!/^\\d+$/.test(String(raw))) throw new TypeError('BUILDBOOK_LOCAL_API_PORT must be an integer.');
+  if (!/^\d+$/.test(String(raw))) throw new TypeError('BUILDBOOK_LOCAL_API_PORT must be an integer.');
   const port = Number(raw);
   if (!Number.isSafeInteger(port) || port < 0 || port > 65535) {
     throw new RangeError('BUILDBOOK_LOCAL_API_PORT must be between 0 and 65535.');
