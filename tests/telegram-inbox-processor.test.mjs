@@ -178,3 +178,56 @@ test('malformed inbox items are quarantined rather than retried', async () => {
   assert.equal(inbox.state.status, 'rejected');
   assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
+
+
+test('retries after canonical commit but before inbox completion without duplicating the finance operation', async () => {
+  const inbox = makeInbox(sample);
+  const profileStore = {
+    revision: 0,
+    profile: { state: { tx: [] } },
+    async read() {
+      return { revision: this.revision, profile: structuredClone(this.profile) };
+    },
+    async write(next, expectedRevision) {
+      assert.equal(expectedRevision, this.revision);
+      this.profile = structuredClone(next);
+      return ++this.revision;
+    },
+  };
+  const { createProfileFinanceAdapter } = await import('../host/profile-finance-adapter.mjs');
+  let buildCalls = 0;
+  const applyUpdate = createProfileFinanceAdapter({
+    profileStore,
+    async buildTransaction() {
+      buildCalls++;
+      return {
+        kind: 'i',
+        date: '2026-11-23',
+        amount: 100,
+        desc: 'Telegram income',
+        cat: 'Заработок',
+        grp: 'Доходы',
+        acc: 'Наличные',
+      };
+    },
+  });
+  const markCompleted = inbox.markCompleted.bind(inbox);
+  let completionAttempts = 0;
+  inbox.markCompleted = async (...args) => {
+    completionAttempts++;
+    if (completionAttempts === 1) return false;
+    return markCompleted(...args);
+  };
+  const processor = createTelegramInboxProcessor({ inbox, applyUpdate });
+
+  await assert.rejects(processor.processOne(), /could not be marked completed/);
+  assert.equal(profileStore.profile.state.tx.length, 1);
+  assert.equal(inbox.state.status, 'pending');
+
+  const retried = await processor.processOne();
+  assert.equal(retried.processed, true);
+  assert.equal(profileStore.profile.state.tx.length, 1);
+  assert.equal(buildCalls, 1);
+  assert.equal(inbox.state.status, 'completed');
+  assert.equal(inbox.state.operationId, profileStore.profile.state.tx[0].id);
+});
