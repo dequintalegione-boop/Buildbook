@@ -40,14 +40,13 @@ export function readTelegramServiceConfig(env = process.env) {
   const inboxPath = requiredString(env, 'BUILDBOOK_TELEGRAM_INBOX_PATH');
   const offsetPath = requiredString(env, 'BUILDBOOK_TELEGRAM_OFFSET_PATH');
   const instanceLockPath = requiredString(env, 'BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH');
-  if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath)) {
+  if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath) || !isAbsolute(instanceLockPath)) {
     throw new TypeError('Telegram inbox and offset paths must be absolute.');
   }
   const normalizedPaths = [resolve(inboxPath), resolve(offsetPath), resolve(instanceLockPath)].map(path => path.toLowerCase());
   if (new Set(normalizedPaths).size !== normalizedPaths.length) {
     throw new TypeError('Telegram inbox, offset and instance-lock paths must be different.');
   }
-  if (!isAbsolute(instanceLockPath)) throw new TypeError('Telegram instance-lock path must be absolute.');
 
   const retryBaseMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_BASE_MS', 1000, 100, 60000);
   const retryMaxMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_MAX_MS', 60000, 100, 3600000);
