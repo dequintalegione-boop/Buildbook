@@ -462,3 +462,25 @@ test('validates ISO 8601 export timezone offsets at the import boundary', async 
   });
   assert.equal(accepted.status, 200);
 });
+
+
+test('rejects malformed Host ports and non-origin Origin values', async (t) => {
+  const { base } = await fixture(t);
+  for (const host of ['localhost:65536', 'localhost:abc', '127.0.0.1:99999']) {
+    const response = await fetch(base + '/api/health', {
+      headers: { host, authorization: 'Bearer test-local-api-token-0123456789abcdef' },
+    });
+    assert.equal(response.status, 403, host);
+  }
+  for (const origin of [
+    'http://localhost/path',
+    'http://localhost/?x=1',
+    'http://localhost/#fragment',
+    'http://localhost.evil.example',
+  ]) {
+    const response = await fetch(base + '/api/health', {
+      headers: { origin, authorization: 'Bearer test-local-api-token-0123456789abcdef' },
+    });
+    assert.equal(response.status, 403, origin);
+  }
+});
