@@ -82,7 +82,15 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
         return { processed: true, itemId: item.id, operationId };
       } catch (error) {
         if (error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
-          await inbox.markPending(item.id, error?.message || 'Domain adapter failed');
+          const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(error.code)
+            ? error.code
+            : '';
+          const safeMessage = code
+            ? 'Canonical adapter failed (' + code + '); retry scheduled.'
+            : 'Canonical adapter failed; retry scheduled.';
+          // Do not persist arbitrary exception text: adapters may include user data,
+          // request bodies, filesystem paths, or credentials in error messages.
+          await inbox.markPending(item.id, safeMessage);
         }
         throw error;
       }
