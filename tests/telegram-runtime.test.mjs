@@ -21,7 +21,7 @@ test('recovers once, drains existing items, polls, then drains new items sequent
   const runtime = createTelegramRuntime({ inbox, poller, processor });
   const first = await runtime.runOnce();
   assert.equal(first.processed, 3);
-  assert.deepEqual(calls, ['recover', 'process', 'process', 'process', 'poll', 'process']);
+  assert.deepEqual(calls, ['recover', 'process', 'process', 'process', 'poll', 'process', 'process']);
   calls.length = 0;
   await runtime.runOnce();
   assert.deepEqual(calls, ['process', 'poll', 'process']);
