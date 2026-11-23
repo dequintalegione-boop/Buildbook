@@ -76,7 +76,7 @@ function requestHostAllowed(request) {
   const suffix = rawHost.startsWith('[')
     ? rawHost.slice(rawHost.indexOf(']') + 1)
     : (rawHost.includes(':') ? rawHost.slice(rawHost.indexOf(':')) : '');
-  const validPort = suffix === '' || /^:\\d{1,5}$/.test(suffix);
+  const validPort = suffix === '' || /^:\d{1,5}$/.test(suffix);
   return validPort && ALLOWED_HOSTS.has(host);
 }
 
@@ -174,7 +174,7 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
     }
     if (request.method === 'PUT' && pathname === '/api/profile') {
       const declaredLength = request.headers['content-length'];
-      if (declaredLength !== undefined && (!/^\\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
+      if (declaredLength !== undefined && (!/^\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
         send(response, Number(declaredLength) > MAX_BODY_BYTES ? 413 : 400, { error: 'Некорректный или слишком большой Content-Length.' });
         request.resume();
         return;
