@@ -39,6 +39,7 @@ function makeInbox(item) {
 
 const sample = {
   id: 'inbox-1',
+  botId: 'bot-1',
   key: 'bot-1:44',
   userId: '1001',
   update: { update_id: 44, message: { message_id: 44, from: { id: 1001 }, chat: { id: 1001, type: 'private' }, text: 'income 100' } },
