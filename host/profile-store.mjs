@@ -2,6 +2,8 @@ import { mkdir, readFile, rename, writeFile, unlink } from 'node:fs/promises';
 import { dirname, basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
+
 /**
  * File-backed canonical profile store for the local Buildbook host.
  * One host process owns this file; browser clients must use its API rather than
@@ -63,6 +65,13 @@ export function createProfileStore(filePath) {
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
         throw new TypeError('Не задана корректная версия профиля.');
       }
+      let serializedProfile;
+      try { serializedProfile = JSON.stringify(profile); } catch {
+        throw new TypeError('Профиль должен содержать только сериализуемые JSON-данные.');
+      }
+      if (typeof serializedProfile !== 'string' || Buffer.byteLength(serializedProfile, 'utf8') > MAX_PROFILE_BYTES) {
+        throw new RangeError('Размер профиля превышает допустимые 32 MiB.');
+      }
       return serialize(async () => {
         const current = await readDisk();
         if (current.revision !== expectedRevision) {
@@ -73,8 +82,11 @@ export function createProfileStore(filePath) {
           error.currentRevision = current.revision;
           throw error;
         }
+        if (current.revision >= Number.MAX_SAFE_INTEGER) {
+          throw new RangeError('Исчерпан диапазон ревизий профиля.');
+        }
         const revision = current.revision + 1;
-        await writeDisk({ version: 1, revision, profile });
+        await writeDisk({ version: 1, revision, profile: JSON.parse(serializedProfile) });
         return revision;
       });
     },
