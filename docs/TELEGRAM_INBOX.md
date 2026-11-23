@@ -39,3 +39,20 @@ Run the coordinator tests with:
 ```sh
 node --test tests/telegram-runtime.test.mjs
 ```
+
+
+## Host configuration
+
+`host/telegram-config.mjs` reads the host-only environment settings and validates them before a service is constructed. Required variables:
+
+- `BUILDBOOK_TELEGRAM_BOT_TOKEN` — bot token; keep it only in the host environment/secret store.
+- `BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS` — comma-separated numeric Telegram user IDs.
+- `BUILDBOOK_TELEGRAM_INBOX_PATH` and `BUILDBOOK_TELEGRAM_OFFSET_PATH` — distinct absolute paths in the user's private application-data directory.
+
+Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. It is configuration validation only; it does not yet start or install a background service.
+
+Run its tests with:
+
+```sh
+node --test tests/telegram-config.test.mjs
+```
