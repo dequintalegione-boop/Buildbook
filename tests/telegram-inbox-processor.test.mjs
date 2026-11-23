@@ -132,6 +132,20 @@ test('rejects malformed or tampered inbox payload before calling domain adapter'
 });
 
 
+test('rejects non-canonical numeric identity aliases in persisted inbox records', async () => {
+  const tampered = structuredClone(sample);
+  tampered.userId = '01001';
+  const inbox = makeInbox(tampered);
+  let called = false;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { called = true; return { operationId: 'should-not-exist' }; },
+  });
+  await assert.rejects(processor.processOne(), /private-text command validation/);
+  assert.equal(called, false);
+  assert.equal(inbox.state.status, 'rejected');
+});
+
 test('adapter receives only the normalized private-text envelope', async () => {
   const tampered = structuredClone(sample);
   tampered.update.privateMetadata = 'must-not-forward';
