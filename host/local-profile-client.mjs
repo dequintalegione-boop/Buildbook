@@ -54,17 +54,22 @@ export function createLocalProfileClient({
         },
       });
     } catch (error) {
+      clearTimeout(timeout);
       const wrapped = new Error(controller.signal.aborted
         ? 'Локальный сервис Buildbook не ответил за отведённое время.'
         : 'Локальный сервис Buildbook недоступен. Проверьте, запущен ли он.');
       wrapped.cause = error;
       wrapped.code = controller.signal.aborted ? 'BUILD_BOOK_LOCAL_API_TIMEOUT' : 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
       throw wrapped;
-    } finally {
-      clearTimeout(timeout);
     }
     let payload = null;
     try { payload = await response.json(); } catch (_) {}
+    clearTimeout(timeout);
+    if (controller.signal.aborted) {
+      const error = new Error('Локальный сервис Buildbook не ответил за отведённое время.');
+      error.code = 'BUILD_BOOK_LOCAL_API_TIMEOUT';
+      throw error;
+    }
     if (!response.ok) {
       const message = payload && typeof payload.error === 'string' ? payload.error : 'Локальный API вернул ошибку HTTP ' + response.status + '.';
       const error = new Error(message);
