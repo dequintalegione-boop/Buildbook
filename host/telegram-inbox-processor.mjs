@@ -8,12 +8,14 @@ function validateInboxCommand(item) {
   const update = item?.update;
   const message = update?.message;
   const userId = String(item?.userId ?? '');
+  const botId = String(item?.botId ?? '');
+  const key = String(item?.key ?? '');
   if (!/^\d{1,16}$/.test(userId)
-    || !/^\d{1,16}$/.test(String(item?.botId ?? ''))
-    || Number(item.botId) <= 0 || !Number.isSafeInteger(Number(item.botId))
-    || !/^\d{1,16}:\d+$/.test(String(item?.key ?? ''))
-    || String(item.key).split(':')[0] !== String(item?.botId ?? '')
-    || Number(String(item.key).split(':')[1]) !== item?.updateId
+    || !/^\d{1,16}$/.test(botId)
+    || Number(botId) <= 0 || !Number.isSafeInteger(Number(botId))
+    || !/^\d{1,16}:\d+$/.test(key)
+    || key.split(':')[0] !== botId
+    || Number(key.split(':')[1]) !== item?.updateId
     || !Number.isSafeInteger(item?.updateId) || item.updateId < 0
     || update?.update_id !== item.updateId
     || !message
@@ -29,6 +31,18 @@ function validateInboxCommand(item) {
     error.code = 'INVALID_TELEGRAM_INBOX_ITEM';
     throw error;
   }
+
+  // Treat the durable file as untrusted too. Rebuild the narrow envelope
+  // instead of forwarding arbitrary extra fields from a tampered record.
+  return {
+    update_id: item.updateId,
+    message: {
+      message_id: message.message_id,
+      from: { id: Number(userId) },
+      chat: { id: Number(userId), type: 'private' },
+      text: message.text,
+    },
+  };
 }
 
 export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
@@ -53,13 +67,13 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
 
       try {
         try {
-          validateInboxCommand(item);
+          item.validatedUpdate = validateInboxCommand(item);
         } catch (error) {
           await inbox.markRejected(item.id, error?.message || 'Invalid inbox item');
           throw error;
         }
         const result = await applyUpdate({
-          update: structuredClone(item.update),
+          update: structuredClone(item.validatedUpdate),
           userId: item.userId,
           idempotencyKey: item.key,
           inboxItemId: item.id,
