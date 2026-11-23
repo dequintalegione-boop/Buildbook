@@ -3,13 +3,17 @@
  * Raw Telegram objects are untrusted input: persist a minimal, validated envelope
  * rather than forwarding arbitrary fields (attachments, entities, chat metadata).
  */
-const USER_ID = /^\d{1,20}$/;
 const MAX_TEXT_LENGTH = 4096;
+const MAX_SAFE_TELEGRAM_ID = BigInt(Number.MAX_SAFE_INTEGER);
 
 function numericId(value) {
   if (typeof value !== 'number' && typeof value !== 'string') return null;
-  const normalized = String(value);
-  return USER_ID.test(normalized) ? normalized : null;
+  if (typeof value === 'number' && (!Number.isSafeInteger(value) || value <= 0)) return null;
+  const raw = String(value);
+  if (!/^\d{1,16}$/.test(raw)) return null;
+  const parsed = BigInt(raw);
+  if (parsed <= 0n || parsed > MAX_SAFE_TELEGRAM_ID) return null;
+  return parsed.toString();
 }
 
 function normalizeAllowlist(allowlist) {
