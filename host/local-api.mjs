@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { timingSafeEqual, createHash } from 'node:crypto';
 
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
+const SUPPORTED_PROFILE_SCHEMA_VERSION = 5;
 const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 function send(response, status, payload) {
@@ -231,7 +232,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const payload = envelope?.payload;
         if (!body || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
           || !envelope || envelope.format !== 'buildbook-profile-export' || envelope.version !== 1
-          || !Number.isSafeInteger(envelope.sourceSchemaVersion) || envelope.sourceSchemaVersion < 1
+          || envelope.sourceSchemaVersion !== SUPPORTED_PROFILE_SCHEMA_VERSION
           || typeof envelope.exportedAt !== 'string' || !Number.isFinite(Date.parse(envelope.exportedAt))
           || !payload || typeof payload !== 'object' || Array.isArray(payload)
           || !Object.hasOwn(payload, 'state') || !Object.hasOwn(payload, 'logs') || !Object.hasOwn(payload, 'photos')
