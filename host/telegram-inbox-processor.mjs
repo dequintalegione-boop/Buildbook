@@ -4,6 +4,26 @@
  * that commits its domain effect. The inbox alone cannot make external writes
  * exactly-once.
  */
+function validateInboxCommand(item) {
+  const update = item?.update;
+  const message = update?.message;
+  const userId = String(item?.userId ?? '');
+  if (!/^\d{1,16}$/.test(userId)
+    || !Number.isSafeInteger(item?.updateId)
+    || update?.update_id !== item.updateId
+    || !message
+    || !Number.isSafeInteger(message.message_id)
+    || message.message_id < 0
+    || String(message.from?.id ?? '') !== userId
+    || String(message.chat?.id ?? '') !== userId
+    || message.chat?.type !== 'private'
+    || typeof message.text !== 'string'
+    || message.text.length === 0
+    || message.text.length > 4096) {
+    throw new TypeError('Telegram inbox item failed the private-text command validation.');
+  }
+}
+
 export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
   if (!inbox || typeof inbox.nextPending !== 'function'
     || typeof inbox.markProcessing !== 'function'
@@ -24,6 +44,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
       if (!await inbox.markProcessing(item.id)) return { processed: false, reason: 'claimed_elsewhere' };
 
       try {
+        validateInboxCommand(item);
         const result = await applyUpdate({
           update: structuredClone(item.update),
           userId: item.userId,
