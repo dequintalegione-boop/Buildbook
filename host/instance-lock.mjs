@@ -1,4 +1,4 @@
-import { mkdir, rmdir, writeFile } from 'node:fs/promises';
+import { mkdir, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 /**
@@ -42,8 +42,7 @@ export async function acquireInstanceLock(lockPath, { pid = process.pid } = {}) 
     released = true;
     // Remove only the owner marker and then the directory. Never recursively
     // delete a path that could have been replaced by another process.
-    const { unlink } = await import('node:fs/promises');
-    await unlink(resolve(path, 'owner.json'));
+        await unlink(resolve(path, 'owner.json'));
     await rmdir(path);
   };
 }
