@@ -20,7 +20,7 @@ This checklist tracks the next implementation batch for `feature/telegram-local-
 14. Add a status endpoint that exposes only bounded, sanitized service state.
 15. Add local UI client support for status and setup, without embedding the bot token in the app bundle.
 16. Define safe first-run token provisioning and protected local secret storage.
-17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling.
+17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling. Design contract: [TELEGRAM_PROFILE_MIGRATION.md](./TELEGRAM_PROFILE_MIGRATION.md).
 18. Keep browser-only and standalone modes functional when the local host is not configured.
 19. Add documented Windows launch/stop and recovery instructions; defer OS autostart until the lifecycle is verified.
 20. Perform a code review of the full data path, then run the existing and new tests only after the user authorizes testing.
