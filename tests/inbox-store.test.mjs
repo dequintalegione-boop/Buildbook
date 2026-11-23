@@ -51,14 +51,21 @@ test('interrupted processing is recovered after service restart', async () => {
   });
 });
 
-test('completed updates are not returned for processing again', async () => {
+test('completed updates purge raw payload but retain dedupe metadata', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 9, userId: '1001', update: { message: 'expense' } });
+    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 9, userId: '1001', update: { message: 'expense', caption: 'private note' } });
     await inbox.markProcessing(item.id);
     await inbox.markCompleted(item.id, 'tx-123');
+
     assert.equal(await inbox.nextPending(), null);
     assert.equal((await inbox.stats()).completed, 1);
+
+    const reopened = createInboxStore(file);
+    const duplicate = await reopened.enqueue({ botId: 'bot-1', updateId: 9, userId: '1001', update: { message: 'expense' } });
+    assert.equal(duplicate.inserted, false);
+    assert.equal(duplicate.item.update, null);
+    assert.equal(duplicate.item.operationId, 'tx-123');
   });
 });
 
