@@ -106,6 +106,42 @@ test('rejects invalid or oversized profiles before sending a request', async () 
   assert.equal(calls, 0);
 });
 
+test('posts a transfer envelope with the target revision and validates the import result', async () => {
+  const envelope = {
+    format: 'buildbook-profile-export',
+    version: 1,
+    sourceSchemaVersion: 5,
+    exportedAt: '2026-11-23T10:00:00.000Z',
+    payload: { state: {}, logs: [], photos: {} },
+    sha256: 'a'.repeat(64),
+  };
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: fakeFetch(async (url, options) => {
+      assert.equal(url, 'http://127.0.0.1:43127/api/profile/import');
+      assert.equal(options.method, 'POST');
+      assert.deepEqual(JSON.parse(options.body), { envelope, expectedRevision: 0 });
+      return { status: 200, body: { revision: 1, imported: true } };
+    }),
+  });
+  assert.equal(await client.importProfile(envelope, 0), 1);
+});
+
+test('rejects malformed import results and oversized transfer requests', async () => {
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: fakeFetch(async () => ({ status: 200, body: { revision: 1, imported: false } })),
+  });
+  await assert.rejects(client.importProfile({}, 0), /некорректный результат импорта/);
+  let calls = 0;
+  const limited = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: async () => { calls += 1; throw new Error('must not be called'); },
+  });
+  await assert.rejects(limited.importProfile({ payload: { huge: 'x'.repeat(34 * 1024 * 1024) } }, 0), /34 MiB/);
+  assert.equal(calls, 0);
+});
+
 test('writes with optimistic revision and returns next revision', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
