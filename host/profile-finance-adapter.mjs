@@ -18,7 +18,7 @@ function validateTransaction(value) {
     || !Number.isFinite(Date.parse(value.date + 'T00:00:00Z'))
     || new Date(value.date + 'T00:00:00Z').toISOString().slice(0, 10) !== value.date
     || !Number.isFinite(value.amount) || value.amount <= 0 || value.amount > 1_000_000_000
-    || Math.round(value.amount * 100) !== value.amount * 100
+    || Math.abs(value.amount * 100 - Math.round(value.amount * 100)) > 1e-8
     || typeof value.desc !== 'string' || !value.desc.trim() || value.desc.length > 500
     || typeof value.cat !== 'string' || value.cat.length > 200
     || typeof value.grp !== 'string' || value.grp.length > 200
