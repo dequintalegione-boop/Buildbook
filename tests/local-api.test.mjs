@@ -329,6 +329,33 @@ test('rejects profile import with a modified payload or unsupported envelope', a
   assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
 });
 
+test('rejects extra import envelope fields and non-ISO dates before writing', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: {}, logs: [], photos: {} };
+  const envelope = makeImportEnvelope(payload);
+  const extraEnvelope = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: { ...envelope, hostToken: 'must-not-be-accepted' } }),
+  });
+  assert.equal(extraEnvelope.status, 400);
+
+  const invalidDate = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: { ...envelope, exportedAt: 'November 23, 2026' } }),
+  });
+  assert.equal(invalidDate.status, 400);
+
+  const extraPayload = await request(`${base}/api/profile/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope({ ...payload, extra: true }) }),
+  });
+  assert.equal(extraPayload.status, 400);
+  assert.deepEqual(await (await request(`${base}/api/profile`)).json(), { revision: 0, profile: null });
+});
+
 test('refuses normal import into a populated profile without changing it', async (t) => {
   const { base, request } = await fixture(t);
   await request(`${base}/api/profile`, {
