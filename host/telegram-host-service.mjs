@@ -12,10 +12,10 @@ import { buildTelegramFinanceTransactionFromUpdate } from './telegram-finance-co
 import { isAbsolute, resolve } from 'node:path';
 
 /**
- * Compose the Telegram host from validated host-only configuration and the
- * canonical Buildbook write adapter. This factory intentionally does not
- * invent a finance adapter: callers must provide the app's real idempotent
- * storage boundary before starting the service.
+ * Compose the Telegram host from validated host-only configuration and a
+ * canonical Buildbook write boundary. profileStore must be the same profile
+ * store used by the UI; passing a separate profile would create a second ledger.
+ * The injected applyUpdate path remains available for an existing domain adapter.
  */
 export function createTelegramHostService({
   config,
