@@ -230,20 +230,30 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const body = await readJson(request);
         const envelope = body?.envelope;
         const payload = envelope?.payload;
-        if (!body || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
-          || !envelope || envelope.format !== 'buildbook-profile-export' || envelope.version !== 1
-          || envelope.sourceSchemaVersion !== SUPPORTED_PROFILE_SCHEMA_VERSION
-          || typeof envelope.exportedAt !== 'string' || !Number.isFinite(Date.parse(envelope.exportedAt))
-          || !payload || typeof payload !== 'object' || Array.isArray(payload)
-          || !Object.hasOwn(payload, 'state') || !Object.hasOwn(payload, 'logs') || !Object.hasOwn(payload, 'photos')
-          || (payload.state !== null && (typeof payload.state !== 'object' || Array.isArray(payload.state)))
+        const hasExactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
+          && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
+        const validExportDate = typeof envelope?.exportedAt === 'string'
+          && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(envelope.exportedAt)
+          && Number.isFinite(Date.parse(envelope.exportedAt));
+        if (!hasExactKeys(body, ['expectedRevision', 'envelope'])
+          || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
+          || !hasExactKeys(envelope, ['format', 'version', 'sourceSchemaVersion', 'exportedAt', 'payload', 'sha256'])
+          || envelope.format !== 'buildbook-profile-export' || envelope.version !== 1
+          || envelope.sourceSchemaVersion !== SUPPORTED_PROFILE_SCHEMA_VERSION || !validExportDate
+          || !hasExactKeys(payload, ['state', 'logs', 'photos'])
+          || !payload.state || typeof payload.state !== 'object' || Array.isArray(payload.state)
           || !Array.isArray(payload.logs)
-          || (payload.photos === null || typeof payload.photos !== 'object' || Array.isArray(payload.photos))
+          || !payload.photos || typeof payload.photos !== 'object' || Array.isArray(payload.photos)
           || typeof envelope.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.sha256)) {
           send(response, 400, { error: 'Файл импорта имеет неподдерживаемый или некорректный формат.' });
           return;
         }
-        const digest = createHash('sha256').update(JSON.stringify(payload), 'utf8').digest('hex');
+        const serializedPayload = JSON.stringify(payload);
+        if (Buffer.byteLength(serializedPayload, 'utf8') > 32 * 1024 * 1024) {
+          send(response, 413, { error: 'Данные профиля превышают допустимые 32 MiB.' });
+          return;
+        }
+        const digest = createHash('sha256').update(serializedPayload, 'utf8').digest('hex');
         const suppliedDigest = Buffer.from(envelope.sha256, 'ascii');
         const expectedDigest = Buffer.from(digest, 'ascii');
         if (suppliedDigest.length !== expectedDigest.length || !timingSafeEqual(suppliedDigest, expectedDigest)) {
