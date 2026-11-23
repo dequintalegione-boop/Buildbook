@@ -41,6 +41,10 @@ export function readTelegramServiceConfig(env = process.env) {
     throw new TypeError('Telegram inbox and offset paths must be different files.');
   }
 
+  const retryBaseMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_BASE_MS', 1000, 100, 60000);
+  const retryMaxMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_MAX_MS', 60000, 100, 3600000);
+  if (retryMaxMs < retryBaseMs) throw new RangeError('BUILDBOOK_TELEGRAM_RETRY_MAX_MS must be at least the retry base.');
+
   return Object.freeze({
     botToken,
     botId: tokenMatch[1],
@@ -49,7 +53,7 @@ export function readTelegramServiceConfig(env = process.env) {
     offsetPath: resolve(offsetPath),
     timeoutSeconds: boundedInteger(env, 'BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS', 25, 0, 50),
     intervalMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_INTERVAL_MS', 1000, 0, 60000),
-    retryBaseMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_BASE_MS', 1000, 100, 60000),
-    retryMaxMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_MAX_MS', 60000, 100, 3600000),
+    retryBaseMs,
+    retryMaxMs,
   });
 }
