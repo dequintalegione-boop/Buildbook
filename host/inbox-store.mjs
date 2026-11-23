@@ -133,6 +133,19 @@ export function createInboxStore(filePath) {
       });
     },
 
+    async markRejected(id, errorMessage) {
+      return mutate(state => {
+        const item = state.items.find(entry => entry.id === id);
+        if (!item || item.status === 'completed') return false;
+        item.status = 'rejected';
+        item.lastError = String(errorMessage || 'Invalid inbox item').slice(0, 1000);
+        item.rejectedAt = new Date().toISOString();
+        item.update = null;
+        item.payloadPurgedAt = item.rejectedAt;
+        return true;
+      });
+    },
+
     async recoverInterrupted() {
       return mutate(state => {
         let recovered = 0;
@@ -148,7 +161,7 @@ export function createInboxStore(filePath) {
 
     async stats() {
       const state = await load();
-      const result = { total: state.items.length, pending: 0, processing: 0, completed: 0 };
+      const result = { total: state.items.length, pending: 0, processing: 0, completed: 0, rejected: 0 };
       for (const item of state.items) {
         if (Object.hasOwn(result, item.status)) result[item.status] += 1;
       }
