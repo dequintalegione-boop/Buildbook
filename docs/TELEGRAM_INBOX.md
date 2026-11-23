@@ -1,11 +1,11 @@
 # Durable Telegram inbox
 
-The first implementation slice is `host/inbox-store.mjs`. It is a file-backed inbox for the future local host process, not a Telegram client and not a financial ledger.
+The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled by `host/telegram-update-gate.mjs`. These are host-side modules, not a Telegram polling client or a financial ledger.
 
 ## Current behavior
 
 - Persists received updates to a local JSON file using write-to-temp then rename.
-- Deduplicates by bot identity and Telegram update ID.
+- `createTelegramUpdateGate` validates numeric allowlist IDs and checks the sender before enqueuing; rejected updates are not persisted.\n- Deduplicates by bot identity and Telegram update ID.
 - Tracks pending, processing and completed states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
 - Recovers interrupted processing to pending after a host restart.
 - Exposes counts for the future Telegram status screen.
