@@ -8,6 +8,7 @@ import { createTelegramService } from './telegram-service.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramStatus } from './telegram-status.mjs';
 import { createProfileFinanceAdapter } from './profile-finance-adapter.mjs';
+import { buildTelegramFinanceTransactionFromUpdate } from './telegram-finance-command.mjs';
 import { isAbsolute, resolve } from 'node:path';
 
 /**
@@ -27,16 +28,22 @@ export function createTelegramHostService({
 } = {}) {
   if (!config || typeof config !== 'object') throw new TypeError('Validated Telegram host config is required.');
   const hasInjectedAdapter = typeof applyUpdate === 'function';
-  const hasProfileAdapter = profileStore && typeof buildTransaction === 'function';
-  if (hasInjectedAdapter === Boolean(hasProfileAdapter)) {
-    throw new TypeError('Provide exactly one of applyUpdate or both profileStore and buildTransaction.');
+  const hasProfileAdapter = Boolean(profileStore);
+  if (hasInjectedAdapter === hasProfileAdapter) {
+    throw new TypeError('Provide exactly one of applyUpdate or profileStore.');
+  }
+  if (buildTransaction !== undefined && typeof buildTransaction !== 'function') {
+    throw new TypeError('buildTransaction must be a function when supplied.');
   }
   if (hasProfileAdapter && (typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function')) {
     throw new TypeError('profileStore must expose read() and write() methods.');
   }
   const canonicalApplyUpdate = hasInjectedAdapter
     ? applyUpdate
-    : createProfileFinanceAdapter({ profileStore, buildTransaction });
+    : createProfileFinanceAdapter({
+      profileStore,
+      buildTransaction: buildTransaction || buildTelegramFinanceTransactionFromUpdate,
+    });
   if (typeof config.botToken !== 'string' || !config.botToken
     || typeof config.botId !== 'string' || !config.botId
     || !Array.isArray(config.allowedUserIds)
