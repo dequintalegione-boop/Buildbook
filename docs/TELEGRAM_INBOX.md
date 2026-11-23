@@ -5,11 +5,17 @@ The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled 
 ## Current behavior
 
 - Persists received updates to a local JSON file using write-to-temp then rename.
-- `createTelegramUpdateGate` validates numeric allowlist IDs and checks the sender before enqueuing; rejected updates are not persisted.\n- The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.\n- The processor marks an item complete only after the domain adapter succeeds, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must enforce that key atomically with its domain write. The inbox cannot itself guarantee exactly-once financial writes.\n- Deduplicates by bot identity and Telegram update ID.
+- The gate checks the numeric sender ID against the configured allowlist before enqueuing. Unauthorized users are not persisted.
+- Only private text messages are accepted; the private chat ID must equal the allowlisted sender ID. Group chats, callback queries, inline queries, edited messages, media-only messages and oversized text are rejected.
+- The gate persists a minimal envelope containing the update/message IDs, sender/chat IDs, private-chat type and text. It does not copy arbitrary Telegram fields, entities or attachment metadata into the inbox.
+- Telegram IDs are checked for safe integer representation before being normalized; text is limited to 4096 characters.
+- The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.
+- The processor marks an item complete only after the domain adapter succeeds, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must enforce that key atomically with its domain write. The inbox cannot itself guarantee exactly-once financial writes.
+- Deduplicates by bot identity and Telegram update ID.
 - Tracks pending, processing and completed states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
 - Recovers interrupted processing to pending after a host restart.
 - Exposes counts for the future Telegram status screen.
-- Does not itself acknowledge Telegram polling offsets or write financial records. The future receiver must enqueue durably before advancing its offset, and the processor must mark an item complete only after the canonical Buildbook storage adapter commits the operation.
+- Does not itself write financial records. The processor must mark an item complete only after the canonical Buildbook storage adapter commits the operation.
 
 ## Important boundaries
 
@@ -21,14 +27,13 @@ The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled 
 
 ## Tests
 
-Run with Node.js 22:
+Run the inbox and Telegram tests with Node.js 22:
 
 ```sh
-node --test tests/inbox-store.test.mjs
+node --test tests/inbox-store.test.mjs tests/telegram-update-gate.test.mjs tests/telegram-poller.test.mjs
 ```
 
-The inbox test suite covers duplicate delivery, persistence across store instances, retry after failure, recovery after interruption, completed-item exclusion and numeric ID validation. The Telegram gate and poller suites cover allowlist filtering and durable checkpoint behavior. The processor suite covers completion, retry, and stable idempotency-key delivery.
-
+The gate tests cover allowlist filtering, private-chat enforcement, payload minimization, media/group rejection and malformed update IDs. Poller tests cover durable checkpoint behavior.
 
 ## Runtime coordinator
 
@@ -41,7 +46,6 @@ node --test tests/*.test.mjs
 ```
 
 The service lifecycle tests also verify that stop cancels an interval wait promptly, the service can restart after stopping, and repeated start calls share one loop. The CI host-test job runs this same command.
-
 
 ## Host configuration
 
