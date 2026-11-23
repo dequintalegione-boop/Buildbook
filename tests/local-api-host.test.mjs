@@ -22,6 +22,25 @@ async function fixture(t, extra = {}) {
   return host;
 }
 
+test('exclusive profile lock prevents a second API host from sharing the canonical file', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-lock-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const env = {
+    BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
+    BUILDBOOK_LOCAL_API_TOKEN: token,
+    BUILDBOOK_LOCAL_API_PORT: '0',
+  };
+  const first = createLocalApiHost({ env });
+  const second = createLocalApiHost({ env });
+  t.after(() => first.stop());
+  t.after(() => second.stop());
+  await first.start();
+  await assert.rejects(second.start(), error => error.code === 'BUILDBOOK_INSTANCE_LOCKED');
+  await first.stop();
+  const address = await second.start();
+  assert.ok(address.port > 0);
+});
+
 test('starts a loopback API and serves the configured profile store', async (t) => {
   const host = await fixture(t);
   const address = await host.start();
