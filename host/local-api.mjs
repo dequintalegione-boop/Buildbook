@@ -76,7 +76,8 @@ function requestHostAllowed(request) {
   const suffix = rawHost.startsWith('[')
     ? rawHost.slice(rawHost.indexOf(']') + 1)
     : (rawHost.includes(':') ? rawHost.slice(rawHost.indexOf(':')) : '');
-  const validPort = suffix === '' || /^:\d{1,5}$/.test(suffix);
+  const portText = suffix.slice(1);
+  const validPort = suffix === '' || (/^:\d{1,5}$/.test(suffix) && Number(portText) <= 65535);
   return validPort && ALLOWED_HOSTS.has(host);
 }
 
