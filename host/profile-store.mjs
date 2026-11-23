@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile, unlink, lstat } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile, unlink, lstat, open } from 'node:fs/promises';
 import { dirname, basename, join, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -26,12 +26,24 @@ export function createProfileStore(filePath) {
 
   async function readDisk() {
     try {
-      const info = await lstat(target);
-      if (info.isSymbolicLink() || !info.isFile()) {
+      const pathInfo = await lstat(target);
+      if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
         throw new Error('Файл профиля должен быть обычным файлом, не ссылкой или специальным объектом.');
       }
-      if (info.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
-      const text = await readFile(target, 'utf8');
+      const handle = await open(target, 'r');
+      let text;
+      try {
+        const openedInfo = await handle.stat();
+        // Compare the opened object to the path checked above. This closes the
+        // lstat/read path-swap window on platforms without O_NOFOLLOW.
+        if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+          throw new Error('Файл профиля был заменён во время чтения; операция отклонена.');
+        }
+        if (openedInfo.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
+        text = await handle.readFile({ encoding: 'utf8' });
+      } finally {
+        await handle.close();
+      }
       const parsed = JSON.parse(text);
       if (!parsed || parsed.version !== 1 || !Number.isSafeInteger(parsed.revision)
         || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object' || Array.isArray(parsed.profile)) {
