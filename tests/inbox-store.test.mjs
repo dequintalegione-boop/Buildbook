@@ -69,6 +69,16 @@ test('completed updates purge raw payload but retain dedupe metadata', async () 
   });
 });
 
+test('cannot mark an inbox item completed without a committed operation ID', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 11, userId: '1001', update: { message: 'income' } });
+    await inbox.markProcessing(item.id);
+    await assert.rejects(inbox.markCompleted(item.id, null), /valid committed Buildbook operation ID/);
+    assert.equal((await inbox.stats()).processing, 1);
+  });
+});
+
 test('invalid sender IDs and update IDs are rejected', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
