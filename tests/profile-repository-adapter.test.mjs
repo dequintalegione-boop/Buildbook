@@ -53,13 +53,15 @@ test('preserves typed-array byte range instead of serializing its entire backing
 
 test('round-trips marker-shaped application data and own __proto__ keys safely', async () => {
   const markerCollision = JSON.parse('{"__buildbookBinaryV1":true,"encoding":"base64","data":"AQI="}');
+  const escapedTagCollision = JSON.parse('{"__buildbookBinaryV1":true,"encoding":"escaped-object","entries":"ordinary user value"}');
   const protoKey = JSON.parse('{"__proto__":{"polluted":true}}');
   const client = fakeClient();
   const adapter = createProfileRepositoryAdapter(client);
-  await adapter.writeProfile({ markerCollision, protoKey }, [], {}, 0);
+  await adapter.writeProfile({ markerCollision, escapedTagCollision, protoKey }, [], {}, 0);
   const loaded = await adapter.readProfile();
 
   assert.deepEqual(loaded.state.markerCollision, markerCollision);
+  assert.deepEqual(loaded.state.escapedTagCollision, escapedTagCollision);
   assert.deepEqual(loaded.state.protoKey, protoKey);
   assert.equal(Object.getPrototypeOf(loaded.state.protoKey), Object.prototype);
   assert.equal(Object.hasOwn(loaded.state.protoKey, '__proto__'), true);
