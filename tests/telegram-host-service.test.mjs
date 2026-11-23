@@ -44,3 +44,17 @@ test('host factory composes service and durable inbox without starting network p
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('host factory rejects overlapping storage and lock paths', () => {
+  const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
+  try {
+    const cfg = config(root);
+    cfg.instanceLockPath = cfg.inboxPath;
+    assert.throws(() => createTelegramHostService({
+      config: cfg,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /must be distinct/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
