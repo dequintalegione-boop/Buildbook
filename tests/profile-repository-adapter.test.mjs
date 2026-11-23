@@ -114,6 +114,7 @@ test('refuses stale UI saves before writing and preserves host-owned metadata', 
     async writeProfile(next, expectedRevision) {
       writes++;
       assert.equal(expectedRevision, revision);
+      Object.assign(profile, next);
       return ++revision;
     },
   };
