@@ -316,6 +316,24 @@ function makeImportEnvelope(payload, sourceSchemaVersion = 5) {
   };
 }
 
+test('accepts UTF-8 JSON charset for profile import and rejects other charsets', async (t) => {
+  const { base, request } = await fixture(t);
+  const payload = { state: {}, logs: [], photos: {} };
+  const accepted = await request(base + '/api/profile/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(accepted.status, 200);
+
+  const rejected = await request(base + '/api/profile/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json; charset=iso-8859-1' },
+    body: JSON.stringify({ expectedRevision: 1, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(rejected.status, 415);
+});
+
 test('imports a valid profile export into an empty canonical profile', async (t) => {
   const { base, request } = await fixture(t);
   const payload = { state: { tx: [{ id: 'from-backup', amount: 125 }] }, logs: [], photos: {} };
