@@ -34,7 +34,15 @@
     if (typeof input.sha256 !== 'string' || !HEX_SHA256.test(input.sha256)) {
       throw new Error('Контрольная сумма файла имеет неверный формат.');
     }
+    const envelopeKeys = ['format', 'version', 'sourceSchemaVersion', 'exportedAt', 'payload', 'sha256'];
+    if (Object.keys(input).some(key => !envelopeKeys.includes(key))) {
+      throw new Error('Файл содержит неизвестные поля конверта.');
+    }
     record(input.payload, 'Данные профиля');
+    const payloadKeys = ['state', 'logs', 'photos'];
+    if (Object.keys(input.payload).some(key => !payloadKeys.includes(key))) {
+      throw new Error('Данные профиля содержат неподдерживаемые поля.');
+    }
     record(input.payload.state, 'Состояние профиля');
     if (!Array.isArray(input.payload.logs)) throw new TypeError('Журнал профиля должен быть массивом.');
     record(input.payload.photos, 'Фотографии профиля');
