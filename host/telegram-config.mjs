@@ -41,7 +41,7 @@ export function readTelegramServiceConfig(env = process.env) {
   const offsetPath = requiredString(env, 'BUILDBOOK_TELEGRAM_OFFSET_PATH');
   const instanceLockPath = requiredString(env, 'BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH');
   if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath) || !isAbsolute(instanceLockPath)) {
-    throw new TypeError('Telegram inbox and offset paths must be absolute.');
+    throw new TypeError('Telegram inbox, offset and instance-lock paths must be absolute.');
   }
   const normalizedPaths = [resolve(inboxPath), resolve(offsetPath), resolve(instanceLockPath)].map(path => path.toLowerCase());
   if (new Set(normalizedPaths).size !== normalizedPaths.length) {
