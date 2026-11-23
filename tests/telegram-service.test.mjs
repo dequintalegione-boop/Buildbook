@@ -94,3 +94,32 @@ test('observer callback errors do not cause a successful poll to be retried', as
   assert.equal(cycles, 2);
   assert.equal(observerErrors, 2);
 });
+
+test('does not start runtime when instance lock acquisition fails', async () => {
+  let cycles = 0;
+  const service = createTelegramService({
+    runtime: { async runOnce() { cycles += 1; return {}; } },
+    acquireInstanceLock() {
+      const error = new Error('already running');
+      error.code = 'BUILDBOOK_INSTANCE_LOCKED';
+      throw error;
+    },
+  });
+  assert.throws(() => service.start(), /already running/);
+  assert.equal(service.running, false);
+  assert.equal(cycles, 0);
+});
+
+test('releases acquired instance lock after a clean stop', async () => {
+  let released = 0;
+  const service = createTelegramService({
+    runtime: { async runOnce() { return {}; } },
+    intervalMs: 60_000,
+    acquireInstanceLock() { return () => { released += 1; }; },
+  });
+  const run = service.start();
+  await new Promise(resolve => setImmediate(resolve));
+  await service.stop();
+  await run;
+  assert.equal(released, 1);
+});
