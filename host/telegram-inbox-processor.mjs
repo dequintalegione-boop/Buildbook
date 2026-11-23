@@ -9,10 +9,12 @@ function validateInboxCommand(item) {
   const message = update?.message;
   const userId = String(item?.userId ?? '');
   if (!/^\d{1,16}$/.test(userId)
+    || !/^\d{1,16}$/.test(String(item?.botId ?? ''))
+    || Number(item.botId) <= 0 || !Number.isSafeInteger(Number(item.botId))
     || !/^\d{1,16}:\d+$/.test(String(item?.key ?? ''))
     || String(item.key).split(':')[0] !== String(item?.botId ?? '')
     || Number(String(item.key).split(':')[1]) !== item?.updateId
-    || !Number.isSafeInteger(item?.updateId)
+    || !Number.isSafeInteger(item?.updateId) || item.updateId < 0
     || update?.update_id !== item.updateId
     || !message
     || !Number.isSafeInteger(message.message_id)
