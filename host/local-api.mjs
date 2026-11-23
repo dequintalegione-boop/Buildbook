@@ -180,7 +180,10 @@ export function createLocalApiServer({ profileStore, accessToken, host = '127.0.
   // Bound slow-client resource use even when the caller never finishes a request.
   server.headersTimeout = 10_000;
   server.requestTimeout = 30_000;
+  server.timeout = 30_000;
   server.keepAliveTimeout = 5_000;
+  server.maxConnections = 64;
+  server.maxRequestsPerSocket = 100;
 
   return Object.freeze({
     server,
