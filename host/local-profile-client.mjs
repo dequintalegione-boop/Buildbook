@@ -96,7 +96,7 @@ export function createLocalProfileClient({
         throw new TypeError('Профиль должен содержать только сериализуемые JSON-данные.');
       }
       if (typeof body !== 'string' || new TextEncoder().encode(body).byteLength > MAX_PROFILE_REQUEST_BYTES) {
-        throw new RangeError('Размер запроса профиля превышает допустимые 8 MiB.');
+        throw new RangeError('Размер запроса профиля превышает допустимые 34 MiB.');
       }
       const result = await request('/api/profile', {
         method: 'PUT',
