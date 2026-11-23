@@ -1,5 +1,6 @@
 const DEFAULT_BASE_URL = 'http://127.0.0.1:43127';
 const MAX_PROFILE_REQUEST_BYTES = 8 * 1024 * 1024;
+const MAX_IMPORT_REQUEST_BYTES = 34 * 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 function normalizeBaseUrl(value) {
@@ -83,6 +84,27 @@ export function createLocalProfileClient({
         throw new Error('Локальный сервис вернул некорректный профиль.');
       }
       return result;
+    },
+    async importProfile(envelope, expectedRevision) {
+      if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+        throw new TypeError('Для импорта нужен проверенный конверт файла переноса.');
+      }
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        throw new Error('Для импорта нужна корректная ревизия целевого профиля.');
+      }
+      let body;
+      try { body = JSON.stringify({ envelope, expectedRevision }); } catch {
+        throw new TypeError('Файл переноса должен содержать только сериализуемые JSON-данные.');
+      }
+      if (typeof body !== 'string' || new TextEncoder().encode(body).byteLength > MAX_IMPORT_REQUEST_BYTES) {
+        throw new RangeError('Размер запроса импорта превышает допустимые 34 MiB.');
+      }
+      const result = await request('/api/profile/import', { method: 'POST', body });
+      if (!result || result.imported !== true || !Number.isSafeInteger(result.revision)
+        || result.revision !== expectedRevision + 1) {
+        throw new Error('Локальный сервис вернул некорректный результат импорта.');
+      }
+      return result.revision;
     },
     async writeProfile(profile, expectedRevision) {
       if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
