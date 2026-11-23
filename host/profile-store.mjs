@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, writeFile, unlink } from 'node:fs/promises';
-import { dirname, basename, join } from 'node:path';
+import { mkdir, readFile, rename, writeFile, unlink, stat } from 'node:fs/promises';
+import { dirname, basename, join, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
@@ -14,7 +14,8 @@ export function createProfileStore(filePath) {
     throw new TypeError('Не задан путь к файлу профиля.');
   }
 
-  const target = filePath;
+  if (!isAbsolute(filePath)) throw new TypeError('Путь к файлу профиля должен быть абсолютным.');
+  const target = resolve(filePath);
   let queue = Promise.resolve();
 
   const serialize = (operation) => {
@@ -25,6 +26,8 @@ export function createProfileStore(filePath) {
 
   async function readDisk() {
     try {
+      const info = await stat(target);
+      if (info.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
       const text = await readFile(target, 'utf8');
       const parsed = JSON.parse(text);
       if (!parsed || parsed.version !== 1 || !Number.isSafeInteger(parsed.revision)
