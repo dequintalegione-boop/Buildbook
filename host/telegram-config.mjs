@@ -24,7 +24,8 @@ function boundedInteger(env, name, fallback, min, max) {
 export function readTelegramServiceConfig(env = process.env) {
   const botToken = requiredString(env, 'BUILDBOOK_TELEGRAM_BOT_TOKEN');
   const tokenMatch = /^(\d+):([A-Za-z0-9_-]+)$/.exec(botToken);
-  if (!tokenMatch || tokenMatch[1].length > 16 || !Number.isSafeInteger(Number(tokenMatch[1]))) {
+  if (!tokenMatch || botToken.length > 256 || tokenMatch[1].length > 16
+    || !Number.isSafeInteger(Number(tokenMatch[1])) || Number(tokenMatch[1]) <= 0) {
     throw new TypeError('BUILDBOOK_TELEGRAM_BOT_TOKEN has an invalid format.');
   }
 
