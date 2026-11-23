@@ -1,9 +1,20 @@
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramHostService } from './telegram-host-service.mjs';
 import { readTelegramServiceConfig } from './telegram-config.mjs';
+
+function parsePort(env) {
+  const raw = env.BUILDBOOK_LOCAL_API_PORT;
+  if (raw == null || raw === '') return 43127;
+  if (!/^\\d+$/.test(String(raw))) throw new TypeError('BUILDBOOK_LOCAL_API_PORT must be an integer.');
+  const port = Number(raw);
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65535) {
+    throw new RangeError('BUILDBOOK_LOCAL_API_PORT must be between 0 and 65535.');
+  }
+  return port;
+}
 
 function required(env, key) {
   const value = String(env[key] ?? '').trim();
@@ -18,18 +29,27 @@ function required(env, key) {
  */
 export function createBuildbookLocalHost({ env = process.env, fetchImpl = globalThis.fetch, onError = () => {} } = {}) {
   const profilePath = required(env, 'BUILDBOOK_PROFILE_PATH');
-  const profileLockPath = resolve(String(env.BUILDBOOK_PROFILE_LOCK_PATH || profilePath + '.api-lock'));
+  if (!isAbsolute(profilePath)) throw new TypeError('BUILDBOOK_PROFILE_PATH must be an absolute path.');
+  const profileLockRaw = String(env.BUILDBOOK_PROFILE_LOCK_PATH || profilePath + '.api-lock').trim();
+  if (!isAbsolute(profileLockRaw)) throw new TypeError('BUILDBOOK_PROFILE_LOCK_PATH must be an absolute path.');
+  const profileLockPath = resolve(profileLockRaw);
+  const normalizedProfilePaths = new Set([resolve(profilePath), profileLockPath].map(path => path.toLowerCase()));
+  if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
-    port: env.BUILDBOOK_LOCAL_API_PORT == null || env.BUILDBOOK_LOCAL_API_PORT === ''
-      ? 43127
-      : Number(env.BUILDBOOK_LOCAL_API_PORT),
+    port: parsePort(env),
   });
+  const telegramConfig = readTelegramServiceConfig(env);
+  for (const path of [telegramConfig.inboxPath, telegramConfig.offsetPath, telegramConfig.instanceLockPath]) {
+    if (normalizedProfilePaths.has(resolve(path).toLowerCase())) {
+      throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
+    }
+  }
   const telegram = createTelegramHostService({
-    config: readTelegramServiceConfig(env),
+    config: telegramConfig,
     profileStore,
     fetchImpl,
     onError,
@@ -73,14 +93,25 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     if (stopPromise) return stopPromise;
     stopPromise = (async () => {
       if (startPromise) await startPromise.catch(() => {});
-      await telegram.service.stop();
-      telegramLoop = null;
-      await api.close();
-      address = null;
-      if (releaseProfileLock) {
-        releaseProfileLock();
-        releaseProfileLock = null;
+      let stopError = null;
+      try {
+        await telegram.service.stop();
+      } catch (error) {
+        stopError = error;
       }
+      telegramLoop = null;
+      try {
+        await api.close();
+      } catch (error) {
+        stopError ||= error;
+      } finally {
+        address = null;
+        if (releaseProfileLock) {
+          try { releaseProfileLock(); } catch (error) { stopError ||= error; }
+          releaseProfileLock = null;
+        }
+      }
+      if (stopError) throw stopError;
     })().finally(() => { stopPromise = null; });
     return stopPromise;
   }
