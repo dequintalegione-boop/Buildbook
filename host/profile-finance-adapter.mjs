@@ -20,10 +20,10 @@ function validateTransaction(value) {
     || !Number.isFinite(value.amount) || value.amount <= 0 || value.amount > 1_000_000_000
     || Math.abs(value.amount * 100 - Math.round(value.amount * 100)) > 1e-8
     || typeof value.desc !== 'string' || !value.desc.trim() || value.desc.length > 500
-    || typeof value.cat !== 'string' || value.cat.length > 200
-    || typeof value.grp !== 'string' || value.grp.length > 200
+    || typeof value.cat !== 'string' || !value.cat.trim() || value.cat.length > 200
+    || typeof value.grp !== 'string' || !value.grp.trim() || value.grp.length > 200
     || !(value.qty === undefined || value.qty === null || Number.isFinite(value.qty))
-    || !(value.acc === undefined || value.acc === null || typeof value.acc === 'string')
+    || typeof value.acc !== 'string' || !value.acc.trim() || value.acc.length > 200
     || !(value.note === undefined || value.note === null || typeof value.note === 'string' && value.note.length <= 2000)) {
     const error = new TypeError('Telegram adapter produced an invalid Buildbook transaction.');
     error.code = 'INVALID_BUILD_BOOK_TRANSACTION';
@@ -102,7 +102,10 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
       throw error;
     }
 
-    const transaction = await buildTransaction(cloneJson(update));
+    const transaction = await buildTransaction(cloneJson(update), {
+      profile: cloneJson(profile),
+      idempotencyKey,
+    });
     validateTransaction(transaction);
     const operationId = typeof transaction.id === 'string' && transaction.id.trim()
       ? transaction.id
