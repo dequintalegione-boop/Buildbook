@@ -25,8 +25,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run host storage tests
-        run: node --test tests/inbox-store.test.mjs tests/profile-store.test.mjs
+      - name: Run host storage and API tests
+        run: node --test tests/inbox-store.test.mjs tests/profile-store.test.mjs tests/local-api.test.mjs
 
   browser-tests:
     name: Buildbook ${{ matrix.app }} / ${{ matrix.browser }} suite
