@@ -1,0 +1,55 @@
+import { isAbsolute, resolve } from 'node:path';
+
+function requiredString(env, name) {
+  const value = String(env[name] ?? '').trim();
+  if (!value) throw new TypeError(name + ' is required.');
+  return value;
+}
+
+function boundedInteger(env, name, fallback, min, max) {
+  const raw = env[name];
+  if (raw == null || raw === '') return fallback;
+  if (!/^\d+$/.test(String(raw))) throw new TypeError(name + ' must be an integer.');
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new RangeError(name + ' must be between ' + min + ' and ' + max + '.');
+  }
+  return value;
+}
+
+/**
+ * Reads host-only Telegram settings without logging or exposing the bot token.
+ * Paths must be explicitly configured so inbox files do not land in the repo.
+ */
+export function readTelegramServiceConfig(env = process.env) {
+  const botToken = requiredString(env, 'BUILDBOOK_TELEGRAM_BOT_TOKEN');
+  const tokenMatch = /^(\d+):([A-Za-z0-9_-]+)$/.exec(botToken);
+  if (!tokenMatch) throw new TypeError('BUILDBOOK_TELEGRAM_BOT_TOKEN has an invalid format.');
+
+  const allowlistRaw = requiredString(env, 'BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS');
+  const allowedUserIds = [...new Set(allowlistRaw.split(',').map(value => value.trim()))];
+  if (!allowedUserIds.length || allowedUserIds.some(value => !/^\d+$/.test(value))) {
+    throw new TypeError('BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS must be comma-separated numeric IDs.');
+  }
+
+  const inboxPath = requiredString(env, 'BUILDBOOK_TELEGRAM_INBOX_PATH');
+  const offsetPath = requiredString(env, 'BUILDBOOK_TELEGRAM_OFFSET_PATH');
+  if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath)) {
+    throw new TypeError('Telegram inbox and offset paths must be absolute.');
+  }
+  if (resolve(inboxPath) === resolve(offsetPath)) {
+    throw new TypeError('Telegram inbox and offset paths must be different files.');
+  }
+
+  return Object.freeze({
+    botToken,
+    botId: tokenMatch[1],
+    allowedUserIds: Object.freeze(allowedUserIds),
+    inboxPath: resolve(inboxPath),
+    offsetPath: resolve(offsetPath),
+    timeoutSeconds: boundedInteger(env, 'BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS', 25, 0, 50),
+    intervalMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_INTERVAL_MS', 1000, 0, 60000),
+    retryBaseMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_BASE_MS', 1000, 100, 60000),
+    retryMaxMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_MAX_MS', 60000, 100, 3600000),
+  });
+}
