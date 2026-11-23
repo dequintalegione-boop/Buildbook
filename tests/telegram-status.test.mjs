@@ -13,13 +13,13 @@ test('status exposes operational counts without retaining raw update data', () =
   assert.equal(snapshot.lastCycleAt, '2026-01-01T00:00:00.000Z');
 });
 
-test('status redacts Telegram bot tokens from error messages', () => {
+test('status never retains arbitrary exception details', () => {
   const status = createTelegramStatus();
-  status.error(new Error('request failed https://api.telegram.org/bot123456:secret_token/getUpdates'));
+  status.error(new Error('token=secret_value; local path=/home/user/private; Telegram text=rent 900'));
   const snapshot = status.snapshot();
   assert.equal(snapshot.consecutiveFailures, 1);
-  assert.match(snapshot.lastError.message, /\[redacted Telegram token\]/);
-  assert.doesNotMatch(snapshot.lastError.message, /secret_token/);
+  assert.equal(snapshot.lastError.message, 'Ошибка сервиса Telegram; подробности исключения не сохраняются.');
+  assert.doesNotMatch(snapshot.lastError.message, /secret_value|private|rent 900/);
 });
 
 test('successful cycle clears prior error and resets failure streak', () => {
