@@ -28,7 +28,7 @@ export function createProfileStore(filePath) {
       const text = await readFile(target, 'utf8');
       const parsed = JSON.parse(text);
       if (!parsed || parsed.version !== 1 || !Number.isSafeInteger(parsed.revision)
-        || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object') {
+        || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object' || Array.isArray(parsed.profile)) {
         throw new Error('Файл профиля Buildbook имеет неизвестный или повреждённый формат.');
       }
       return parsed;
