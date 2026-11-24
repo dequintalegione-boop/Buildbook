@@ -51,7 +51,8 @@ test('commits transaction and idempotency key in one canonical revision', async 
   assert.deepEqual(result, { operationId: 'tx-1', revision: 1, duplicate: false });
   assert.equal(snapshot.profile.state.tx.length, 1);
   assert.equal(snapshot.profile.state.tx[0].id, 'tx-1');
-  assert.deepEqual(snapshot.profile.telegramOperations, [{ key: '123:7', operationId: 'tx-1' }]);
+  assert.equal(snapshot.profile.state.tx[0].telegramOperationKey, '123:7');
+  assert.equal(Object.hasOwn(snapshot.profile, 'telegramOperations'), false);
 });
 
 test('returns the prior operation for a replay without calling the builder or writing', async () => {
@@ -137,4 +138,76 @@ test('rejects missing finance state and malformed idempotency keys', async () =>
     apply({ update: {}, idempotencyKey: '0:1' }),
     error => error.code === 'INVALID_TELEGRAM_IDEMPOTENCY_KEY',
   );
+});
+
+test('persists new idempotency keys with transactions and deduplicates without a growing ledger', async () => {
+  const store = createStore();
+  let builds = 0;
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction({ id: `tx-${++builds}` }),
+  });
+
+  const first = await apply({ update: {}, idempotencyKey: '123:21' });
+  const replay = await apply({ update: {}, idempotencyKey: '123:21' });
+  const second = await apply({ update: {}, idempotencyKey: '123:22' });
+  const snapshot = store.snapshot();
+
+  assert.equal(first.duplicate, false);
+  assert.deepEqual(replay, { operationId: first.operationId, duplicate: true });
+  assert.equal(second.duplicate, false);
+  assert.deepEqual(snapshot.profile.state.tx.map(item => item.telegramOperationKey), ['123:21', '123:22']);
+  assert.equal(Object.hasOwn(snapshot.profile, 'telegramOperations'), false);
+  assert.equal(builds, 2);
+});
+
+test('migrates matching legacy ledger entries onto their committed transactions', async () => {
+  const store = createStore({
+    state: {
+      tx: [
+        { ...transaction(), id: 'legacy-1' },
+        { ...transaction(), id: 'legacy-2' },
+      ],
+    },
+    telegramOperations: [
+      { key: '123:31', operationId: 'legacy-1' },
+      { key: '123:32', operationId: 'legacy-2' },
+    ],
+  });
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction({ id: 'new-operation' }),
+  });
+
+  const result = await apply({ update: {}, idempotencyKey: '123:33' });
+  const snapshot = store.snapshot();
+
+  assert.equal(result.duplicate, false);
+  assert.deepEqual(
+    snapshot.profile.state.tx.map(item => item.telegramOperationKey),
+    ['123:31', '123:32', '123:33'],
+  );
+  assert.equal(Object.hasOwn(snapshot.profile, 'telegramOperations'), false);
+  assert.deepEqual(
+    await apply({ update: {}, idempotencyKey: '123:31' }),
+    { operationId: 'legacy-1', duplicate: true },
+  );
+});
+
+test('preserves orphaned legacy ledger entries while allowing new transaction-key dedupe', async () => {
+  const store = createStore({
+    state: { tx: [] },
+    telegramOperations: [{ key: '123:41', operationId: 'missing-transaction' }],
+  });
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction({ id: 'new-transaction' }),
+  });
+
+  await apply({ update: {}, idempotencyKey: '123:42' });
+  const snapshot = store.snapshot();
+  assert.deepEqual(snapshot.profile.telegramOperations, [
+    { key: '123:41', operationId: 'missing-transaction' },
+  ]);
+  assert.equal(snapshot.profile.state.tx[0].telegramOperationKey, '123:42');
 });
