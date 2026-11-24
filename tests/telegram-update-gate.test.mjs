@@ -56,7 +56,7 @@ test('rejects group chats, mismatched chat IDs, non-text updates and oversized t
 
   const group = privateMessage({ chatId: -100, chatType: 'group' });
   const mismatched = privateMessage({ chatId: 9999 });
-  const mediaOnly = privateMessage({ text: undefined, extra: { photo: [{ file_id: 'sensitive-file' }] } });
+  const mediaOnly = privateMessage({ text: null, extra: { photo: [{ file_id: 'sensitive-file' }] } });
   const oversized = privateMessage({ text: 'x'.repeat(4097) });
 
   for (const update of [group, mismatched, mediaOnly, oversized]) {
