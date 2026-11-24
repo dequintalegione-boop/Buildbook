@@ -60,7 +60,9 @@ test('never overwrites an existing canonical profile', async () => {
 test('rejects invalid source and mismatched export envelope before import', async () => {
   const data = fixture({ state: {}, logs: [], photos: {} });
   await assert.rejects(migrateProfileToLocalApi({ ...data, sourceProfile: { state: [], logs: [], photos: {} } }), /неподдерживаемый формат/);
-  const mismatch = { ...data, createEnvelope: async () => ({
+  const makeEnvelope = data.createEnvelope;
+  const mismatch = { ...data, createEnvelope: async payload => ({
+    ...(await makeEnvelope(payload)),
     payload: { state: {}, logs: [], photos: { altered: true } },
   }) };
   await assert.rejects(migrateProfileToLocalApi(mismatch), /не совпадает с исходным снимком/i);
