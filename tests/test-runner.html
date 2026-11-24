@@ -1315,6 +1315,12 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
  assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
 
+await test('Вкладка Telegram показывает безопасное подключение локального хоста',()=>{
+api.setState(fixture());api.action('nav','telegram');
+assert(w.document.querySelector('#m button[data-a="tgconnect"]'),'Не показана кнопка подключения локального хоста');
+assert(!w.document.querySelector('#m input[name="botToken"]'),'Токен Telegram-бота не должен запрашиваться в браузере');
+assert(w.document.querySelector('#m').textContent.includes('Telegram по умолчанию отключён')||w.document.querySelector('#m').textContent.includes('Безопасный режим'),'Не показано предупреждение о безопасном режиме Telegram');
+});
 await test('Сводка заменяет старое название вкладки «Обзор»',()=>{
 api.action('nav','home');
 const tab=[...w.document.querySelectorAll('nav button')].find(x=>x.dataset.id==='home');

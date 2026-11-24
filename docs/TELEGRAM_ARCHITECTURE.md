@@ -28,7 +28,7 @@
 ## Token and configuration
 
 - The bot token is a secret and must be stored by the host service in an OS-protected local secret store or a restricted local configuration file, never in the web app bundle, browser localStorage, or Git.
-- The current local API uses a host-only bearer token and does not yet provide UI setup or token provisioning. Keep `BUILDBOOK_TELEGRAM_ENABLED=false` until the UI storage adapter and migration are complete. The service must not return the token in status responses or logs.
+- The Buildbook UI now has a Telegram tab for one-time host-session bootstrap and sanitized status/queue monitoring. The bootstrap key is exchanged for an HttpOnly browser session and is not stored in the app. The bot token remains host-only; the UI does not configure or reveal it. Keep `BUILDBOOK_TELEGRAM_ENABLED=false` until the UI storage adapter and migration are complete. The service must not return the token in status responses or logs.
 - Bind the local control API to loopback only; protect configuration-changing requests against cross-site requests and validate the expected local origin.
 - Allowlist entries are numeric Telegram user IDs, normalized and validated by the service.
 
