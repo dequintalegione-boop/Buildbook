@@ -727,3 +727,25 @@ test('expires HttpOnly sessions and rotates an existing browser session on recon
   const freshValue = afterExpiry.headers.get('set-cookie').split(';')[0];
   assert.equal((await fetch(base + '/api/health', { headers: { cookie: freshValue } })).status, 200);
 });
+
+
+test('preserves compare-and-swap semantics across 20 concurrent API write races', async t => {
+  for (let round = 1; round <= 20; round += 1) {
+    await t.test('race ' + round, async t => {
+      const { base, request } = await fixture(t);
+      const write = marker => request(base + '/api/profile', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: 0, profile: { marker } }),
+      });
+      const results = await Promise.all([write('left-' + round), write('right-' + round)]);
+      const statuses = results.map(response => response.status).sort();
+      assert.deepEqual(statuses, [200, 409]);
+      const conflict = results.find(response => response.status === 409);
+      assert.equal((await conflict.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');
+      const final = await (await request(base + '/api/profile')).json();
+      assert.equal(final.revision, 1);
+      assert.ok(['left-' + round, 'right-' + round].includes(final.profile.marker));
+    });
+  }
+});
