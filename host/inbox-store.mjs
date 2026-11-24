@@ -335,6 +335,13 @@ export function createInboxStore(filePath) {
       if (!Number.isSafeInteger(offset) || offset < 0) {
         throw new TypeError('A durable non-negative Telegram checkpoint is required.');
       }
+      const hasAcknowledgedTerminalItems = await readConsistent(state =>
+        state.items.some(item =>
+          ['completed', 'rejected'].includes(item.status) && item.updateId < offset
+        )
+      );
+      if (!hasAcknowledgedTerminalItems) return 0;
+
       return mutate(state => {
         const before = state.items.length;
         state.items = state.items.filter(item =>
