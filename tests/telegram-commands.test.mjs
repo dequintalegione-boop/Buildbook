@@ -116,6 +116,7 @@ test('help does not write, plain text has no reply, and bad syntax does', async 
   const apply = createTelegramCommandAdapter({ profileStore: store, now: () => new Date(2026, 10, 24) });
   const help = await apply({ update: { update_id: 11, message: { text: '/start' } }, idempotencyKey: '123456:11' });
   assert.equal(help.reply, TELEGRAM_HELP_TEXT);
+  assert.match(help.reply, /\/месяц 2026-11/);
   await assert.rejects(
     apply({ update: { update_id: 12, message: { text: 'просто текст' } }, idempotencyKey: '123456:12' }),
     error => error.permanent === true && error.reply === '',
