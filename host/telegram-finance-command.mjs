@@ -113,9 +113,12 @@ function resolveCategory(state, kind) {
 function resolveAccount(state, preferredId = null) {
   const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
   if (preferredId) {
-    const configured = accounts.find(account => account && account.id === preferredId && typeof account.id === 'string' && account.id.trim());
-    if (configured) return configured.id;
-    const error = commandError('Выбранный счёт Telegram не найден в текущем профиле Buildbook. Проверьте BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID.');
+    const matches = accounts.filter(account => account && account.id === preferredId
+      && typeof account.id === 'string' && account.id.trim());
+    if (matches.length === 1) return matches[0].id;
+    const error = commandError(matches.length > 1
+      ? 'Выбранный счёт Telegram неоднозначен: в профиле Buildbook повторяется его ID.'
+      : 'Выбранный счёт Telegram не найден в текущем профиле Buildbook. Проверьте BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID.');
     error.code = 'TELEGRAM_FINANCE_ACCOUNT_UNAVAILABLE';
     throw error;
   }
