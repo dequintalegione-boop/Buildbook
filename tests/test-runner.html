@@ -319,7 +319,7 @@ await test('Категории можно добавлять в новую гр�
 api.action('nav','set');prompts=['Тестовая группа'];api.action('cgroupadd','e');assert(state().categories.e['Тестовая группа'],'Группа не создана');prompts=['Тестовая категория'];api.action('ccadd',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));assert(state().categories.e['Тестовая группа'].includes('Тестовая категория'),'Категория не добавлена');
 });
 await test('Категории можно переименовывать и скрывать/показывать',()=>{
-prompts=['Переименованная категория'];api.action('ccedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Тестовая категория'])));assert(state().categories.e['Тестовая группа'].includes('Переименованная категория'),'Категория не переименована');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не скрыта');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(!state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не восстановлена');
+api.action('ccedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Тестовая категория'])));const editCategoryForm=form();assert(editCategoryForm&&editCategoryForm.elements.name,'Не открылось окно переименования категории');setv(editCategoryForm,'name','Переименованная категория');submit(editCategoryForm);assert(state().categories.e['Тестовая группа'].includes('Переименованная категория'),'Категория не переименована');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не скрыта');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(!state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не восстановлена');
 });
 await test('Группы можно переименовывать и пустые группы удалять',()=>{
 prompts=['Новая тестовая группа'];api.action('cgroupedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));assert(state().categories.e['Новая тестовая группа'],'Группа не переименована');const key=encodeURIComponent(JSON.stringify(['e','Новая тестовая группа','Переименованная категория']));api.action('ccdel',key);assert(!state().categories.e['Новая тестовая группа'].includes('Переименованная категория'),'Категория не удалена');api.action('cgroupdel',encodeURIComponent(JSON.stringify(['e','Новая тестовая группа'])));assert(!state().categories.e['Новая тестовая группа'],'Пустая группа не удалена');
@@ -1421,7 +1421,8 @@ d.tx=[
 {id:'calendar-detail-one',kind:'i',date,amount:12000,acc:'cash',desc:'Продажа видеокарты',cat:'Комплектующие'},
 {id:'calendar-detail-two',kind:'e',date,amount:2000,acc:'cash',desc:'Закупка SSD',cat:'Сборка ПК'}
 ];
-api.setState(d);api.action('nav','calendar');api.action('calday',date);
+api.setState(d);api.action('nav','calendar');api.action('calnow');
+const dayButton=w.document.querySelector('[data-calendar-date="'+date+'"]');assert(dayButton&&!dayButton.disabled,'Не найдена активная ячейка календаря для '+date);dayButton.click();
 const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
 assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня');
 assert(panel.textContent.includes('Расход')&&!panel.textContent.includes('Выбыло'),'Подпись «Выбыло» не заменена на «Расход».');
@@ -2121,7 +2122,7 @@ await test('История транзакций заполняет свобод�
  const body=w.document.body,main=w.document.querySelector('main'),page=w.document.querySelector('.transaction-page'),history=w.document.querySelector('.transaction-history'),table=history&&history.querySelector('.tw');
  assert(body.classList.contains('transaction-screen')&&w.document.documentElement.classList.contains('transaction-screen'),'Не включён режим экранной компоновки транзакций');
  assert(page&&history&&table,'Не найдена отдельная область истории транзакций');
- assert(w.getComputedStyle(w.document.documentElement).overflowY==='hidden','Корневой контейнер продолжает прокручиваться по вертикали');
+ assert(w.getComputedStyle(w.document.documentElement).overflowY==='hidden','Корневой контейнер продолжает прокручиваться по вертикали: '+JSON.stringify(api.layoutDiagnostics()));
  assert(history.getBoundingClientRect().height>=150,'Истории не выделена свободная высота окна');
  assert(Math.abs(main.getBoundingClientRect().height-w.innerHeight)<=2,'Основная область не ограничена высотой окна');
  assert(w.getComputedStyle(history).flexGrow==='1','История не растягивается на оставшуюся высоту');
