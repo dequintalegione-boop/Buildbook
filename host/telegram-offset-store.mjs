@@ -47,22 +47,22 @@ export function createTelegramOffsetStore(filePath) {
       throw new Error('Telegram offset path must be a regular file, not a link or special file.');
     }
     const handle = await open(filePath, 'r');
-      let text;
-      try {
-        const openedInfo = await handle.stat();
-        if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
-          throw new Error('Telegram offset file changed during read; refusing the checkpoint.');
-        }
-        if (openedInfo.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
-        text = await readUtf8Bounded(handle, 1024);
-      } finally {
-        await handle.close();
+    let text;
+    try {
+      const openedInfo = await handle.stat();
+      if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+        throw new Error('Telegram offset file changed during read; refusing the checkpoint.');
       }
-      const parsed = JSON.parse(text);
-      if (parsed?.version !== 1 || !(parsed.offset === null || Number.isSafeInteger(parsed.offset) && parsed.offset >= 0)) {
-        throw new Error('Unsupported or corrupt Telegram offset file.');
-      }
-      return parsed.offset;
+      if (openedInfo.size > 1024) throw new Error('Telegram offset file exceeds the allowed size.');
+      text = await readUtf8Bounded(handle, 1024);
+    } finally {
+      await handle.close();
+    }
+    const parsed = JSON.parse(text);
+    if (parsed?.version !== 1 || !(parsed.offset === null || Number.isSafeInteger(parsed.offset) && parsed.offset >= 0)) {
+      throw new Error('Unsupported or corrupt Telegram offset file.');
+    }
+    return parsed.offset;
   }
 
   return Object.freeze({
