@@ -109,3 +109,47 @@ test('rejects response bodies that cannot be read with a bounded stream', async 
   });
   await assert.rejects(poller.pollOnce(), /bounded readable body/);
 });
+
+
+test('rejects a streamed body that crosses the byte limit even without content-length', async () => {
+  const oversized = new Uint8Array(1024 * 1024 + 1);
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 9, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(oversized);
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /exceeds the allowed size/);
+});
+
+test('does not checkpoint when Telegram returns malformed JSON', async () => {
+  let checkpointed = false;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 3, write: async () => { checkpointed = true; } },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{broken'));
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /invalid JSON/);
+  assert.equal(checkpointed, false);
+});
