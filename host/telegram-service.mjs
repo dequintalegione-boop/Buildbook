@@ -30,9 +30,12 @@ export function createTelegramService({
   acquireInstanceLock = null,
 } = {}) {
   if (!runtime || typeof runtime.runOnce !== 'function') throw new TypeError('A Telegram runtime is required.');
+  // A zero interval is useful for deterministic, fast lifecycle tests and
+  // explicit host-controlled immediate retries. Production configuration still
+  // enforces a minimum 100 ms interval and retry delay.
   for (const [name, value] of Object.entries({ intervalMs, retryBaseMs, retryMaxMs })) {
-    if (!Number.isSafeInteger(value) || value < 100) {
-      throw new TypeError(name + ' must be a safe integer of at least 100 milliseconds.');
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(name + ' must be a non-negative safe integer in milliseconds.');
     }
   }
   if (retryMaxMs < retryBaseMs) throw new TypeError('retryMaxMs must be at least retryBaseMs.');
