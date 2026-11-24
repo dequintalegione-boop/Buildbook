@@ -176,3 +176,26 @@ test('canonical runtime deadline settles even when fetch ignores abort', async (
     error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT',
   );
 });
+
+
+test('canonical runtime rejects malformed save acknowledgements', async t => {
+  const replies = [
+    { revision: 1, extra: true },
+    { revision: Number.MAX_SAFE_INTEGER },
+    { revision: '1' },
+    { revision: 0 },
+    null,
+    [],
+  ];
+  for (const [index, payload] of replies.entries()) {
+    await t.test('invalid acknowledgement ' + (index + 1), async () => {
+      const runtime = createCanonicalProfileRuntime({
+        fetchImpl: async () => jsonResponse(payload),
+      });
+      await assert.rejects(
+        runtime.client.writeProfile({ marker: true }, 0),
+        error => error.code === 'BUILD_BOOK_SAVE_RESULT_UNKNOWN',
+      );
+    });
+  }
+});
