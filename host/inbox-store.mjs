@@ -201,7 +201,9 @@ export function createInboxStore(filePath) {
       const rawUpdateId = String(updateId ?? '');
       const numericUpdateId = Number(rawUpdateId);
       const keyParts = [rawBotId, String(numericUpdateId)];
-      if (!/^[A-Za-z0-9_-]{1,64}$/.test(rawBotId) || !/^\d+$/.test(rawUpdateId)
+      if (!/^\d{1,16}$/.test(rawBotId) || !Number.isSafeInteger(Number(rawBotId))
+        || Number(rawBotId) <= 0 || String(Number(rawBotId)) !== rawBotId
+        || !/^\d+$/.test(rawUpdateId)
         || !Number.isSafeInteger(numericUpdateId) || numericUpdateId < 0) {
         throw new TypeError('botId and a safe numeric Telegram updateId are required.');
       }
