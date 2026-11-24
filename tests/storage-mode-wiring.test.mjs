@@ -77,6 +77,6 @@ test('expired canonical sessions can be reconnected without accepting stale in-m
   assert.match(html, /canonicalReconnectReady=true/);
   assert.match(html, /data-a="tgconnect">Повторно подключить хост/);
   assert.match(html, /data-a="canonical-reload">Загрузить актуальный профиль/);
-  assert.match(html, /Несохранённые изменения этой вкладки не будут перенесены/);
+  assert.match(html, /несохранённые изменения этой вкладки не будут перенесены/);
   assert.match(html, /if\(STARTUP_STAGE==='ready'&&!confirm\(/);
 });
