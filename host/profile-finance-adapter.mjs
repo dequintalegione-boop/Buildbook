@@ -46,6 +46,19 @@ function validateProfile(profile) {
     error.code = 'BUILD_BOOK_FINANCE_STATE_UNAVAILABLE';
     throw error;
   }
+
+  const transactionKeys = new Set();
+  for (const transaction of profile.state.tx) {
+    if (!isRecord(transaction) || transaction.telegramOperationKey === undefined) continue;
+    if (!isValidIdempotencyKey(transaction.telegramOperationKey)
+      || transactionKeys.has(transaction.telegramOperationKey)) {
+      const error = new Error('Canonical profile contains invalid or duplicate Telegram transaction metadata.');
+      error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
+      throw error;
+    }
+    transactionKeys.add(transaction.telegramOperationKey);
+  }
+
   if (profile.telegramOperations !== undefined) {
     const ledger = profile.telegramOperations;
     const keys = new Set();
@@ -64,10 +77,44 @@ function validateProfile(profile) {
         error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
         throw error;
       }
+      const transaction = profile.state.tx.find(item => item?.telegramOperationKey === entry.key);
+      if (transaction && transaction.id !== entry.operationId) {
+        const error = new Error('Canonical profile contains conflicting Telegram idempotency metadata.');
+        error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
+        throw error;
+      }
       keys.add(entry.key);
       operationIds.add(entry.operationId);
     }
   }
+}
+
+/**
+ * Move legacy ledger keys onto their committed transactions. The transaction
+ * history is already retained by Buildbook, so this keeps replay protection
+ * without growing a second unbounded array. Orphaned legacy entries are kept.
+ */
+function migrateLegacyLedger(profile) {
+  const ledger = profile.telegramOperations;
+  if (!Array.isArray(ledger) || ledger.length === 0) return ledger || [];
+  const remaining = [];
+  for (const entry of ledger) {
+    const matches = profile.state.tx.filter(item => item?.id === entry.operationId);
+    if (matches.length !== 1) {
+      remaining.push(entry);
+      continue;
+    }
+    const transaction = matches[0];
+    if (transaction.telegramOperationKey !== undefined
+      && transaction.telegramOperationKey !== entry.key) {
+      remaining.push(entry);
+      continue;
+    }
+    transaction.telegramOperationKey = entry.key;
+  }
+  if (remaining.length) profile.telegramOperations = remaining;
+  else delete profile.telegramOperations;
+  return remaining;
 }
 
 /**
@@ -105,15 +152,13 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
 
       const profile = cloneJson(current.profile);
       validateProfile(profile);
-      const ledger = profile.telegramOperations || [];
+      const ledger = migrateLegacyLedger(profile);
+      const transactionPrior = profile.state.tx.find(
+        item => item?.telegramOperationKey === idempotencyKey
+      );
+      if (transactionPrior) return { operationId: transactionPrior.id, duplicate: true };
       const prior = ledger.find(entry => entry.key === idempotencyKey);
       if (prior) return { operationId: prior.operationId, duplicate: true };
-
-      if (ledger.length >= MAX_OPERATION_KEYS) {
-        const error = new RangeError('Telegram idempotency ledger reached its configured limit.');
-        error.code = 'TELEGRAM_OPERATION_LEDGER_FULL';
-        throw error;
-      }
 
       // Builders must be pure: on a revision conflict they may be called again
       // with a refreshed profile so category/account changes are respected.
@@ -130,10 +175,17 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
         error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
         throw error;
       }
-      const committedTransaction = { ...transaction, id: operationId };
+      const committedTransaction = {
+        ...transaction,
+        id: operationId,
+        telegramOperationKey: idempotencyKey,
+      };
 
       profile.state.tx.push(committedTransaction);
-      profile.telegramOperations = [...ledger, { key: idempotencyKey, operationId }];
+      // New idempotency keys live on the canonical transaction itself. Keep
+      // only unmigratable legacy entries in the compatibility ledger.
+      if (ledger.length) profile.telegramOperations = ledger;
+      else delete profile.telegramOperations;
       try {
         const revision = await profileStore.write(profile, current.revision);
         return { operationId, revision, duplicate: false };
