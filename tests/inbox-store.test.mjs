@@ -48,6 +48,19 @@ test('rejects malformed or duplicate-key durable inbox records on load', async (
   });
 });
 
+test('rejects non-canonical numeric user IDs in persisted inbox records', async () => {
+  await withStore(async file => {
+    const item = {
+      id: 'one', key: '123456:3', botId: '123456', updateId: 3, userId: '001001',
+      update: { update_id: 3 }, status: 'pending', attempts: 0,
+      receivedAt: new Date().toISOString(), processedAt: null, lastError: null,
+    };
+    await writeFile(file, JSON.stringify({ version: 1, items: [item] }), 'utf8');
+    const inbox = createInboxStore(file);
+    await assert.rejects(inbox.stats(), /corrupt Telegram inbox file/i);
+  });
+});
+
 test('retries loading after a transient or repaired inbox read failure', async () => {
   await withStore(async file => {
     await writeFile(file, '{ invalid json', 'utf8');
