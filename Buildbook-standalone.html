@@ -280,6 +280,8 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
 }
 
 /* Final desktop layout safeguards for wide screens and transaction history. */
+.modal-error{margin:0 0 12px;padding:9px 11px;border:1px solid var(--bad);border-radius:8px;background:color-mix(in srgb,var(--bad) 9%,var(--s));color:var(--bad);font-size:13px;line-height:1.4}
+main{width:auto;max-width:none;min-width:0;box-sizing:border-box}
 main{width:100%;max-width:none;min-width:0;box-sizing:border-box}
 #nav-other-folder{width:100%;max-width:100%;min-width:0;box-sizing:border-box;flex:0 1 auto;overflow-x:hidden}
 #nav-other-folder *{box-sizing:border-box;max-width:100%}
@@ -1075,7 +1077,12 @@ const categoryGroup=(kind,name)=>Object.keys(kind=='e'?EXP:INC).find(g=>(kind=='
 const fld=(k,l,t='text',v='',x='')=>`<label>${l}${t=='select'?`<select name="${k}">${x}</select>`:t=='area'?`<textarea name="${k}">${esc(v)}</textarea>`:`<input name="${k}" type="${t}" value="${esc(v)}" ${x}>`}</label>`,fd=f=>Object.fromEntries(new FormData(f));
 const head=(t,a='')=>`<div class="hd"><h1>${t}</h1><div>${a}</div></div>`,kpi=(l,v,c='')=>`<div class="kp"><span>${l}</span><b class="${c}">${v}</b></div>`,table=(h,r,em)=>r.length?`<div class="tw"><table><thead><tr>${h.map((x,i)=>`<th data-sort-col="${i}" aria-sort="none" class="${/^(Цена|Сумма|Всего|В наличии|Себестоимость|Заработок|Маржа|Доходы|Расходы|Итог|По сборкам)/.test(x)?'r':''}">${x} <span class="sort-mark" aria-hidden="true">↕</span></th>`).join('')}</tr></thead><tbody>${r.join('')}</tbody></table></div>`:`<p class="em">${em}</p>`;
 const btns=(p,id)=>`<td class="r"><button class="btn ic" data-a="${p}e" data-id="${id}" title="Изменить">✎</button> <button class="btn ic" data-a="${p}d" data-id="${id}" title="Удалить">✕</button></td>`;
-function modal(title,body,ok,wide,lab){const m=document.createElement('div');m.className='ov';m.innerHTML=`<form class="md${wide?' w':''}"><h3>${title}</h3>${body}<div class="ac"><button type="button" class="btn g" data-x>Отмена</button><button class="btn p">${lab||'Сохранить'}</button></div></form>`;document.body.append(m);const f=m.firstChild;m.onclick=e=>{if(e.target==m||e.target.dataset.x!=null)m.remove()};f.onsubmit=e=>{e.preventDefault();if(ok(f)!==false)m.remove()};const i=f.querySelector('input,select');i&&i.focus();return f}
+function modal(title,body,ok,wide,lab){const m=document.createElement('div');m.className='ov';m.innerHTML=`<form class="md${wide?' w':''}"><h3>${title}</h3><p class="modal-error" data-modal-error role="alert" hidden></p>${body}<div class="ac"><button type="button" class="btn g" data-x>Отмена</button><button class="btn p">${lab||'Сохранить'}</button></div></form>`;document.body.append(m);const f=m.firstChild;m.onclick=e=>{if(e.target==m||e.target.dataset.x!=null)m.remove()};f.onsubmit=e=>{e.preventDefault();if(ok(f)!==false)m.remove()};const i=f.querySelector('input,select');i&&i.focus();return f}
+function showModalError(form,message){
+ const target=form&&form.querySelector('[data-modal-error]');
+ if(!target){window.alert(message);return false}
+ target.hidden=false;target.textContent=String(message||'Проверьте введённые данные.');return false;
+}
 /* склад */
 function pform(id){const o=id&&S.batches.find(b=>b.id==id);modal(o?'Партия':'Закупка',`<div class="g2">${fld('type','Тип','select','',opt(T,o&&o.type))}${fld('date','Дата','date',o?o.date:today())}</div>${fld('desc','Описание (модель)','text',o?o.desc:'','required')}<div class="g2">${fld('price','Цена за штуку, ₽','number',o?o.price:'','required min=0 step=any')}${fld('qty','Количество','number',o?o.qty:1,'required min=1')}</div><div class="g2">${fld('supplier','Поставщик','text',o?o.supplier:'')}${fld('link','Ссылка на объявление','url',o?o.link:'')}</div>${fld('note','Комментарий','area',o?o.note:'')}${o?'':`<div class="g2">${fld('acc','Из какой кассы','select','',accOpt())}<label class="ck"><input type="checkbox" name="nx"> Не создавать расход</label></div>`}`,f=>{const d=fd(f),p=+d.price,q=+d.qty;
 if(o){const minQty=writtenOff(o)+usedGood(o)+problemMarked(o);if(q<minQty){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}const t=o.txId&&S.tx.find(t=>t.id==o.txId),next=t&&{...t,date:d.date,amount:p*q,cat:d.type,qty:q,desc:'Закупка: '+d.desc};if(next){const check=checkTransactionBalance(next,t);if(!check.ok){alert(check.error);return false}}Object.assign(o,{type:d.type,date:d.date,desc:d.desc,price:p,qty:q,supplier:d.supplier,link:d.link,note:d.note});if(t)Object.assign(t,next)}
@@ -1238,7 +1245,7 @@ for(const l of ls){const key=l.batchId+'|'+(l.problem?'problem':'normal');sum[ke
 const was=o&&o.status==ST[3],storedCost=x.cost,existingSale=x.txId&&S.tx.find(t=>t.id===x.txId);
 if(d.status===ST[3]){
  const candidate=existingSale?{...existingSale,kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:(d.stx&&(+d.price||0)?{kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:null);
- if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok){window.alert(cashCheck.error);return false}}
+ if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok)return showModalError(form,cashCheck.error);}
 }
 Object.assign(x,{name:d.name,status:d.status,builder:d.builder,buyer:d.buyer,date:d.date,sold:d.sold,planned:+d.planned||0,price:+d.price||0,note:d.note,lines:ls});const sold=x.status==ST[3];
 if(sold){if(!x.sold)x.sold=today();x.cost=was&&storedCost!=null&&Number.isFinite(Number(storedCost))?Number(storedCost):live(x)}else x.cost=null;
@@ -1763,7 +1770,7 @@ const calendarTransactionType=t=>({
  investment_in:'Пополнение инвестиции',investment_out:'Вывод из инвестиции'
 }[t.kind]||'Операция');
 function calendarDay(date){
- if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||(!calendarEntries(date).length&&!calendarTaskEntries(date).length))return;
+ if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date||'')))return;
  V.calendar=Object.assign({},V.calendar||{}, {selectedDate:date});
  render();
 }
@@ -3207,7 +3214,9 @@ const CSV_FIELDS={
 };
 function guessCsvKind(headers){
  const h=headers.map(csvHeaderNorm);
- if(h.some(x=>['paymentsjson','платежиjson','principal','суммадолга','debtid','иддолга'].includes(x)))return'debts';
+ const transactionSheet=(h.includes('amount')||h.includes('сумма'))&&(h.includes('дата')||h.includes('date'))&&(h.includes('тип')||h.includes('типоперации')||h.includes('kind'));
+ if(transactionSheet)return'tx';
+ if(h.some(x=>['paymentsjson','платежиjson','principal','суммадолга'].includes(x)))return'debts';
  if(h.some(x=>['eventsjson','движенияjson','currentvalue','текущаяоценка','investmentid','идинвестиции'].includes(x)))return'investments';
  if(h.some(x=>['сумма','amount'].includes(x))||h.includes('типоперации'))return'tx';
  if(h.includes('названиекассы')||h.includes('начальныйостаток')||h.includes('начальныйбаланс')||h.includes('openingbalance'))return'accounts';
@@ -3788,6 +3797,21 @@ function applyXlsxSelections(plans,choices){
    if(transaction)payment.txId=transaction.id;
   });
  });
+ (S.investments||[]).forEach(investment=>{
+  (Array.isArray(investment.events)?investment.events:[]).forEach(event=>{
+   const eventId=String(event.id||''),txId=String(event.txId||'');
+   let transaction=S.tx.find(tx=>(txId&&tx.id===txId)||(eventId&&tx.investmentId===investment.id&&tx.investmentEventId===eventId));
+   if(!transaction&&eventId){
+    const accountId=event.accountId||investment.accountId||(S.accounts[0]&&S.accounts[0].id)||'';
+    const withdrawal=event.type==='withdrawal';
+    transaction={id:txId||uid(),kind:withdrawal?'investment_in':'investment_out',date:event.date,amount:Number(event.amount),desc:(withdrawal?'Вывод из инвестиции: ':'Вложение в инвестицию: ')+investment.name,cat:'Инвестиции',grp:'Инвестиции',qty:1,acc:accountId,note:String(event.note||''),investmentId:investment.id,investmentEventId:eventId,investmentRole:event.type};
+    S.tx.push(transaction);total.added++;
+   }else if(transaction){
+    transaction.investmentId=investment.id;transaction.investmentEventId=eventId;transaction.investmentRole=event.type;
+   }
+   if(transaction)event.txId=transaction.id;
+  });
+ });
  return total;
 }
 function importXlsxBuffer(buffer){
@@ -4043,6 +4067,11 @@ function persistLayoutOrder(source){
  }
  save.skip=1;save();render();
 }
+function syncTransactionOverflow(){
+ const active=V.tab==='tx',mobile=!!(window.matchMedia&&window.matchMedia('(max-width:760px)').matches),value=active&&!mobile?'hidden':'';
+ document.documentElement.style.overflowY=value;document.body.style.overflowY=value;
+}
+window.addEventListener('resize',syncTransactionOverflow);
 function render(){
  if(APP_LOCKED){renderLegacyUnlockScreen();return}
  const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=false;
@@ -4053,6 +4082,7 @@ function render(){
  $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
  document.body.classList.toggle('transaction-screen',V.tab==='tx');
  document.documentElement.classList.toggle('transaction-screen',V.tab==='tx');
+ syncTransactionOverflow();
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
  document.body.classList.toggle('nav-collapsed',!!S.set.navCollapsed);
  applyLayoutEditing();
@@ -4166,7 +4196,7 @@ function trash(){
 function renameCategory(kind,group,oldName){
  const categories=kind==='e'?EXP:INC;
  if(!categories[group]||!categories[group].includes(oldName))return false;
- const nextName=String(prompt('Новое название категории',oldName)||'').trim();
+ const nextName=String(window.prompt('Новое название категории',oldName)||'').trim();
  if(!nextName||nextName===oldName)return false;
  if(Object.values(categories).some(items=>items.includes(nextName))){window.alert('Категория с таким названием уже существует.');return false}
  categories[group][categories[group].indexOf(oldName)]=nextName;
