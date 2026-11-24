@@ -38,7 +38,7 @@ test('rejects malformed or duplicate-key durable inbox records on load', async (
   });
   await withStore(async file => {
     const item = {
-      id: 'one', key: 'bot-1:3', botId: 'bot-1', updateId: 3, userId: '1001',
+      id: 'one', key: '123456:3', botId: '123456', updateId: 3, userId: '1001',
       update: { update_id: 3 }, status: 'pending', attempts: 0,
       receivedAt: new Date().toISOString(), processedAt: null, lastError: null,
     };
@@ -66,14 +66,14 @@ test('refuses a symlink as the durable inbox file', async () => {
 test('enqueue is durable and duplicate Telegram updates are idempotent', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const first = await inbox.enqueue({ botId: 'bot-1', updateId: 42, userId: '1001', update: { message: 'income' } });
-    const duplicate = await inbox.enqueue({ botId: 'bot-1', updateId: 42, userId: '1001', update: { message: 'income' } });
+    const first = await inbox.enqueue({ botId: '123456', updateId: 42, userId: '1001', update: { update_id: 42, message: { text: 'income' } } });
+    const duplicate = await inbox.enqueue({ botId: '123456', updateId: 42, userId: '1001', update: { update_id: 42, message: { text: 'income' } } });
     assert.equal(first.inserted, true);
     assert.equal(duplicate.inserted, false);
     assert.equal((await inbox.stats()).total, 1);
 
     const reopened = createInboxStore(file);
-    assert.equal((await reopened.nextPending()).key, 'bot-1:42');
+    assert.equal((await reopened.nextPending()).key, '123456:42');
   });
 });
 
@@ -83,19 +83,19 @@ test('failed durable enqueue does not poison the in-memory dedupe snapshot', asy
     await inbox.stats(); // Load and cache the initial empty snapshot.
     await mkdir(file); // Force atomic rename to fail after the temp write.
     await assert.rejects(
-      inbox.enqueue({ botId: 'bot-1', updateId: 13, userId: '1001', update: { message: 'income' } })
+      inbox.enqueue({ botId: '123456', updateId: 13, userId: '1001', update: { update_id: 13, message: { text: 'income' } } })
     );
     await rm(file, { recursive: true, force: true });
-    const retry = await inbox.enqueue({ botId: 'bot-1', updateId: 13, userId: '1001', update: { message: 'income' } });
+    const retry = await inbox.enqueue({ botId: '123456', updateId: 13, userId: '1001', update: { update_id: 13, message: { text: 'income' } } });
     assert.equal(retry.inserted, true);
-    assert.equal((await inbox.nextPending()).key, 'bot-1:13');
+    assert.equal((await inbox.nextPending()).key, '123456:13');
   });
 });
 
 test('failed processing returns to pending and can be retried', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 7, userId: '1001', update: { message: 'expense' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 7, userId: '1001', update: { update_id: 7, message: { text: 'expense' } } });
     assert.equal(await inbox.markProcessing(item.id), true);
     assert.equal(await inbox.markPending(item.id, 'storage unavailable'), true);
     assert.equal((await inbox.nextPending()).id, item.id);
@@ -106,7 +106,7 @@ test('failed processing returns to pending and can be retried', async () => {
 test('interrupted processing is recovered after service restart', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 8, userId: '1001', update: { message: 'income' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 8, userId: '1001', update: { update_id: 8, message: { text: 'income' } } });
     await inbox.markProcessing(item.id);
 
     const restarted = createInboxStore(file);
@@ -118,7 +118,7 @@ test('interrupted processing is recovered after service restart', async () => {
 test('completed updates purge raw payload but retain dedupe metadata', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 9, userId: '1001', update: { message: 'expense', caption: 'private note' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 9, userId: '1001', update: { update_id: 9, message: { text: 'expense', caption: 'private note' } } });
     await inbox.markProcessing(item.id);
     await inbox.markCompleted(item.id, 'tx-123');
 
@@ -126,7 +126,7 @@ test('completed updates purge raw payload but retain dedupe metadata', async () 
     assert.equal((await inbox.stats()).completed, 1);
 
     const reopened = createInboxStore(file);
-    const duplicate = await reopened.enqueue({ botId: 'bot-1', updateId: 9, userId: '1001', update: { message: 'expense' } });
+    const duplicate = await reopened.enqueue({ botId: '123456', updateId: 9, userId: '1001', update: { update_id: 9, message: { text: 'expense' } } });
     assert.equal(duplicate.inserted, false);
     assert.equal(duplicate.item.update, null);
     assert.equal(duplicate.item.operationId, 'tx-123');
@@ -136,7 +136,7 @@ test('completed updates purge raw payload but retain dedupe metadata', async () 
 test('cannot mark an inbox item completed without a committed operation ID', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 11, userId: '1001', update: { message: 'income' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 11, userId: '1001', update: { update_id: 11, message: { text: 'income' } } });
     await inbox.markProcessing(item.id);
     await assert.rejects(inbox.markCompleted(item.id, null), /valid committed Buildbook operation ID/);
     assert.equal((await inbox.stats()).processing, 1);
@@ -146,7 +146,7 @@ test('cannot mark an inbox item completed without a committed operation ID', asy
 test('inbox state transitions reject invalid completion and terminal-state rewrites', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 12, userId: '1001', update: { message: 'income' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 12, userId: '1001', update: { update_id: 12, message: { text: 'income' } } });
     assert.equal(await inbox.markPending(item.id, 'not processing'), false);
     assert.equal(await inbox.markRejected(item.id, 'not processing'), false);
     assert.equal(await inbox.markCompleted(item.id, 'tx-12'), false);
@@ -162,8 +162,8 @@ test('inbox state transitions reject invalid completion and terminal-state rewri
 test('invalid sender IDs and update IDs are rejected', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    await assert.rejects(inbox.enqueue({ botId: 'bot-1', updateId: 'not-a-number', userId: '1001', update: {} }), /numeric Telegram updateId/);
-    await assert.rejects(inbox.enqueue({ botId: 'bot-1', updateId: 1, userId: 'not-a-number', update: {} }), /numeric Telegram userId/);
+    await assert.rejects(inbox.enqueue({ botId: '123456', updateId: 'not-a-number', userId: '1001', update: {} }), /numeric Telegram updateId/);
+    await assert.rejects(inbox.enqueue({ botId: '123456', updateId: 1, userId: 'not-a-number', update: {} }), /numeric Telegram userId/);
   });
 });
 
@@ -171,7 +171,7 @@ test('invalid sender IDs and update IDs are rejected', async () => {
 test('inbox error summaries never persist arbitrary caller text', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 14, userId: '1001', update: { message: 'income' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 14, userId: '1001', update: { update_id: 14, message: { text: 'income' } } });
     await inbox.markProcessing(item.id);
     await inbox.markPending(item.id, 'token=secret; private amount=9000');
     const pendingFile = JSON.parse(await readFile(file, 'utf8'));
@@ -189,7 +189,7 @@ test('inbox error summaries never persist arbitrary caller text', async () => {
 test('rejected inbox records are terminal and excluded from pending work', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
-    const { item } = await inbox.enqueue({ botId: 'bot-1', updateId: 10, userId: '1001', update: { message: 'tampered' } });
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 10, userId: '1001', update: { update_id: 10, message: { text: 'tampered' } } });
     await inbox.markProcessing(item.id);
     assert.equal(await inbox.markRejected(item.id, 'invalid envelope'), true);
     assert.equal(await inbox.nextPending(), null);
