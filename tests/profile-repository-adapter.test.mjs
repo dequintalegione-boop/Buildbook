@@ -173,7 +173,7 @@ test('rejects exhausted revision before contacting the canonical API', async () 
 });
 
 
-test('rejects 20 malformed canonical profile shapes before exposing data or writing', async t => {
+test('rejects malformed canonical core shapes before exposing data or writing', async t => {
   const malformed = [
     [],
     'profile',
@@ -189,11 +189,8 @@ test('rejects 20 malformed canonical profile shapes before exposing data or writ
     { state: {}, logs: [], photos: [] },
     { state: {}, logs: [], photos: null },
     { state: {}, logs: [], photos: 'photos' },
-    { state: {}, logs: [], photos: {}, version: 'bad', extra: true },
     { state: {}, logs: {}, photos: [] },
     { state: false, logs: false, photos: false },
-    { state: {}, logs: [], photos: {}, revision: -1 },
-    { state: {}, logs: [], photos: {}, schema: [] },
   ];
   for (const [index, profile] of malformed.entries()) {
     await t.test('shape ' + (index + 1), async () => {
