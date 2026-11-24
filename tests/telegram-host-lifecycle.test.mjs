@@ -14,6 +14,17 @@ function fixture() {
   return { processRef, host, counts: () => ({ starts, stops }) };
 }
 
+test('stop before start is a no-op and does not block later startup', async () => {
+  const { processRef, host, counts } = fixture();
+  const lifecycle = installTelegramHostLifecycle({ host, processRef });
+
+  assert.deepEqual(await lifecycle.stop('early'), { stopped: true, signal: 'early' });
+  assert.equal(lifecycle.running, false);
+  lifecycle.start();
+  assert.deepEqual(counts(), { starts: 1, stops: 0 });
+  await lifecycle.stop('cleanup');
+});
+
 test('lifecycle registers signals before starting and starts only once', () => {
   const { processRef, host, counts } = fixture();
   const lifecycle = installTelegramHostLifecycle({ host, processRef });
