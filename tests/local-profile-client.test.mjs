@@ -46,6 +46,29 @@ test('allows explicit loopback hosts and preserves a configured port', async () 
   }
 });
 
+test('exchanges the bootstrap token once and uses only a browser-managed session afterwards', async () => {
+  const calls = [];
+  const client = createLocalProfileClient({
+    accessToken: token,
+    fetchImpl: fakeFetch(async (url, options) => {
+      calls.push({ url, options });
+      if (url.endsWith('/api/session/bootstrap')) return { status: 200, body: { ok: true, expiresIn: 12 * 60 * 60 * 1000 } };
+      if (url.endsWith('/api/health')) return { status: 200, body: { ok: true } };
+      if (url.endsWith('/api/session/close')) return { status: 200, body: { ok: true } };
+      throw new Error('unexpected request');
+    }),
+  });
+  assert.equal(await client.connectSession(), true);
+  assert.equal(client.connected, true);
+  assert.equal(calls[0].options.credentials, 'include');
+  assert.equal(calls[0].options.headers.authorization, 'Bearer ' + token);
+  await client.health();
+  assert.equal(calls[1].options.credentials, 'include');
+  assert.equal(calls[1].options.headers.authorization, undefined);
+  await client.closeSession();
+  assert.equal(client.connected, false);
+});
+
 test('disables redirects, ambient credentials, caching and referrer on token requests', async () => {
   const client = createLocalProfileClient({
     accessToken: token,
