@@ -385,3 +385,21 @@ test('does not resend a reply after delivery was durably recorded but completion
   assert.equal(replyCalls, 1);
   assert.equal(inbox.state.status, 'completed');
 });
+
+
+test('quarantines inbox records with non-canonical bot IDs instead of retrying them forever', async () => {
+  const tampered = structuredClone(sample);
+  tampered.botId = '00123456';
+  tampered.key = '00123456:44';
+  const inbox = makeInbox(tampered);
+  let called = false;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { called = true; return { operationId: 'should-not-exist' }; },
+  });
+
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1', reason: 'invalid_inbox_item' });
+  assert.equal(called, false);
+  assert.equal(inbox.state.status, 'rejected');
+});
