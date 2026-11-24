@@ -56,6 +56,13 @@ export function createTelegramHostService({
     || typeof config.instanceLockPath !== 'string') {
     throw new TypeError('Telegram host config is incomplete.');
   }
+  if (config.defaultAccountId !== undefined && config.defaultAccountId !== null
+    && (typeof config.defaultAccountId !== 'string'
+      || !config.defaultAccountId.trim()
+      || config.defaultAccountId.length > 200
+      || /[\\u0000-\\u001f\\u007f]/.test(config.defaultAccountId))) {
+    throw new TypeError('Telegram default account ID is invalid.');
+  }
 
   // The bot ID is used to namespace durable update keys. Reject a hand-built
   // config that pairs one bot's token with another bot's ID; otherwise updates
