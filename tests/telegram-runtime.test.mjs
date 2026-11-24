@@ -151,3 +151,28 @@ test('compacts using the saved checkpoint before requesting another Telegram bat
     ['checkpoint'], ['compact', 41], ['poll'], ['compact', 41],
   ]);
 });
+
+test('continues draining after a terminally rejected inbox item', async () => {
+  const calls = [];
+  let next = 0;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); return {}; } },
+    processor: {
+      async processOne() {
+        next += 1;
+        calls.push('process:' + next);
+        if (next === 1) return { processed: true, rejected: true, itemId: 'bad-item' };
+        if (next === 2) return { processed: true, itemId: 'good-item' };
+        return { processed: false, reason: 'empty' };
+      },
+    },
+  });
+
+  const result = await runtime.runOnce();
+  assert.equal(result.processed, 2);
+  assert.deepEqual(calls, ['process:1', 'process:2', 'process:3', 'poll']);
+});
