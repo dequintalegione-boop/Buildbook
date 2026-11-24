@@ -431,7 +431,7 @@ const defaultState=()=>({
  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false,otherTabs:[],hotkeys:DEFAULT_HOTKEYS.map(item=>({...item}))}
 });
 let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,txMenuOpen:false,hotkeyCaptureId:'',calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
-let TELEGRAM_UI={baseUrl:'http://127.0.0.1:43127',checked:false,checking:false,busy:false,connected:false,status:null,error:''};
+let TELEGRAM_UI={baseUrl:location.hostname==='localhost'?'http://localhost:43127':'http://127.0.0.1:43127',checked:false,checking:false,busy:false,connected:false,status:null,error:''};
 const DATA_SCHEMA_VERSION=5;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
