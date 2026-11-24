@@ -143,6 +143,13 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
       error.code = 'INVALID_TELEGRAM_IDEMPOTENCY_KEY';
       throw error;
     }
+    const keyedUpdateId = Number(idempotencyKey.slice(idempotencyKey.indexOf(':') + 1));
+    if (!isRecord(update) || update.update_id !== keyedUpdateId
+      || !isRecord(update.message) || typeof update.message.text !== 'string') {
+      const error = new TypeError('The Telegram update must match its idempotency key and contain a text message.');
+      error.code = 'TELEGRAM_UPDATE_KEY_MISMATCH';
+      throw error;
+    }
 
     // Revision conflicts are safe to retry: the store uses compare-and-swap,
     // and the idempotency key is checked again after every fresh read.
