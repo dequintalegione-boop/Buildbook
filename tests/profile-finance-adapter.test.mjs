@@ -287,7 +287,7 @@ test('accepts its own persisted bot checkpoint on the next Telegram finance writ
   let builds = 0;
   const apply = createProfileFinanceAdapter({
     profileStore: store,
-    buildTransaction: async () => transaction({ id: \`checkpoint-tx-\${++builds}\` }),
+    buildTransaction: async () => transaction({ id: `checkpoint-tx-${++builds}` }),
   });
 
   await apply({ update: {}, idempotencyKey: '123:1' });
