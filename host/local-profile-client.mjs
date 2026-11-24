@@ -84,6 +84,9 @@ export function createLocalProfileClient({
   return Object.freeze({
     async connectSession() {
       if (sessionMode) return true;
+      if (typeof accessToken !== 'string') {
+        throw new Error('Для повторного подключения создайте новый клиент и введите ключ локального сервиса заново.');
+      }
       const result = await request('/api/session/bootstrap', {
         method: 'POST',
         body: '{}',
