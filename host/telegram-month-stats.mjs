@@ -28,8 +28,8 @@ export function formatTelegramMonthSummary(profile, month) {
   }
   const monthNumber = Number(month.slice(5, 7));
   const year = Number(month.slice(0, 4));
-  if (monthNumber < 1 || monthNumber > 12 || year < 1) {
-    throw new TypeError('Month statistics require a real calendar month.');
+  if (monthNumber < 1 || monthNumber > 12 || year < 2000 || year > 2100) {
+    throw new TypeError('Month statistics require a real calendar month between 2000 and 2100.');
   }
   const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const monthDays = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
