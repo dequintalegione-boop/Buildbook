@@ -34,12 +34,19 @@ export function createTelegramOffsetStore(filePath) {
   };
 
   async function readOffset() {
+    let pathInfo;
     try {
-      const pathInfo = await lstat(filePath);
-      if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
-        throw new Error('Telegram offset path must be a regular file, not a link or special file.');
-      }
-      const handle = await open(filePath, 'r');
+      pathInfo = await lstat(filePath);
+    } catch (error) {
+      // Only an absent path at the initial check means no checkpoint. An
+      // ENOENT after lstat indicates a path race and must not reset progress.
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
+    if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
+      throw new Error('Telegram offset path must be a regular file, not a link or special file.');
+    }
+    const handle = await open(filePath, 'r');
       let text;
       try {
         const openedInfo = await handle.stat();
@@ -56,10 +63,6 @@ export function createTelegramOffsetStore(filePath) {
         throw new Error('Unsupported or corrupt Telegram offset file.');
       }
       return parsed.offset;
-    } catch (error) {
-      if (error.code === 'ENOENT') return null;
-      throw error;
-    }
   }
 
   return Object.freeze({
