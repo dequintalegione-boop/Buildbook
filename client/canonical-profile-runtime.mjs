@@ -144,7 +144,11 @@ export function createCanonicalProfileRuntime({
         }
         throw cause;
       }
-      if (!result || result.revision !== expectedRevision + 1) {
+      if (!isPlainRecord(result)
+        || Object.keys(result).length !== 1
+        || !Object.hasOwn(result, 'revision')
+        || !Number.isSafeInteger(result.revision)
+        || result.revision !== expectedRevision + 1) {
         const error = new Error('Результат сохранения неизвестен: сервер не подтвердил новую ревизию. Перечитайте профиль перед повторной попыткой.');
         error.code = 'BUILD_BOOK_SAVE_RESULT_UNKNOWN';
         throw error;
