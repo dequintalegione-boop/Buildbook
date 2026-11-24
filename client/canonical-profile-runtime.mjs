@@ -40,11 +40,16 @@ export function createCanonicalProfileRuntime({
 
   async function request(path, { method = 'GET', body } = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
-    let response;
-    let payload = null;
-    try {
-      response = await fetchImpl(base + path, {
+    let timeout;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeout = setTimeout(() => {
+        const cause = new Error('Local API request timed out');
+        controller.abort(cause);
+        reject(cause);
+      }, requestTimeoutMs);
+    });
+    const operation = (async () => {
+      const response = await fetchImpl(base + path, {
         method,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
@@ -54,19 +59,23 @@ export function createCanonicalProfileRuntime({
         referrerPolicy: 'no-referrer',
         headers: body === undefined ? {} : { 'content-type': 'application/json' },
       });
+      let payload = null;
       try {
         payload = await response.json();
       } catch (cause) {
-        // A body read can outlive the response headers. Keep the timeout active
-        // until the body is consumed, and surface timeout instead of masking it
-        // as an empty HTTP error payload.
         if (controller.signal.aborted) throw cause;
       }
+      return { response, payload };
+    })();
+    let result;
+    try {
+      result = await Promise.race([operation, timeoutPromise]);
     } catch (cause) {
-      const error = new Error(controller.signal.aborted
+      const timedOut = controller.signal.aborted;
+      const error = new Error(timedOut
         ? 'Локальный сервис Buildbook не ответил за отведённое время.'
         : 'Локальный сервис Buildbook недоступен или сессия не может быть использована.');
-      error.code = controller.signal.aborted
+      error.code = timedOut
         ? 'BUILD_BOOK_LOCAL_API_TIMEOUT'
         : 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
       error.cause = cause;
@@ -74,6 +83,7 @@ export function createCanonicalProfileRuntime({
     } finally {
       clearTimeout(timeout);
     }
+    const { response, payload } = result;
     if (!response.ok) {
       const error = new Error(typeof payload?.error === 'string'
         ? payload.error
