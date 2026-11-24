@@ -610,12 +610,13 @@ test('expires HttpOnly sessions and rotates an existing browser session on recon
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
   const origin = 'http://127.0.0.1:43127';
-  const bootstrap = () => fetch(base + '/api/session/bootstrap', {
+  const bootstrap = (cookie = '') => fetch(base + '/api/session/bootstrap', {
     method: 'POST',
     headers: {
       origin,
       authorization: `Bearer ${token}`,
       'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
     },
     body: '{}',
   });
@@ -628,7 +629,7 @@ test('expires HttpOnly sessions and rotates an existing browser session on recon
   assert.match(firstCookie, /Max-Age=2/);
   const firstValue = firstCookie.split(';')[0];
 
-  const renewed = await bootstrap();
+  const renewed = await bootstrap(firstValue);
   assert.equal(renewed.status, 200);
   const renewedValue = renewed.headers.get('set-cookie').split(';')[0];
   assert.notEqual(renewedValue, firstValue);
