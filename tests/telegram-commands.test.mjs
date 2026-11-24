@@ -5,6 +5,7 @@ import { classifyTelegramCommand, TELEGRAM_HELP_TEXT } from '../host/telegram-fi
 import { createTelegramCommandAdapter } from '../host/telegram-command-adapter.mjs';
 import { createTelegramReplySender } from '../host/telegram-reply.mjs';
 import { createTelegramInboxProcessor } from '../host/telegram-inbox-processor.mjs';
+import { formatTelegramMoney, formatTelegramMonthSummary } from '../host/telegram-month-stats.mjs';
 
 function makeStore(profile) {
   let revision = 1;
@@ -204,4 +205,21 @@ test('ordinary text is rejected silently without a help reply', async () => {
     },
   );
   assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length);
+});
+
+
+test('monthly stats reject invalid dates, unsafe totals and nonnumeric amounts', () => {
+  assert.throws(() => formatTelegramMoney(Number.POSITIVE_INFINITY), /finite/);
+  assert.throws(() => formatTelegramMonthSummary(profile, '1999-11'), /2000 and 2100/);
+  const invalidDates = { state: { tx: [
+    { kind: 'i', date: '2026-11-31', amount: 100 },
+    { kind: 'i', date: '2026-11-02-extra', amount: 200 },
+    { kind: 'i', date: '2026-11-03', amount: '300' },
+  ] } };
+  assert.match(formatTelegramMonthSummary(invalidDates, '2026-11'), /Доходы: 0,00 ₽/);
+  const tooLarge = { state: { tx: [
+    { kind: 'i', date: '2026-11-01', amount: Number.MAX_SAFE_INTEGER / 100 },
+    { kind: 'i', date: '2026-11-02', amount: 1 },
+  ] } };
+  assert.throws(() => formatTelegramMonthSummary(tooLarge, '2026-11'), /safe integer cents/);
 });
