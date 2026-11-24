@@ -244,3 +244,34 @@ test('exposes only a validated durable checkpoint to the runtime', async () => {
   });
   await assert.rejects(invalid.readCheckpoint(), /invalid checkpoint/);
 });
+
+
+test('times out when a successful Telegram response body stalls', async () => {
+  let requestSignal;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 12, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async (_url, options) => {
+      requestSignal = options.signal;
+      return {
+        ok: true,
+        headers: { get: () => null },
+        body: {
+          getReader() {
+            return {
+              read: () => new Promise(() => {}),
+              cancel: async () => {},
+              releaseLock() {},
+            };
+          },
+        },
+      };
+    },
+    timeoutSeconds: 0,
+    requestTimeoutMs: 15,
+  });
+
+  await assert.rejects(poller.pollOnce(), error => error.code === 'TELEGRAM_POLL_TIMEOUT');
+  assert.equal(requestSignal.aborted, true);
+});
