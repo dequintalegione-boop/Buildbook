@@ -59,7 +59,7 @@ function validateProfile(profile) {
     for (const checkpoint of checkpoints) {
       if (!isRecord(checkpoint)
         || typeof checkpoint.botId !== 'string'
-        || !/^[1-9]\\d{0,15}$/.test(checkpoint.botId)
+        || !/^[1-9]\d{0,15}$/.test(checkpoint.botId)
         || !Number.isSafeInteger(Number(checkpoint.botId))
         || String(Number(checkpoint.botId)) !== checkpoint.botId
         || !Number.isSafeInteger(checkpoint.updateId)
