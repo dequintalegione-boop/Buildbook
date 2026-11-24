@@ -33,6 +33,8 @@ export function createLocalProfileClient({
   }
   const base = normalizeBaseUrl(baseUrl);
   let sessionMode = false;
+  let connectPromise = null;
+  let closePromise = null;
 
   async function request(path, options = {}) {
     const controller = new AbortController();
@@ -102,31 +104,47 @@ export function createLocalProfileClient({
 
   return Object.freeze({
     async connectSession() {
-      if (sessionMode) return true;
+      if ((sessionMode)) return true;
+      if (connectPromise) return connectPromise;
       if (typeof accessToken !== 'string') {
         throw new Error('Для повторного подключения создайте новый клиент и введите ключ локального сервиса заново.');
       }
-      const result = await request('/api/session/bootstrap', {
-        method: 'POST',
-        body: '{}',
-        credentials: 'include',
-        headers: { authorization: 'Bearer ' + accessToken },
-      });
-      if (!result || result.ok !== true || result.expiresIn !== 12 * 60 * 60 * 1000) {
-        throw new Error('Локальный сервис вернул некорректный результат подключения.');
+      connectPromise = (async () => {
+        const result = await request('/api/session/bootstrap', {
+          method: 'POST',
+          body: '{}',
+          credentials: 'include',
+          headers: { authorization: 'Bearer ' + accessToken },
+        });
+        if (!result || result.ok !== true || result.expiresIn !== 12 * 60 * 60 * 1000) {
+          throw new Error('Локальный сервис вернул некорректный результат подключения.');
+        }
+        // Drop the bootstrap secret after exchanging it for a browser-managed session.
+        sessionMode = true;
+        accessToken = null;
+        return true;
+      })();
+      try {
+        return await connectPromise;
+      } finally {
+        connectPromise = null;
       }
-      // Drop the bootstrap secret from the client closure after exchanging it
-      // for an HttpOnly, SameSite=Strict, browser-managed session cookie.
-      sessionMode = true;
-      accessToken = null;
-      return true;
     },
     async closeSession() {
-      if (!sessionMode) return false;
-      const result = await request('/api/session/close', { method: 'POST' });
-      if (!result || result.ok !== true) throw new Error('Не удалось закрыть сессию локального API.');
-      sessionMode = false;
-      return true;
+      if (closePromise) return closePromise;
+      closePromise = (async () => {
+        if (connectPromise) await connectPromise;
+        if (!sessionMode) return false;
+        const result = await request('/api/session/close', { method: 'POST' });
+        if (!result || result.ok !== true) throw new Error('Не удалось закрыть сессию локального API.');
+        sessionMode = false;
+        return true;
+      })();
+      try {
+        return await closePromise;
+      } finally {
+        closePromise = null;
+      }
     },
     get connected() { return sessionMode; },
     async health() {
