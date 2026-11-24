@@ -308,3 +308,40 @@ test('rejects 20 invalid export-envelope metadata variants before import', async
     });
   }
 });
+
+
+test('rejects 20 malformed canonical target read responses before import', async t => {
+  const invalidTargets = [
+    ['null response', null],
+    ['undefined response', undefined],
+    ['array response', []],
+    ['string response', 'profile'],
+    ['number response', 1],
+    ['boolean response', false],
+    ['missing revision', { profile: null }],
+    ['string revision', { revision: '0', profile: null }],
+    ['null revision', { revision: null, profile: null }],
+    ['negative revision', { revision: -1, profile: null }],
+    ['fractional revision', { revision: 0.25, profile: null }],
+    ['NaN revision', { revision: NaN, profile: null }],
+    ['infinite revision', { revision: Infinity, profile: null }],
+    ['unsafe revision', { revision: Number.MAX_SAFE_INTEGER + 1, profile: null }],
+    ['missing profile field', { revision: 0 }],
+    ['undefined profile', { revision: 0, profile: undefined }],
+    ['array profile', { revision: 0, profile: [] }],
+    ['string profile', { revision: 0, profile: 'not-empty-object' }],
+    ['number profile', { revision: 0, profile: 7 }],
+    ['boolean profile', { revision: 0, profile: true }],
+  ];
+
+  for (const [name, target] of invalidTargets) {
+    await t.test(name, async () => {
+      const data = fixture({ state: {}, logs: [], photos: {} });
+      let importCalls = 0;
+      data.client.readProfile = async () => target;
+      data.client.importProfile = async () => { importCalls += 1; return 1; };
+      await assert.rejects(migrateProfileToLocalApi(data), /некорректное состояние/);
+      assert.equal(importCalls, 0, 'malformed target response must not reach import');
+    });
+  }
+});
