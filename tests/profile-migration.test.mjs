@@ -150,3 +150,68 @@ test('rejects 20 malformed migration inputs and target states before unsafe impo
     });
   }
 });
+
+
+test('keeps the migration snapshot stable across 20 concurrent source edits', async t => {
+  const mutations = [
+    ['change a top-level state field', source => { source.state.marker = 'edited'; }],
+    ['append a transaction', source => { source.state.tx.push({ id: 'late', amount: 99 }); }],
+    ['edit a nested transaction', source => { source.state.tx[0].amount = 99; }],
+    ['replace the state object', source => { source.state = { replaced: true }; }],
+    ['replace the transaction list', source => { source.state.tx = []; }],
+    ['append a log entry', source => { source.logs.push({ id: 'late' }); }],
+    ['edit a nested log', source => { source.logs[0].message = 'edited'; }],
+    ['replace the logs array', source => { source.logs = []; }],
+    ['add a photo', source => { source.photos.newBuild = ['photo-b']; }],
+    ['append to a photo list', source => { source.photos.build.push('photo-b'); }],
+    ['replace a photo list', source => { source.photos.build = ['replacement']; }],
+    ['replace the photos object', source => { source.photos = { replacement: [] }; }],
+    ['replace the whole source state', source => { source.state = { tx: [{ id: 'late' }] }; }],
+    ['delete a transaction', source => { source.state.tx.pop(); }],
+    ['delete a log', source => { source.logs.pop(); }],
+    ['delete a photo collection', source => { delete source.photos.build; }],
+    ['add IndexedDB revision metadata', source => { source.revision = 77; }],
+    ['add host-owned metadata', source => { source.internalMetadata = { secret: true }; }],
+    ['mutate a nested transaction field', source => { source.state.tx[0].id = 'changed'; }],
+    ['mutate the original source after replacing logs', source => { source.logs = [{ id: 'replacement' }]; }],
+  ];
+
+  for (const [name, mutate] of mutations) {
+    await t.test(name, async () => {
+      const sourceProfile = {
+        state: { marker: 'initial', tx: [{ id: 'tx-1', amount: 1 }] },
+        logs: [{ id: 'log-1', message: 'initial' }],
+        photos: { build: ['photo-a'] },
+      };
+      const expected = JSON.parse(JSON.stringify({
+        state: sourceProfile.state,
+        logs: sourceProfile.logs,
+        photos: sourceProfile.photos,
+      }));
+      const data = fixture(sourceProfile);
+      let releaseEnvelope;
+      let announceEnvelope;
+      const envelopeGate = new Promise(resolve => { releaseEnvelope = resolve; });
+      const envelopeStarted = new Promise(resolve => { announceEnvelope = resolve; });
+      data.createEnvelope = async payload => {
+        announceEnvelope();
+        await envelopeGate;
+        return {
+          format: 'buildbook-profile-export',
+          version: 1,
+          sourceSchemaVersion: 5,
+          exportedAt: '2026-11-24T00:00:00.000Z',
+          payload,
+          sha256: 'a'.repeat(64),
+        };
+      };
+
+      const migration = migrateProfileToLocalApi(data);
+      await envelopeStarted;
+      mutate(sourceProfile);
+      releaseEnvelope();
+      await migration;
+      assert.deepEqual(data.readStored(), expected, 'the canonical import must use the pre-edit snapshot');
+    });
+  }
+});
