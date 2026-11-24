@@ -27,7 +27,7 @@ try {
     },
   });
   const address = await host.start();
-  console.info(`Buildbook local API listening on ${address.address}:${address.port}; Telegram service started.`);
+  console.info(`Buildbook local API listening on ${address.address}:${address.port}; Telegram ${host.telegramStatus.enabled ? 'service started' : 'disabled until explicitly enabled'}.`);
 } catch (error) {
   console.error('Buildbook local host failed to start.', error?.message || error);
   process.exitCode = 1;

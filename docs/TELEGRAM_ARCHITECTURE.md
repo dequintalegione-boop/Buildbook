@@ -28,7 +28,7 @@
 ## Token and configuration
 
 - The bot token is a secret and must be stored by the host service in an OS-protected local secret store or a restricted local configuration file, never in the web app bundle, browser localStorage, or Git.
-- The current local API uses a host-only bearer token and does not yet provide UI setup or token provisioning. The service must not return the token in status responses or logs.
+- The current local API uses a host-only bearer token and does not yet provide UI setup or token provisioning. Keep `BUILDBOOK_TELEGRAM_ENABLED=false` until the UI storage adapter and migration are complete. The service must not return the token in status responses or logs.
 - Bind the local control API to loopback only; protect configuration-changing requests against cross-site requests and validate the expected local origin.
 - Allowlist entries are numeric Telegram user IDs, normalized and validated by the service.
 
@@ -36,7 +36,7 @@
 
 The current app uses browser IndexedDB, which is unavailable to a separate background process when the browser is closed. The local service therefore cannot safely write financial records into the current browser database directly.
 
-The combined local host now shares one file-backed profile store between its API and Telegram processor. The browser UI still initializes directly from IndexedDB; the repository adapter is not yet wired into app startup, and a recoverable migration/bootstrap path is not complete. Until that is finished, do not treat the browser UI and host as one live ledger or enable Telegram writes against a separate profile.
+The combined local host now shares one file-backed profile store between its API and Telegram processor. Telegram polling is disabled by default (`BUILDBOOK_TELEGRAM_ENABLED=false`) and must be explicitly enabled only after the browser repository has been switched to the same canonical profile; this prevents silent writes to a separate ledger during migration. The browser UI still initializes directly from IndexedDB; the repository adapter is not yet wired into app startup, and a recoverable migration/bootstrap path is not complete. Until that is finished, do not treat the browser UI and host as one live ledger or enable Telegram writes against a separate profile.
 
 ## Outage caveat
 

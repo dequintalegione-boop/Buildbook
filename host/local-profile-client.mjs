@@ -117,7 +117,7 @@ export function createLocalProfileClient({
     },
     async telegramStatus() {
       const result = await request('/api/telegram/status');
-      if (!result || typeof result.running !== 'boolean'
+      if (!result || typeof result.enabled !== 'boolean' || typeof result.running !== 'boolean'
         || !Number.isSafeInteger(result.lastProcessed) || result.lastProcessed < 0
         || !Number.isSafeInteger(result.consecutiveFailures) || result.consecutiveFailures < 0) {
         throw new Error('Локальный сервис вернул некорректный статус Telegram.');

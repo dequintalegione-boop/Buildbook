@@ -272,6 +272,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
         send(response, 200, {
+          enabled: raw?.enabled !== false,
           running: raw?.running === true,
           startedAt: timestamp(raw?.startedAt),
           lastCycleAt: timestamp(raw?.lastCycleAt),
