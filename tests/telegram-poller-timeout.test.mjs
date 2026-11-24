@@ -36,7 +36,9 @@ test('validates the Telegram request timeout configuration', () => {
 test('caller cancellation remains distinguishable from a request timeout', async () => {
   const controller = new AbortController();
   const poller = makePoller((_url, options) => new Promise((_, reject) => {
-    options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+    const abort = () => reject(options.signal.reason);
+    if (options.signal.aborted) abort();
+    else options.signal.addEventListener('abort', abort, { once: true });
     controller.abort(new Error('host shutdown'));
   }), { requestTimeoutMs: 1000 });
 
