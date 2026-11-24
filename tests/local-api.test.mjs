@@ -81,7 +81,7 @@ test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t)
   const bootstrap = await fetch(base + '/api/session/bootstrap', {
     method: 'POST',
     headers: {
-      origin: 'http://localhost:5173',
+      origin: base,
       authorization: 'Bearer test-local-api-token-0123456789abcdef',
       'content-type': 'application/json',
     },
@@ -98,7 +98,7 @@ test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t)
 
   const closed = await fetch(base + '/api/session/close', {
     method: 'POST',
-    headers: { origin: 'http://localhost:5173', cookie: cookie.split(';')[0] },
+    headers: { origin: base, cookie: cookie.split(';')[0] },
   });
   assert.equal(closed.status, 200);
   const afterClose = await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } });
@@ -115,7 +115,7 @@ test('requires the exact local origin and bootstrap secret for browser session e
   assert.equal(noOrigin.status, 403);
   const wrongToken = await fetch(base + '/api/session/bootstrap', {
     method: 'POST',
-    headers: { origin: 'http://localhost:5173', authorization: 'Bearer wrong-bootstrap-token-value-123456', 'content-type': 'application/json' },
+    headers: { origin: base, authorization: 'Bearer wrong-bootstrap-token-value-123456', 'content-type': 'application/json' },
     body: '{}',
   });
   assert.equal(wrongToken.status, 401);
@@ -171,14 +171,14 @@ test('allows authenticated browser clients to preflight profile import POST', as
   const response = await fetch(`${base}/api/profile/import`, {
     method: 'OPTIONS',
     headers: {
-      origin: 'http://localhost:43127',
+      origin: base,
       'access-control-request-method': 'POST',
       'access-control-request-headers': 'authorization,content-type',
     },
   });
   assert.equal(response.status, 204);
   assert.match(response.headers.get('access-control-allow-methods'), /POST/);
-  assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:43127');
+  assert.equal(response.headers.get('access-control-allow-origin'), base);
   assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
 });
 
@@ -258,13 +258,13 @@ test('supports authenticated browser preflight only from loopback origins', asyn
   const allowed = await fetch(`${base}/api/profile`, {
     method: 'OPTIONS',
     headers: {
-      origin: 'http://localhost:5173',
+      origin: base,
       'access-control-request-method': 'PUT',
       'access-control-request-headers': 'authorization,content-type',
     },
   });
   assert.equal(allowed.status, 204);
-  assert.equal(allowed.headers.get('access-control-allow-origin'), 'http://localhost:5173');
+  assert.equal(allowed.headers.get('access-control-allow-origin'), base);
   assert.match(allowed.headers.get('access-control-allow-methods'), /PUT/);
   assert.match(allowed.headers.get('access-control-allow-headers'), /Authorization/);
 
@@ -387,7 +387,7 @@ test('preflight responses carry the same browser isolation headers', async (t) =
   const { base } = await fixture(t);
   const response = await fetch(`${base}/api/profile`, {
     method: 'OPTIONS',
-    headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'GET' },
+    headers: { origin: base, 'access-control-request-method': 'GET' },
   });
   assert.equal(response.status, 204);
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
