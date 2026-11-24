@@ -19,14 +19,19 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
 
   let running = false;
 
+  async function readCheckpoint() {
+    const offset = await offsetStore.read();
+    if (offset !== null && (!Number.isSafeInteger(offset) || offset < 0)) {
+      throw new TypeError('Telegram offset store returned an invalid checkpoint.');
+    }
+    return offset;
+  }
+
   async function pollOnce({ signal } = {}) {
     if (running) throw new Error('A Telegram polling request is already in progress.');
     running = true;
     try {
-      const offset = await offsetStore.read();
-      if (offset !== null && (!Number.isSafeInteger(offset) || offset < 0)) {
-        throw new TypeError('Telegram offset store returned an invalid checkpoint.');
-      }
+      const offset = await readCheckpoint();
 
       const url = new URL(`https://api.telegram.org/bot${botToken}/getUpdates`);
       url.searchParams.set('timeout', String(timeoutSeconds));
@@ -67,5 +72,5 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
     }
   }
 
-  return Object.freeze({ pollOnce });
+  return Object.freeze({ pollOnce, readCheckpoint });
 }
