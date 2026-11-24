@@ -46,7 +46,7 @@ Still blocked / incomplete:
 - The combined host shares one profile store between API and Telegram, but the UI still starts with browser IndexedDB. The repository adapter is not yet wired into the app startup path; do not treat the UI and host as one live ledger until that switch/migration is implemented and exercised.
 - Category/group and account selection now resolve against the canonical profile, including hidden-category filtering and account IDs. User-configurable default choices and explicit account selection in command syntax remain.
 - UI setup, safe token provisioning, browser export/backup UI, import preview/confirmation, post-import verification, storage-mode switching, and service installation/autostart remain. The browser export-envelope utility at `client/profile-export.js` is loaded and exposed in Settings as **Export for local host**; it downloads the transfer envelope but does not import it into the host. The authenticated import endpoint is implemented but not yet wired to UI. Status is available from the authenticated local API but not yet displayed in the app.
-- Review and tests remain pending; tests have not been run per user instruction.
+- The host/API/Telegram unit suite is now green in GitHub Actions: 181/181 tests passed on 2026-11-24. Browser checks still report eight existing application regressions across both `index.html` and the standalone build; these are tracked separately from the Telegram host unit suite.
 
 ### Current command format
 
