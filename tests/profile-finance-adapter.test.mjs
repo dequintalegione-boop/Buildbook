@@ -45,7 +45,7 @@ test('commits transaction and per-bot replay checkpoint in one canonical revisio
     buildTransaction: async () => transaction({ id: 'tx-1' }),
   });
 
-  const result = await apply({ update: { text: 'расход кофе' }, idempotencyKey: '123:7' });
+  const result = await apply({ update: { update_id: 7, message: { text: 'расход кофе' } }, idempotencyKey: '123:7' });
   const snapshot = store.snapshot();
 
   assert.deepEqual(result, { operationId: 'tx-1', revision: 1, duplicate: false });
