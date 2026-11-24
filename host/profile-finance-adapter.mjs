@@ -57,7 +57,8 @@ function validateProfile(profile) {
     }
     for (const entry of ledger) {
       if (!isRecord(entry) || !isValidIdempotencyKey(entry.key)
-        || typeof entry.operationId !== 'string' || !entry.operationId
+        || typeof entry.operationId !== 'string' || !entry.operationId.trim()
+        || entry.operationId.length > 256 || entry.operationId !== entry.operationId.trim()
         || keys.has(entry.key) || operationIds.has(entry.operationId)) {
         const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
         error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
