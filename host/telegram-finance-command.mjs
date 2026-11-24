@@ -34,7 +34,7 @@ function splitCommand(text) {
 }
 
 function parseAmount(raw) {
-  if (!/^(?:0|[1-9]\d{0,8})(?:[.,]\d{1,2})?$/.test(raw)) return null;
+  if (!/^(?:0|[1-9]\d{0,9})(?:[.,]\d{1,2})?$/.test(raw)) return null;
   const amount = Number(raw.replace(',', '.'));
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const cents = Math.round(amount * 100);
