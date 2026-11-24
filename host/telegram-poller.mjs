@@ -57,21 +57,24 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       let response;
       let payload;
       try {
-        response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
-        if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
-        payload = await readBoundedTelegramJson(response);
-      } catch (error) {
-        if (timedOut) {
-          const timeoutError = new Error('Telegram getUpdates request timed out.');
-          timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
-          throw timeoutError;
+        try {
+          response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+        } catch (error) {
+          if (timedOut) {
+            const timeoutError = new Error('Telegram getUpdates request timed out.');
+            timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
+            throw timeoutError;
+          }
+          if (signal?.aborted) throw signal.reason || new Error('Telegram polling was aborted.');
+          // Fetch errors can contain the request URL, which includes the bot token.
+          const requestError = new Error('Telegram getUpdates request failed.');
+          requestError.code = 'TELEGRAM_POLL_FAILED';
+          throw requestError;
         }
-        // Fetch implementations may include the full request URL in error
-        // messages; Telegram URLs contain the bot token. Do not pass raw
-        // transport errors to lifecycle callbacks or logs.
-        const requestError = new Error('Telegram getUpdates request failed.');
-        requestError.code = 'TELEGRAM_POLL_FAILED';
-        throw requestError;
+        if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
+        // Reader errors are locally-authored and safe to preserve: they tell
+        // callers whether the response was oversized, unreadable, or invalid UTF-8.
+        payload = await readBoundedTelegramJson(response);
       } finally {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abortFromCaller);
