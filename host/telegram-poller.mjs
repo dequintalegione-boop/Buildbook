@@ -35,9 +35,10 @@ async function readTelegramJson(response) {
     reader.releaseLock();
   }
   try {
-    return JSON.parse(Buffer.concat(chunks, total).toString('utf8'));
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, total));
+    return JSON.parse(text);
   } catch {
-    throw new Error('Telegram returned invalid JSON.');
+    throw new Error('Telegram returned invalid UTF-8 JSON.');
   }
 }
 
