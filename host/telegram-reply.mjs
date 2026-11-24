@@ -16,7 +16,7 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
 
   return async function sendReply({ chatId, text, replyToMessageId } = {}) {
     const chat = String(chatId ?? '');
-    if (!/^\d{1,16}$/.test(chat) || String(Number(chat)) !== chat || Number(chat) <= 0) {
+    if (!/^\\d{1,16}$/.test(chat) || String(Number(chat)) !== chat || Number(chat) <= 0) {
       throw new TypeError('Telegram reply requires a canonical numeric chat ID.');
     }
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_REPLY_CHARS) {
@@ -52,7 +52,13 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
         throw error;
       }
       if (!response?.ok) {
-        await response?.body?.cancel?.().catch(() => {});
+        // Best-effort cleanup must not hold the caller open past the request timeout.
+        try {
+          const cleanup = response?.body?.cancel?.();
+          cleanup?.catch?.(() => {});
+        } catch {
+          // Ignore cleanup failures; the HTTP error is the actionable failure.
+        }
         const error = new Error('Telegram sendMessage failed with HTTP ' + (response?.status ?? 'unknown') + '.');
         error.code = 'TELEGRAM_REPLY_FAILED';
         throw error;
