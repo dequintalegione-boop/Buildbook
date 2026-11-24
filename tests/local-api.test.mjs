@@ -29,6 +29,51 @@ test('rejects requests without a valid bearer token', async (t) => {
   assert.equal(response.status, 401);
 });
 
+test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t) => {
+  const { base } = await fixture(t);
+  const bootstrap = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: 'http://localhost:5173',
+      authorization: 'Bearer test-local-api-token-0123456789abcdef',
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  assert.deepEqual(await bootstrap.json(), { ok: true, expiresIn: 12 * 60 * 60 * 1000 });
+  const cookie = bootstrap.headers.get('set-cookie');
+  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\\/api$/);
+  const withoutSession = await fetch(base + '/api/health');
+  assert.equal(withoutSession.status, 401);
+  const withSession = await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } });
+  assert.equal(withSession.status, 200);
+
+  const closed = await fetch(base + '/api/session/close', {
+    method: 'POST',
+    headers: { origin: 'http://localhost:5173', cookie: cookie.split(';')[0] },
+  });
+  assert.equal(closed.status, 200);
+  const afterClose = await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } });
+  assert.equal(afterClose.status, 401);
+});
+
+test('requires the exact local origin and bootstrap secret for browser session exchange', async (t) => {
+  const { base } = await fixture(t);
+  const noOrigin = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: { authorization: 'Bearer test-local-api-token-0123456789abcdef', 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(noOrigin.status, 403);
+  const wrongToken = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: { origin: 'http://localhost:5173', authorization: 'Bearer wrong-bootstrap-token-value-123456', 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(wrongToken.status, 401);
+});
+
 test('sets restrictive browser security headers on API responses', async (t) => {
   const { base, request } = await fixture(t);
   const response = await request(`${base}/api/health`);
