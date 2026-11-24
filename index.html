@@ -3865,7 +3865,8 @@ async function closeTelegramSession(){
 }
 function telegram(){
  if(S.set.localApiUrl)TELEGRAM_UI.baseUrl=String(S.set.localApiUrl);
- if(!TELEGRAM_UI.checked&&!TELEGRAM_UI.checking)refreshTelegramStatus();
+ if(TEST_MODE&&!TELEGRAM_UI.checked){TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Проверка локального хоста отключена в тестовом режиме.'}
+ if(!TEST_MODE&&!TELEGRAM_UI.checked&&!TELEGRAM_UI.checking)refreshTelegramStatus();
  const status=TELEGRAM_UI.status,queue=status&&status.queue?status.queue:{},stamp=value=>{if(!value)return'—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString('ru-RU')};
  const connection=TELEGRAM_UI.checking?'<span class="mu">Проверяем локальный сервис…</span>':TELEGRAM_UI.connected?'<span class="ok">Подключено</span>':'<span class="mu">'+esc(TELEGRAM_UI.error||'Нет активной сессии.')+'</span>';
  const statusCard=TELEGRAM_UI.connected?'<section><div class="hd"><h2>Состояние сервиса</h2><span class="'+(status.enabled&&status.running?'ok':'mu')+'">'+(status.enabled?(status.running?'Работает':'Включён, но остановлен'):'Отключён настройкой')+'</span></div><div class="k">'+kpi('В очереди',Number(queue.pending)||0)+kpi('Обрабатывается',Number(queue.processing)||0)+kpi('Завершено',Number(queue.completed)||0)+kpi('Отклонено',Number(queue.rejected)||0)+kpi('Обработано за цикл',status.lastProcessed||0)+kpi('Ошибки подряд',status.consecutiveFailures||0)+'</div><p class="mu">Запущен: '+stamp(status.startedAt)+' · Последний цикл: '+stamp(status.lastCycleAt)+'</p>'+(status.lastError?'<p class="bad">'+esc(status.lastError.message||'Ошибка сервиса Telegram')+'</p>':'')+'</section>':'<section><b>Локальный сервис не подключён</b><p class="mu">Запустите host-службу на этом компьютере, затем подключите браузер с помощью ключа BUILDBOOK_LOCAL_API_TOKEN.</p><button class="btn p" data-a="tgconnect">Подключить локальный хост</button></section>';
