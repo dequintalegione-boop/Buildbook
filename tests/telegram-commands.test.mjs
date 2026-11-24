@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ReadableStream } from 'node:stream/web';
-import { classifyTelegramCommand, TELEGRAM_HELP_TEXT } from '../host/telegram-finance-command.mjs';
+import { classifyTelegramCommand, parseTelegramFinanceCommand, TELEGRAM_HELP_TEXT } from '../host/telegram-finance-command.mjs';
 import { createTelegramCommandAdapter } from '../host/telegram-command-adapter.mjs';
 import { createTelegramReplySender } from '../host/telegram-reply.mjs';
 import { createTelegramInboxProcessor } from '../host/telegram-inbox-processor.mjs';
@@ -57,6 +57,11 @@ const profile = {
     },
   },
 };
+
+test('finance amount parser accepts the configured maximum and rejects amounts above it', () => {
+  assert.equal(parseTelegramFinanceCommand('/доход 1000000000 Максимум').amount, 1_000_000_000);
+  assert.throws(() => parseTelegramFinanceCommand('/доход 1000000000,01 Слишком много'), /положительным числом/);
+});
 
 test('classifier accepts help, stats and finance, and stays quiet for plain text', () => {
   assert.deepEqual(classifyTelegramCommand('/help'), { type: 'help' });
