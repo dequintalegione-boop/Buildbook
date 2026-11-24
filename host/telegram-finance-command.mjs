@@ -110,8 +110,15 @@ function resolveCategory(state, kind) {
   return { grp: selectedGroup.group, cat: category };
 }
 
-function resolveAccount(state) {
+function resolveAccount(state, preferredId = null) {
   const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  if (preferredId) {
+    const configured = accounts.find(account => account && account.id === preferredId && typeof account.id === 'string' && account.id.trim());
+    if (configured) return configured.id;
+    const error = commandError('Выбранный счёт Telegram не найден в текущем профиле Buildbook. Проверьте BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID.');
+    error.code = 'TELEGRAM_FINANCE_ACCOUNT_UNAVAILABLE';
+    throw error;
+  }
   const preferred = accounts.find(account => account && account.name === 'Наличные' && typeof account.id === 'string' && account.id.trim());
   const account = preferred || accounts.find(item => item && typeof item.id === 'string' && item.id.trim());
   if (account) return account.id;
@@ -121,7 +128,7 @@ function resolveAccount(state) {
 }
 
 /** Convert a parsed command to Buildbook's transaction schema. */
-export function buildTelegramFinanceTransaction(command, { now = new Date(), profile } = {}) {
+export function buildTelegramFinanceTransaction(command, { now = new Date(), profile, defaults } = {}) {
   if (!command || !['i', 'e'].includes(command.kind)
     || !Number.isFinite(command.amount) || command.amount <= 0
     || typeof command.desc !== 'string' || !command.desc.trim()) {
@@ -133,7 +140,7 @@ export function buildTelegramFinanceTransaction(command, { now = new Date(), pro
     grp: command.kind === 'i' ? 'Заработок' : 'Общие расходы',
     cat: command.kind === 'i' ? 'Другое' : 'Еда',
   };
-  const accountId = state ? resolveAccount(state) : 'a1';
+  const accountId = state ? resolveAccount(state, defaults?.accountId || null) : 'a1';
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   const iso = now.toISOString();
   return {
