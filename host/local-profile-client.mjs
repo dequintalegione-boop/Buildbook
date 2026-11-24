@@ -35,15 +35,21 @@ export function createLocalProfileClient({
   let sessionMode = false;
 
   async function request(path, options = {}) {
-    let response;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(new Error('Local API request timed out')), requestTimeoutMs);
-    try {
-      response = await fetchImpl(base + path, {
+    let timeout;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeout = setTimeout(() => {
+        const error = new Error('Local API request timed out');
+        controller.abort(error);
+        reject(error);
+      }, requestTimeoutMs);
+    });
+
+    const operation = (async () => {
+      const response = await fetchImpl(base + path, {
         ...options,
         signal: controller.signal,
-        // The bearer token must never follow a redirect or accompany ambient
-        // cookies/referrer data to another origin.
+        // Never forward the bearer token through redirects or ambient browser state.
         redirect: 'error',
         credentials: options.credentials || (sessionMode ? 'include' : 'omit'),
         cache: 'no-store',
@@ -54,28 +60,41 @@ export function createLocalProfileClient({
           ...(options.headers || {}),
         },
       });
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        // Empty or non-JSON error bodies are handled by the HTTP status below.
+      }
+      return { response, payload };
+    })();
+
+    let result;
+    try {
+      result = await Promise.race([operation, timeoutPromise]);
     } catch (error) {
-      clearTimeout(timeout);
-      const wrapped = new Error(controller.signal.aborted
+      const timedOut = controller.signal.aborted;
+      const wrapped = new Error(timedOut
         ? 'Локальный сервис Buildbook не ответил за отведённое время.'
         : 'Локальный сервис Buildbook недоступен. Проверьте, запущен ли он.');
       wrapped.cause = error;
-      wrapped.code = controller.signal.aborted ? 'BUILD_BOOK_LOCAL_API_TIMEOUT' : 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
+      wrapped.code = timedOut ? 'BUILD_BOOK_LOCAL_API_TIMEOUT' : 'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
       throw wrapped;
+    } finally {
+      clearTimeout(timeout);
     }
-    let payload = null;
-    try { payload = await response.json(); } catch (_) {}
-    clearTimeout(timeout);
-    if (controller.signal.aborted) {
-      const error = new Error('Локальный сервис Buildbook не ответил за отведённое время.');
-      error.code = 'BUILD_BOOK_LOCAL_API_TIMEOUT';
-      throw error;
-    }
+
+    const { response, payload } = result;
     if (!response.ok) {
-      const message = payload && typeof payload.error === 'string' ? payload.error : 'Локальный API вернул ошибку HTTP ' + response.status + '.';
+      const message = payload && typeof payload.error === 'string'
+        ? payload.error
+        : 'Локальный API вернул ошибку HTTP ' + response.status + '.';
       const error = new Error(message);
       error.status = response.status;
-      error.code = payload && payload.code || (response.status === 409 ? 'BUILD_BOOK_STORAGE_CONFLICT' : 'BUILD_BOOK_LOCAL_API_ERROR');
+      error.code = payload && payload.code || (response.status === 409
+        ? 'BUILD_BOOK_STORAGE_CONFLICT'
+        : 'BUILD_BOOK_LOCAL_API_ERROR');
       throw error;
     }
     return payload;
