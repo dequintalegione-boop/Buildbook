@@ -110,6 +110,7 @@ export function createTelegramHostService({
 
   const service = createTelegramService({
     runtime,
+    onStart() { status.started(); },
     intervalMs: config.intervalMs,
     retryBaseMs: config.retryBaseMs,
     retryMaxMs: config.retryMaxMs,
