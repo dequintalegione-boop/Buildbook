@@ -592,3 +592,54 @@ test('rejects malformed Host ports and non-origin Origin values', async (t) => {
     assert.equal(response.status, 403, origin);
   }
 });
+
+
+test('expires HttpOnly sessions and rotates an existing browser session on reconnect', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-session-expiry-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const store = createProfileStore(join(dir, 'profile.json'));
+  const token = 'test-local-api-token-0123456789abcdef';
+  let clock = 1_000;
+  const api = createLocalApiServer({
+    profileStore: store,
+    accessToken: token,
+    sessionTtlMs: 2_000,
+    now: () => clock,
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = `http://127.0.0.1:${address.port}`;
+  const origin = 'http://127.0.0.1:43127';
+  const bootstrap = () => fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin,
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+
+  const first = await bootstrap();
+  assert.equal(first.status, 200);
+  const firstCookie = first.headers.get('set-cookie');
+  assert.match(firstCookie, /HttpOnly/);
+  assert.match(firstCookie, /SameSite=Strict/);
+  assert.match(firstCookie, /Max-Age=2/);
+  const firstValue = firstCookie.split(';')[0];
+
+  const renewed = await bootstrap();
+  assert.equal(renewed.status, 200);
+  const renewedValue = renewed.headers.get('set-cookie').split(';')[0];
+  assert.notEqual(renewedValue, firstValue);
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: firstValue } })).status, 401);
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: renewedValue } })).status, 200);
+
+  clock += 2_001;
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: renewedValue } })).status, 401);
+
+  const afterExpiry = await bootstrap();
+  assert.equal(afterExpiry.status, 200);
+  const freshValue = afterExpiry.headers.get('set-cookie').split(';')[0];
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: freshValue } })).status, 200);
+});
