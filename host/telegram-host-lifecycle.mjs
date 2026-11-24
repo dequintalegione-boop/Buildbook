@@ -19,6 +19,12 @@ export function installTelegramHostLifecycle({ host, processRef = process, onErr
   let stopping = null;
   let started = false;
 
+  const detachSignals = () => {
+    processRef.removeListener('SIGINT', onSigint);
+    processRef.removeListener('SIGTERM', onSigterm);
+    started = false;
+  };
+
   const stop = async (signal = 'shutdown') => {
     if (stopping) return stopping;
     stopping = (async () => {
@@ -29,9 +35,7 @@ export function installTelegramHostLifecycle({ host, processRef = process, onErr
         try { onError(error, { phase: 'shutdown', signal }); } catch {}
         throw error;
       } finally {
-        processRef.removeListener('SIGINT', onSigint);
-        processRef.removeListener('SIGTERM', onSigterm);
-        started = false;
+        detachSignals();
       }
     })();
     return stopping;
@@ -50,13 +54,16 @@ export function installTelegramHostLifecycle({ host, processRef = process, onErr
       try {
         const loop = host.service.start();
         started = true;
-        // The service start promise resolves only when its lifecycle ends.
-        void loop.catch(error => {
+        // A loop that ends unexpectedly must not leave stale signal handlers
+        // or report the host as running. Normal shutdown performs its own cleanup.
+        void Promise.resolve(loop).then(() => {
+          if (!stopping) detachSignals();
+        }, error => {
           try { onError(error, { phase: 'service-loop' }); } catch {}
+          if (!stopping) detachSignals();
         });
       } catch (error) {
-        processRef.removeListener('SIGINT', onSigint);
-        processRef.removeListener('SIGTERM', onSigterm);
+        detachSignals();
         throw error;
       }
     },
