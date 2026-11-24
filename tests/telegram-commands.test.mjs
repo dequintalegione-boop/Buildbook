@@ -74,7 +74,7 @@ test('finance command commits once and returns a confirmation reply', async () =
     profileStore: store,
     now: () => new Date(2026, 10, 24, 9, 0, 0),
   });
-  const update = { message: { text: '/расход 40 Обед' } };
+  const update = { update_id: 8, message: { text: '/расход 40 Обед' } };
   const first = await apply({ update, idempotencyKey: '123456:8' });
   const duplicate = await apply({ update, idempotencyKey: '123456:8' });
   assert.equal(first.duplicate, false);
@@ -91,8 +91,8 @@ test('month statistics read the canonical profile and do not write it', async ()
     profileStore: store,
     now: () => new Date(2026, 10, 24, 9, 0, 0),
   });
-  const current = await apply({ update: { message: { text: '/статистика' } }, idempotencyKey: '123456:9' });
-  const selected = await apply({ update: { message: { text: '/месяц 2026-10' } }, idempotencyKey: '123456:10' });
+  const current = await apply({ update: { update_id: 9, message: { text: '/статистика' } }, idempotencyKey: '123456:9' });
+  const selected = await apply({ update: { update_id: 10, message: { text: '/месяц 2026-10' } }, idempotencyKey: '123456:10' });
   assert.equal(current.operationId, 'stats:123456:9');
   assert.match(current.reply, /Ноябрь 2026/);
   assert.match(current.reply, /Доходы: 1 000,00 ₽/);
@@ -109,14 +109,14 @@ test('month statistics read the canonical profile and do not write it', async ()
 test('help does not write, plain text has no reply, and bad syntax does', async () => {
   const store = makeStore(profile);
   const apply = createTelegramCommandAdapter({ profileStore: store, now: () => new Date(2026, 10, 24) });
-  const help = await apply({ update: { message: { text: '/start' } }, idempotencyKey: '123456:11' });
+  const help = await apply({ update: { update_id: 11, message: { text: '/start' } }, idempotencyKey: '123456:11' });
   assert.equal(help.reply, TELEGRAM_HELP_TEXT);
   await assert.rejects(
-    apply({ update: { message: { text: 'просто текст' } }, idempotencyKey: '123456:12' }),
+    apply({ update: { update_id: 12, message: { text: 'просто текст' } }, idempotencyKey: '123456:12' }),
     error => error.permanent === true && error.reply === undefined,
   );
   await assert.rejects(
-    apply({ update: { message: { text: '/доход' } }, idempotencyKey: '123456:13' }),
+    apply({ update: { update_id: 13, message: { text: '/доход' } }, idempotencyKey: '123456:13' }),
     error => error.permanent === true && /Формат/.test(error.reply),
   );
   assert.equal(store.snapshot().revision, 1);
@@ -196,7 +196,7 @@ test('ordinary text is rejected silently without a help reply', async () => {
   const store = makeStore(profile);
   const apply = createTelegramCommandAdapter({ profileStore: store });
   await assert.rejects(
-    apply({ update: { message: { text: 'привет' } }, idempotencyKey: '123456:plain' }),
+    apply({ update: { update_id: 14, message: { text: 'привет' } }, idempotencyKey: '123456:14' }),
     error => {
       assert.equal(error.code, 'IGNORED_TELEGRAM_TEXT');
       assert.equal(error.permanent, true);
