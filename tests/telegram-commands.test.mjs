@@ -69,6 +69,8 @@ test('classifier accepts help, stats and finance, and stays quiet for plain text
   assert.deepEqual(classifyTelegramCommand('/stats 2026-11'), { type: 'stats', month: '2026-11' });
   assert.deepEqual(classifyTelegramCommand('/доход 10 Текст'), { type: 'finance' });
   assert.equal(classifyTelegramCommand('привет'), null);
+  assert.equal(classifyTelegramCommand('/доход@anotherbot 10 Текст'), null);
+  assert.equal(parseTelegramFinanceCommand('/расход@anotherbot 10 Текст'), null);
   assert.throws(() => classifyTelegramCommand('/статистика ноябрь'), /ГГГГ-ММ/);
   assert.throws(() => classifyTelegramCommand('/unknown'), /Неизвестная команда/);
 });
