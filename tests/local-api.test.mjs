@@ -2,7 +2,7 @@ import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
@@ -35,6 +35,40 @@ async function fixture(t) {
   });
   return { api, base, request };
 }
+
+
+test('serves only the fixed public UI allowlist without exposing host data or secrets', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-static-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(join(dir, 'index.html'), '<!doctype html><title>Buildbook test</title>');
+  await writeFile(join(dir, '.env'), 'BUILDBOOK_LOCAL_API_TOKEN=must-not-leak');
+  await writeFile(join(dir, 'profile.json'), '{"private":true}');
+  const store = createProfileStore(join(dir, 'canonical-profile.json'));
+  const api = createLocalApiServer({
+    profileStore: store,
+    accessToken: 'test-local-api-token-0123456789abcdef',
+    staticRoot: dir,
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = 'http://127.0.0.1:' + address.port;
+
+  const root = await fetch(base + '/');
+  assert.equal(root.status, 200);
+  assert.match(root.headers.get('content-type'), /^text\/html/);
+  assert.equal(await root.text(), '<!doctype html><title>Buildbook test</title>');
+  assert.equal(root.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(root.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+
+  const head = await fetch(base + '/index.html', { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+
+  for (const path of ['/.env', '/profile.json', '/data/profile.json', '/host/local-api.mjs', '/unknown.js']) {
+    assert.equal((await fetch(base + path)).status, 404, path);
+  }
+  assert.equal((await fetch(base + '/api/profile')).status, 401);
+});
 
 test('rejects requests without a valid bearer token', async (t) => {
   const { base } = await fixture(t);
