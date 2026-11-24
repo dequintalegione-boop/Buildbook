@@ -24,7 +24,7 @@ test('recovers once, drains existing items, polls, then drains new items sequent
   assert.deepEqual(calls, ['recover', 'process', 'process', 'process', 'poll', 'process', 'process']);
   calls.length = 0;
   await runtime.runOnce();
-  assert.deepEqual(calls, ['process', 'poll', 'process']);
+  assert.deepEqual(calls, ['process', 'poll', 'process', 'process']);
 });
 
 test('drains already accepted updates even when Telegram polling fails', async () => {
