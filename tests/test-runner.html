@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buildbook — тесты</title>
 <style>
-:root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:640px;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
+:root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:100%;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:block;position:fixed;left:-2000px;top:0;width:1440px;height:1000px;visibility:hidden;pointer-events:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
 </style></head><body>
 <h1>Buildbook — автоматические браузерные тесты</h1>
 <p class="muted">Проверяется выбранная версия приложения в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
@@ -1424,7 +1424,7 @@ d.tx=[
 api.setState(d);api.action('nav','calendar');api.action('calnow');
 const dayButton=w.document.querySelector('[data-calendar-date="'+date+'"]');assert(dayButton&&!dayButton.disabled,'Не найдена активная ячейка календаря для '+date);dayButton.click();
 const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
-assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня');
+assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня: '+JSON.stringify(api.calendarDiagnostics()));
 assert(panel.textContent.includes('Расход')&&!panel.textContent.includes('Выбыло'),'Подпись «Выбыло» не заменена на «Расход».');
 assert(panel.textContent.includes('Продажа видеокарты')&&panel.textContent.includes('Закупка SSD'),'В блоке не показаны все сделки за день');
 assert(normalize(panel.textContent).includes('+12 000')&&normalize(panel.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
