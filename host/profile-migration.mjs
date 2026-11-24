@@ -4,6 +4,25 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function isValidExportDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone, sign, offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+  const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
+  const offsetHour = Number(offsetHourText || 0), offsetMinute = Number(offsetMinuteText || 0);
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, Number((fraction + '000').slice(0, 3)));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute && date.getUTCSeconds() === second
+    && Number.isFinite(Date.parse(value)) && (sign === '+' || sign === '-' || zone === 'Z');
+}
+
 /**
  * Copy the current IndexedDB snapshot into an empty canonical local profile.
  * This deliberately never clears or mutates the source repository: the caller
@@ -67,8 +86,7 @@ export async function migrateProfileToLocalApi({ client, sourceProfile, createEn
     || envelope.format !== 'buildbook-profile-export'
     || envelope.version !== 1
     || envelope.sourceSchemaVersion !== 5
-    || typeof envelope.exportedAt !== 'string'
-    || !Number.isFinite(Date.parse(envelope.exportedAt))
+    || !isValidExportDate(envelope.exportedAt)
     || typeof envelope.sha256 !== 'string'
     || !/^[a-f0-9]{64}$/.test(envelope.sha256)
     || !isPlainObject(envelope.payload)
