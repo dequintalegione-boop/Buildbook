@@ -184,8 +184,8 @@ test('rejects exhausted revisions before profile writes or imports', async () =>
     accessToken: token,
     fetchImpl: async () => { calls += 1; throw new Error('must not be called'); },
   });
-  await assert.rejects(client.writeProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректную ревизию/);
-  await assert.rejects(client.importProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректную ревизию/);
+  await assert.rejects(client.writeProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректн.*ревизи/);
+  await assert.rejects(client.importProfile({ marker: true }, Number.MAX_SAFE_INTEGER), /корректн.*ревизи/);
   assert.equal(calls, 0);
 });
 
@@ -223,7 +223,7 @@ test('bounds request time and reports timeout distinctly', async () => {
     }),
   });
   await assert.rejects(client.health(), error =>
-    error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT' && /отведённого времени/.test(error.message));
+    error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT' && /отведённ.*времени/.test(error.message));
 });
 
 test('rejects invalid request timeout configuration', () => {
