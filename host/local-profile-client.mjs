@@ -129,7 +129,7 @@ export function createLocalProfileClient({
         sessionMode = true;
         accessToken = null;
         return true;
-      })();
+      });;
       try {
         return await connectPromise;
       } finally {
@@ -145,7 +145,7 @@ export function createLocalProfileClient({
         if (!result || result.ok !== true) throw new Error('Не удалось закрыть сессию локального API.');
         sessionMode = false;
         return true;
-      })();
+      });;
       try {
         return await closePromise;
       } finally {
