@@ -749,3 +749,30 @@ test('preserves compare-and-swap semantics across 20 concurrent API write races'
     });
   }
 });
+
+
+test('allows exactly one winner in 20 concurrent empty-profile import races', async t => {
+  for (let round = 1; round <= 20; round += 1) {
+    await t.test('import race ' + round, async t => {
+      const { base, request } = await fixture(t);
+      const envelope = makeImportEnvelope({
+        state: { tx: [{ id: 'import-' + round, amount: round }] },
+        logs: [],
+        photos: {},
+      });
+      const importOnce = () => request(base + '/api/profile/import', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedRevision: 0, envelope }),
+      });
+      const responses = await Promise.all([importOnce(), importOnce()]);
+      const statuses = responses.map(response => response.status).sort();
+      assert.deepEqual(statuses, [200, 409]);
+      const successful = responses.find(response => response.status === 200);
+      assert.deepEqual(await successful.json(), { revision: 1, imported: true, verified: true });
+      const final = await (await request(base + '/api/profile')).json();
+      assert.equal(final.revision, 1);
+      assert.deepEqual(final.profile.state.tx, [{ id: 'import-' + round, amount: round }]);
+    });
+  }
+});
