@@ -89,7 +89,7 @@ export function createInboxStore(filePath) {
 
   async function load() {
     if (!statePromise) {
-      statePromise = (async () => {
+      const pending = (async () => {
         let pathInfo;
         try {
           pathInfo = await lstat(path);
@@ -126,6 +126,14 @@ export function createInboxStore(filePath) {
         }
         return parsed;
       })();
+      // A failed read must not permanently poison this store instance. Keep
+      // the rejection visible to current callers, but allow a later operation
+      // to retry after a transient I/O failure or an externally repaired file.
+      const cached = pending.catch(error => {
+        if (statePromise === cached) statePromise = undefined;
+        throw error;
+      });
+      statePromise = cached;
     }
     return statePromise;
   }
