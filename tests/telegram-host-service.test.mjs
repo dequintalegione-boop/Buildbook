@@ -105,6 +105,14 @@ test('host factory accepts numeric bot token identity and rejects malformed toke
       config: malformed,
       async applyUpdate() { return { operationId: 'op-1' }; },
     }), /bot ID must match the bot token identity/);
+
+    const noncanonical = config(root);
+    noncanonical.botToken = '012345:secret';
+    noncanonical.botId = '012345';
+    assert.throws(() => createTelegramHostService({
+      config: noncanonical,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /bot ID must match the bot token identity/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
