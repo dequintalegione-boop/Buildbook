@@ -60,6 +60,45 @@ test('does not advance offset when durable enqueue fails', async () => {
   assert.equal(f.offset, 7);
 });
 
+test('replays durably accepted updates when offset checkpoint persistence fails', async () => {
+  let savedOffset = 7;
+  let failFirstWrite = true;
+  let accepted = 0;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async update => {
+      assert.equal(update.update_id, 7);
+      accepted += 1;
+      return { accepted: true };
+    } },
+    offsetStore: {
+      async read() { return savedOffset; },
+      async write(value) {
+        if (failFirstWrite) {
+          failFirstWrite = false;
+          throw new Error('checkpoint storage unavailable');
+        }
+        savedOffset = value;
+      },
+    },
+    fetchImpl: async () => {
+      const bytes = new TextEncoder().encode(JSON.stringify({ ok: true, result: [{ update_id: 7 }] }));
+      return {
+        ok: true,
+        headers: { get: () => String(bytes.byteLength) },
+        body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }),
+      };
+    },
+    timeoutSeconds: 0,
+  });
+
+  await assert.rejects(poller.pollOnce(), /checkpoint storage unavailable/);
+  assert.equal(savedOffset, 7);
+  await poller.pollOnce();
+  assert.equal(accepted, 2);
+  assert.equal(savedOffset, 8);
+});
+
 test('advances past rejected users and sends persisted offset on next poll', async () => {
   const f = fixture({ updates: [{ update_id: 25 }], accept: async () => ({ accepted: false }) });
   const result = await f.poller.pollOnce();
