@@ -215,3 +215,52 @@ test('keeps the migration snapshot stable across 20 concurrent source edits', as
     });
   }
 });
+
+
+test('refuses to migrate when the canonical revision counter is exhausted', async () => {
+  const data = fixture({ state: {}, logs: [], photos: {} });
+  data.client.readProfile = async () => ({ revision: Number.MAX_SAFE_INTEGER, profile: null });
+  let imports = 0;
+  data.client.importProfile = async () => { imports += 1; return Number.MAX_SAFE_INTEGER; };
+  await assert.rejects(migrateProfileToLocalApi(data), /Исчерпан диапазон ревизий/);
+  assert.equal(imports, 0, 'an exhausted revision must be rejected before import');
+});
+
+test('does not report migration success for 20 invalid import revision results', async t => {
+  const invalidRevisions = [
+    undefined, null, false, true, '1', '', 0, -1, 1.5, NaN,
+    Infinity, -Infinity, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1,
+    2, 3, {}, [], new Number(1), 1n,
+  ];
+  for (const [index, invalidRevision] of invalidRevisions.entries()) {
+    await t.test('invalid revision result #' + (index + 1), async () => {
+      const sourceProfile = { state: { marker: 'source' }, logs: [], photos: {} };
+      let stored = null;
+      let storedRevision = 0;
+      const client = {
+        async readProfile() { return { revision: storedRevision, profile: stored }; },
+        async importProfile(envelope, expectedRevision) {
+          assert.equal(expectedRevision, 0);
+          stored = envelope.payload;
+          storedRevision = 1;
+          return invalidRevision;
+        },
+      };
+      const createEnvelope = async payload => ({
+        format: 'buildbook-profile-export',
+        version: 1,
+        sourceSchemaVersion: 5,
+        exportedAt: '2026-11-24T00:00:00.000Z',
+        payload,
+        sha256: 'a'.repeat(64),
+      });
+
+      await assert.rejects(
+        migrateProfileToLocalApi({ client, sourceProfile, createEnvelope }),
+        error => error.code === 'BUILD_BOOK_MIGRATION_VERIFY_FAILED',
+      );
+      assert.equal(storedRevision, 1, 'the read-back still observes the committed revision');
+      assert.deepEqual(stored, { state: { marker: 'source' }, logs: [], photos: {} });
+    });
+  }
+});
