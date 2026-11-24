@@ -101,25 +101,28 @@ export function createInboxStore(filePath) {
           throw new Error('Telegram inbox path must be a regular file, not a link or special file.');
         }
         const handle = await open(path, 'r');
-          let text;
-          try {
-            const openedInfo = await handle.stat();
-            if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
-              throw new Error('Telegram inbox file changed during read; refusing persisted updates.');
-            }
-            if (openedInfo.size > MAX_INBOX_FILE_BYTES) {
-              throw new Error('Telegram inbox file exceeds the allowed size.');
-            }
-            try { text = await readUtf8Bounded(handle, MAX_INBOX_FILE_BYTES); }
-            catch (error) { if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Telegram inbox file exceeds the allowed size.'); throw error; }
-          } finally {
-            await handle.close();
+        let text;
+        try {
+          const openedInfo = await handle.stat();
+          if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+            throw new Error('Telegram inbox file changed during read; refusing persisted updates.');
           }
-          const parsed = JSON.parse(text);
-          if (!isValidState(parsed)) {
-            throw new Error('Unsupported or corrupt Telegram inbox file.');
+          if (openedInfo.size > MAX_INBOX_FILE_BYTES) {
+            throw new Error('Telegram inbox file exceeds the allowed size.');
           }
-          return parsed;
+          try { text = await readUtf8Bounded(handle, MAX_INBOX_FILE_BYTES); }
+          catch (error) {
+            if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Telegram inbox file exceeds the allowed size.');
+            throw error;
+          }
+        } finally {
+          await handle.close();
+        }
+        const parsed = JSON.parse(text);
+        if (!isValidState(parsed)) {
+          throw new Error('Unsupported or corrupt Telegram inbox file.');
+        }
+        return parsed;
       })();
     }
     return statePromise;
