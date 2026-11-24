@@ -93,6 +93,17 @@ export function createProfileStore(filePath) {
         await handle.close();
       }
       await rename(temp, target);
+      // Persist the directory entry update as well as the file contents. A
+      // crash after rename but before this sync can otherwise lose the rename
+      // on filesystems that defer directory metadata.
+      if (process.platform !== 'win32') {
+        const directoryHandle = await open(dirname(target), 'r');
+        try {
+          await directoryHandle.sync();
+        } finally {
+          await directoryHandle.close();
+        }
+      }
     } catch (error) {
       await unlink(temp).catch(() => {});
       throw error;
