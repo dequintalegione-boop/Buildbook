@@ -296,3 +296,57 @@ test('terminal silent command rejection is acknowledged without sending a Telegr
   assert.equal(inbox.state.status, 'rejected');
   assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
+
+
+test('retries a failed Telegram reply without duplicating the committed finance operation', async () => {
+  const inbox = makeInbox(sample);
+  const profileStore = {
+    revision: 0,
+    profile: { state: { tx: [] } },
+    async read() {
+      return { revision: this.revision, profile: structuredClone(this.profile) };
+    },
+    async write(next, expectedRevision) {
+      assert.equal(expectedRevision, this.revision);
+      this.profile = structuredClone(next);
+      return ++this.revision;
+    },
+  };
+  const { createProfileFinanceAdapter } = await import('../host/profile-finance-adapter.mjs');
+  let buildCalls = 0;
+  const applyUpdate = createProfileFinanceAdapter({
+    profileStore,
+    async buildTransaction() {
+      buildCalls++;
+      return {
+        kind: 'i',
+        date: '2026-11-23',
+        amount: 100,
+        desc: 'Telegram income',
+        cat: 'Заработок',
+        grp: 'Доходы',
+        acc: 'Наличные',
+      };
+    },
+  });
+  let replyAttempts = 0;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    applyUpdate,
+    async deliverReply() {
+      replyAttempts++;
+      if (replyAttempts === 1) throw new Error('Telegram transport unavailable');
+    },
+  });
+
+  await assert.rejects(processor.processOne(), /Telegram transport unavailable/);
+  assert.equal(inbox.state.status, 'pending');
+  assert.equal(profileStore.profile.state.tx.length, 1);
+
+  const retried = await processor.processOne();
+  assert.equal(retried.processed, true);
+  assert.equal(inbox.state.status, 'completed');
+  assert.equal(profileStore.profile.state.tx.length, 1);
+  assert.equal(buildCalls, 1);
+  assert.equal(replyAttempts, 2);
+});
