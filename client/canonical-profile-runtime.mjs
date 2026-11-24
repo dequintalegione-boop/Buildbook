@@ -42,6 +42,7 @@ export function createCanonicalProfileRuntime({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;
+    let payload = null;
     try {
       response = await fetchImpl(base + path, {
         method,
@@ -53,6 +54,14 @@ export function createCanonicalProfileRuntime({
         referrerPolicy: 'no-referrer',
         headers: body === undefined ? {} : { 'content-type': 'application/json' },
       });
+      try {
+        payload = await response.json();
+      } catch (cause) {
+        // A body read can outlive the response headers. Keep the timeout active
+        // until the body is consumed, and surface timeout instead of masking it
+        // as an empty HTTP error payload.
+        if (controller.signal.aborted) throw cause;
+      }
     } catch (cause) {
       const error = new Error(controller.signal.aborted
         ? 'Локальный сервис Buildbook не ответил за отведённое время.'
@@ -65,9 +74,6 @@ export function createCanonicalProfileRuntime({
     } finally {
       clearTimeout(timeout);
     }
-
-    let payload = null;
-    try { payload = await response.json(); } catch {}
     if (!response.ok) {
       const error = new Error(typeof payload?.error === 'string'
         ? payload.error
