@@ -278,6 +278,15 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
  .hd h1{font-size:23px}
  .ac2{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Final desktop layout safeguards for wide screens and transaction history. */
+main{width:100%;max-width:none;min-width:0;box-sizing:border-box}
+#nav-other-folder{width:100%;max-width:100%;min-width:0;box-sizing:border-box;flex:0 1 auto;overflow-x:hidden}
+#nav-other-folder *{box-sizing:border-box;max-width:100%}
+html.transaction-screen,body.transaction-screen{overflow-x:hidden;overflow-y:hidden}
+@media(max-width:760px){
+ html.transaction-screen,body.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto}
+}
 </style></head><body>
 <nav><button type="button" data-a="navcollapse" class="nav-toggle" title="Свернуть или развернуть меню" data-short="☰">Свернуть меню</button><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home" data-short="С" title="Сводка">Сводка</button><button data-a="nav" data-id="dash" data-short="Д" title="Дашборд">Дашборд</button><button data-a="nav" data-id="planning" data-short="Пл" title="Планирование">Планирование</button><button data-a="nav" data-id="calendar" data-short="К" title="Календарь">Календарь</button><button data-a="nav" data-id="stock" data-short="С" title="Склад">Склад</button><button data-a="nav" data-id="builds" data-short="Сб" title="Сборки">Сборки</button><button data-a="nav" data-id="tx" data-short="₽" title="Транзакции">Транзакции</button><button data-a="nav" data-id="assets" data-short="ДИ" title="Долги и инвестиции">Долги и инвестиции</button><button data-a="nav" data-id="reports" data-short="О" title="Отчёты">Отчёты</button><button data-a="nav" data-id="tasks" data-short="З" title="Задачи">Задачи</button><button data-a="nav" data-id="trash" data-short="К" title="Корзина">Корзина</button><button data-a="nav" data-id="log" data-short="Ж" title="Журнал">Журнал</button><button data-a="nav" data-id="set" data-short="Н" title="Настройки">Настройки</button><div id="nav-other-folder" class="nav-other-folder" data-nav-other-drop hidden><button type="button" data-a="other-toggle" data-short="•••" title="Дополнительные вкладки" aria-expanded="false">Прочее <span aria-hidden="true">▾</span></button><div id="nav-other-list" class="nav-other-list" aria-label="Дополнительные вкладки"></div><div class="nav-other-drop-label">Перетащите сюда ненужные вкладки</div></div></nav>
 <main id="m"></main>
@@ -1181,7 +1190,7 @@ for(const l of ls){const key=l.batchId+'|'+(l.problem?'problem':'normal');sum[ke
 const was=o&&o.status==ST[3],storedCost=x.cost,existingSale=x.txId&&S.tx.find(t=>t.id===x.txId);
 if(d.status===ST[3]){
  const candidate=existingSale?{...existingSale,kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:(d.stx&&(+d.price||0)?{kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:null);
- if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok){alert(cashCheck.error);return false}}
+ if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok){window.alert(cashCheck.error);return false}}
 }
 Object.assign(x,{name:d.name,status:d.status,builder:d.builder,buyer:d.buyer,date:d.date,sold:d.sold,planned:+d.planned||0,price:+d.price||0,note:d.note,lines:ls});const sold=x.status==ST[3];
 if(sold){if(!x.sold)x.sold=today();x.cost=was&&storedCost!=null&&Number.isFinite(Number(storedCost))?Number(storedCost):live(x)}else x.cost=null;
@@ -3709,6 +3718,28 @@ function applyXlsxSelections(plans,choices){
   result.errors.forEach(e=>{if(total.errors.length<50)total.errors.push({sheet:choice.name,row:e.row,reason:e.reason})});
   total.sheets.push({name:choice.name,kind:choice.kind,added:result.added,skipped:result.skipped});
  });
+ // The debt sheet is the authoritative source for payment-to-operation IDs.
+ // Restore the linked cash-flow record if an older/custom workbook omitted
+ // that transaction row, and repair metadata when the row was imported.
+ (S.debts||[]).forEach(debt=>{
+  const originId=String(debt.originTxId||'');
+  if(originId){
+   let origin=S.tx.find(tx=>tx.id===originId)||S.tx.find(tx=>tx.debtId===debt.id&&tx.debtRole==='origin');
+   if(origin){origin.debtId=debt.id;origin.debtRole='origin';debt.originTxId=origin.id}
+  }
+  (Array.isArray(debt.payments)?debt.payments:[]).forEach(payment=>{
+   const paymentId=String(payment.id||''),txId=String(payment.txId||'');
+   let transaction=S.tx.find(tx=>(txId&&tx.id===txId)||(paymentId&&tx.debtId===debt.id&&tx.debtPaymentId===paymentId));
+   if(!transaction&&paymentId){
+    const accountId=payment.accountId||debt.accountId||(S.accounts[0]&&S.accounts[0].id)||'';
+    transaction={id:txId||uid(),kind:debt.direction==='given'?'loan_repayment_in':'loan_repayment_out',date:payment.date,amount:Number(payment.amount),desc:(debt.direction==='given'?'Возврат долга от ':'Погашение долга: ')+debt.person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note:String(payment.note||''),debtId:debt.id,debtPaymentId:paymentId,debtRole:'payment'};
+    S.tx.push(transaction);total.added++;
+   }else if(transaction){
+    transaction.debtId=debt.id;transaction.debtPaymentId=paymentId;transaction.debtRole='payment';
+   }
+   if(transaction)payment.txId=transaction.id;
+  });
+ });
  return total;
 }
 function importXlsxBuffer(buffer){
@@ -4084,6 +4115,21 @@ function trash(){
  return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
 }
 
+function renameCategory(kind,group,oldName){
+ const categories=kind==='e'?EXP:INC;
+ if(!categories[group]||!categories[group].includes(oldName))return false;
+ const nextName=String(prompt('Новое название категории',oldName)||'').trim();
+ if(!nextName||nextName===oldName)return false;
+ if(Object.values(categories).some(items=>items.includes(nextName))){window.alert('Категория с таким названием уже существует.');return false}
+ categories[group][categories[group].indexOf(oldName)]=nextName;
+ S.tx.forEach(transaction=>{if(transaction.cat===oldName&&(transaction.grp===group||!transaction.grp))transaction.cat=nextName});
+ const oldKey=group+'::'+oldName,newKey=group+'::'+nextName;
+ S.hiddenCategories[kind]=(S.hiddenCategories[kind]||[]).map(item=>item===oldKey?newKey:item);
+ if(kind==='e'&&group===S.stockGroup)S.batches.forEach(batch=>{if(batch.type===oldName)batch.type=nextName});
+ if(kind==='i'&&group===S.partSaleGroup&&S.partSaleCategory===oldName)S.partSaleCategory=nextName;
+ syncCategories();save();render();return true;
+}
+
 function act(a,id){const A={
 'hotkey-add':()=>{
  const select=$('#hotkey-new-action'),action=select&&select.value;
@@ -4102,7 +4148,7 @@ td:()=>{const t=find('tx',id);if(!t)return;if(t.buildId){alert('Продажа �
 aadd:()=>accountForm(),
 aedit:()=>accountForm(id),
 
-cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccedit',catKey(k,g,select.value))},
+cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)renameCategory(k,g,select.value)},
 cchidepick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('cchide',catKey(k,g,select.value))},
 ccdelpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccdel',catKey(k,g,select.value))},
 txcat:()=>{try{const[k,g,c]=JSON.parse(decodeURIComponent(id));V.t.k=k;V.t.grp=g;V.t.cat=c;const overlay=document.querySelector('.ov');if(overlay)overlay.remove();render();toast('Показана категория «'+c+'».')}catch(error){alert('Не удалось выбрать категорию.')}},
@@ -4113,7 +4159,7 @@ cgroupedit:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;
 cghide:()=>{const [k,g]=JSON.parse(decodeURIComponent(id));if(k=='e'&&g==S.stockGroup){alert('Группу типов склада нельзя скрыть: она используется в учёте комплектующих.');return}const a=S.hiddenGroups[k]||(S.hiddenGroups[k]=[]),i=a.indexOf(g);i>=0?a.splice(i,1):a.push(g);save();render()},
 cgroupdel:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(g==S.stockGroup){alert('Системную группу типов склада удалить нельзя.');return}if((o[g]||[]).length){alert('Сначала удалите или перенесите категории внутри группы.');return}if(S.tx.some(t=>t.grp==g)){alert('Группа используется в истории операций. Скрывайте её вместо удаления.');return}if(!confirm('Удалить пустую группу «'+g+'»?'))return;delete o[g];S.hiddenGroups[k]=(S.hiddenGroups[k]||[]).filter(x=>x!=g);syncCategories();save();render()},
 ccadd:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g])return;const n=(prompt('Название новой категории в группе «'+g+'»')||'').trim();if(!n)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g].push(n);syncCategories();save();render()},
-ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(old))return;const n=(prompt('Новое название категории',old)||'').trim();if(!n||n==old)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g][o[g].indexOf(old)]=n;S.tx.forEach(t=>{if(t.cat==old&&(t.grp==g||!t.grp))t.cat=n});const hk=g+'::'+old,hk2=g+'::'+n;S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).map(x=>x==hk?hk2:x);if(k=='e'&&g==S.stockGroup)S.batches.forEach(b=>{if(b.type==old)b.type=n});if(k=='i'&&g==S.partSaleGroup&&S.partSaleCategory==old)S.partSaleCategory=n;syncCategories();save();render()},
+ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id));renameCategory(k,g,old)},
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
 exp:()=>{if(downloadBackup('buildbook-'+today()+'.json',true)){render();toast('Копия скачана')}},expzip:()=>downloadZipBackup(),'host-export':()=>downloadHostProfileExport(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
