@@ -320,7 +320,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       const sessionId = randomBytes(32).toString('base64url');
       sessions.set(sessionId, { expiresAt: now() + sessionTtlMs });
-      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.floor(sessionTtlMs / 1000));
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.ceil(sessionTtlMs / 1000));
       send(response, 200, { ok: true, expiresIn: sessionTtlMs });
       return;
     }
