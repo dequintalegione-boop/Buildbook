@@ -325,6 +325,25 @@ export function createInboxStore(filePath) {
       });
     },
 
+    /**
+     * Remove terminal inbox records only after the durable Telegram checkpoint
+     * has advanced beyond them. The canonical finance idempotency ledger is
+     * retained independently, so a replayed update still cannot create a
+     * second financial effect. Pending/processing records are never compacted.
+     */
+    async compactAcknowledged(offset) {
+      if (!Number.isSafeInteger(offset) || offset < 0) {
+        throw new TypeError('A durable non-negative Telegram checkpoint is required.');
+      }
+      return mutate(state => {
+        const before = state.items.length;
+        state.items = state.items.filter(item =>
+          !(['completed', 'rejected'].includes(item.status) && item.updateId < offset)
+        );
+        return before - state.items.length;
+      });
+    },
+
     async stats() {
       return readConsistent(state => {
         const result = { total: state.items.length, pending: 0, processing: 0, completed: 0, rejected: 0 };
