@@ -204,12 +204,26 @@ export function createLocalProfileClient({
       if (typeof body !== 'string' || new TextEncoder().encode(body).byteLength > MAX_PROFILE_REQUEST_BYTES) {
         throw new RangeError('Размер запроса профиля превышает допустимые 8 MiB.');
       }
-      const result = await request('/api/profile', {
-        method: 'PUT',
-        body,
-      });
+      let result;
+      try {
+        result = await request('/api/profile', { method: 'PUT', body });
+      } catch (cause) {
+        // A lost response or server error may happen after the atomic commit.
+        // Never blindly retry a financial write; force the caller to read current state.
+        if (cause?.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT'
+          || cause?.code === 'BUILD_BOOK_LOCAL_API_UNAVAILABLE'
+          || (Number.isInteger(cause?.status) && cause.status >= 500)) {
+          const error = new Error('Результат сохранения неизвестен: перечитайте профиль перед повторной попыткой.');
+          error.code = 'BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+          error.cause = cause;
+          throw error;
+        }
+        throw cause;
+      }
       if (!result || !Number.isSafeInteger(result.revision) || result.revision !== expectedRevision + 1) {
-        throw new Error('Локальный сервис вернул некорректную ревизию после сохранения.');
+        const error = new Error('Результат сохранения неизвестен: сервер не подтвердил новую ревизию. Перечитайте профиль перед повторной попыткой.');
+        error.code = 'BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+        throw error;
       }
       return result.revision;
     },
