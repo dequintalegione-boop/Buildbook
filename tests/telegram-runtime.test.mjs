@@ -105,3 +105,24 @@ test('does not compact inbox records when polling fails before checkpoint confir
   await assert.rejects(runtime.runOnce(), /checkpoint write failed/);
   assert.equal(compacted, false);
 });
+
+test('compacts using the saved checkpoint before requesting another Telegram batch', async () => {
+  const calls = [];
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged(offset) { calls.push(['compact', offset]); },
+    },
+    poller: {
+      async readCheckpoint() { calls.push(['checkpoint']); return 41; },
+      async pollOnce() { calls.push(['poll']); return { received: 0, accepted: 0, nextOffset: 41 }; },
+    },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await runtime.runOnce();
+  assert.deepEqual(calls, [
+    ['checkpoint'], ['compact', 41], ['poll'], ['compact', 41],
+  ]);
+});
