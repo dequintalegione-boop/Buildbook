@@ -48,6 +48,17 @@ test('rejects malformed or duplicate-key durable inbox records on load', async (
   });
 });
 
+test('retries loading after a transient or repaired inbox read failure', async () => {
+  await withStore(async file => {
+    await writeFile(file, '{ invalid json', 'utf8');
+    const inbox = createInboxStore(file);
+    await assert.rejects(inbox.stats(), /JSON|Unexpected/i);
+
+    await writeFile(file, JSON.stringify({ version: 1, items: [] }), 'utf8');
+    assert.equal((await inbox.stats()).total, 0);
+  });
+});
+
 test('refuses a symlink as the durable inbox file', async () => {
   await withStore(async file => {
     const external = file + '.external';
