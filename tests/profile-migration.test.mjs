@@ -264,3 +264,47 @@ test('does not report migration success for 20 invalid import revision results',
     });
   }
 });
+
+
+test('rejects 20 invalid export-envelope metadata variants before import', async t => {
+  const mutations = [
+    ['missing format', envelope => { delete envelope.format; }],
+    ['wrong format', envelope => { envelope.format = 'other'; }],
+    ['null format', envelope => { envelope.format = null; }],
+    ['string version', envelope => { envelope.version = '1'; }],
+    ['zero version', envelope => { envelope.version = 0; }],
+    ['negative version', envelope => { envelope.version = -1; }],
+    ['fractional version', envelope => { envelope.version = 1.5; }],
+    ['unsupported version', envelope => { envelope.version = 2; }],
+    ['missing schema version', envelope => { delete envelope.sourceSchemaVersion; }],
+    ['string schema version', envelope => { envelope.sourceSchemaVersion = '5'; }],
+    ['negative schema version', envelope => { envelope.sourceSchemaVersion = -1; }],
+    ['unsupported schema version', envelope => { envelope.sourceSchemaVersion = 6; }],
+    ['missing export date', envelope => { delete envelope.exportedAt; }],
+    ['non-date export date', envelope => { envelope.exportedAt = 'yesterday'; }],
+    ['empty export date', envelope => { envelope.exportedAt = ''; }],
+    ['missing checksum', envelope => { delete envelope.sha256; }],
+    ['uppercase checksum', envelope => { envelope.sha256 = 'A'.repeat(64); }],
+    ['short checksum', envelope => { envelope.sha256 = 'a'.repeat(63); }],
+    ['long checksum', envelope => { envelope.sha256 = 'a'.repeat(65); }],
+    ['non-hex checksum', envelope => { envelope.sha256 = 'g'.repeat(64); }],
+  ];
+
+  for (const [name, mutate] of mutations) {
+    await t.test(name, async () => {
+      const data = fixture({ state: { safe: true }, logs: [], photos: {} });
+      let importCalls = 0;
+      data.client.importProfile = async () => { importCalls += 1; return 1; };
+      const makeEnvelope = data.createEnvelope;
+      data.createEnvelope = async payload => {
+        const envelope = await makeEnvelope(payload);
+        mutate(envelope);
+        return envelope;
+      };
+      await assert.rejects(migrateProfileToLocalApi(data), /некорректный конверт/);
+      assert.equal(importCalls, 0, 'invalid envelope metadata must be rejected before import');
+      assert.equal(data.readStored(), null);
+      assert.equal(data.readRevision(), 0);
+    });
+  }
+});
