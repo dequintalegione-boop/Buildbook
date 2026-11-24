@@ -29,11 +29,22 @@ async function fixture(t) {
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
+  const bootstrap = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: base,
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const cookie = bootstrap.headers.get('set-cookie').split(';')[0];
   const request = (url, options = {}) => fetch(url, {
     ...options,
-    headers: { authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    headers: { cookie, ...(options.headers || {}) },
   });
-  return { api, base, request };
+  return { api, base, request, cookie };
 }
 
 
@@ -70,10 +81,18 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal((await fetch(base + '/api/profile')).status, 401);
 });
 
-test('rejects requests without a valid bearer token', async (t) => {
+test('rejects requests without a browser session', async (t) => {
   const { base } = await fixture(t);
   const response = await fetch(`${base}/api/health`);
   assert.equal(response.status, 401);
+});
+
+test('bootstrap bearer cannot authorize profile or status requests after exchange', async t => {
+  const { base } = await fixture(t);
+  const headers = { authorization: 'Bearer test-local-api-token-0123456789abcdef' };
+  assert.equal((await fetch(base + '/api/health', { headers })).status, 401);
+  assert.equal((await fetch(base + '/api/profile', { headers })).status, 401);
+  assert.equal((await fetch(base + '/api/telegram/status', { headers })).status, 401);
 });
 
 test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t) => {
@@ -340,8 +359,19 @@ test('sanitizes Telegram status and never returns arbitrary error text or secret
   const base = `http://127.0.0.1:${address.port}`;
   const unauthorized = await fetch(`${base}/api/telegram/status`);
   assert.equal(unauthorized.status, 401);
+  const bootstrap = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: base,
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const cookie = bootstrap.headers.get('set-cookie').split(';')[0];
   const response = await fetch(`${base}/api/telegram/status`, {
-    headers: { authorization: `Bearer ${token}` },
+    headers: { cookie },
   });
   assert.equal(response.status, 200);
   const body = await response.text();
@@ -457,10 +487,21 @@ test('reports a failed canonical read-back after profile import instead of claim
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
   const payload = { state: { tx: [{ id: 'verify-me' }] }, logs: [], photos: {} };
+  const bootstrap = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: base,
+      authorization: 'Bearer test-local-api-token-0123456789abcdef',
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const cookie = bootstrap.headers.get('set-cookie').split(';')[0];
   const response = await fetch(base + '/api/profile/import', {
     method: 'POST',
     headers: {
-      authorization: 'Bearer test-local-api-token-0123456789abcdef',
+      cookie,
       'content-type': 'application/json',
     },
     body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope(payload) }),
