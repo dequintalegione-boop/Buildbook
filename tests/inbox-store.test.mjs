@@ -20,7 +20,7 @@ test('requires an absolute durable inbox path', () => {
 
 test('treats only a missing inbox path as an empty queue', async () => {
   await withStore(async file => {
-    const missing = createInboxStore(join(file, '..', 'not-created', 'inbox.json'));
+    const missing = createInboxStore(join(file + '.missing-parent', 'not-created', 'inbox.json'));
     assert.equal((await missing.stats()).total, 0);
 
     const directoryPath = file + '.directory';
