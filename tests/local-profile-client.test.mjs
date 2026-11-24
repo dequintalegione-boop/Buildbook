@@ -223,7 +223,7 @@ test('bounds request time and reports timeout distinctly', async () => {
     }),
   });
   await assert.rejects(client.health(), error =>
-    error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT' && /отведённ.*времени/.test(error.message));
+    error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT' && /не ответил за отведённое время/.test(error.message));
 });
 
 test('rejects invalid request timeout configuration', () => {
