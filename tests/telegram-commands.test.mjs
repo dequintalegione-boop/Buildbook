@@ -215,8 +215,12 @@ test('monthly stats reject invalid dates, unsafe totals and nonnumeric amounts',
     { kind: 'i', date: '2026-11-31', amount: 100 },
     { kind: 'i', date: '2026-11-02-extra', amount: 200 },
     { kind: 'i', date: '2026-11-03', amount: '300' },
+    { kind: 'i', date: '2026-11-30', amount: 50 },
   ] } };
-  assert.match(formatTelegramMonthSummary(invalidDates, '2026-11'), /Доходы: 0,00 ₽/);
+  assert.match(formatTelegramMonthSummary(invalidDates, '2026-11'), /Доходы: 50,00 ₽/);
+  assert.match(formatTelegramMonthSummary({ state: { tx: [
+    { kind: 'i', date: '2024-02-29', amount: 1 },
+  ] } }, '2024-02'), /Доходы: 1,00 ₽/);
   const tooLarge = { state: { tx: [
     { kind: 'i', date: '2026-11-01', amount: Number.MAX_SAFE_INTEGER / 100 },
     { kind: 'i', date: '2026-11-02', amount: 1 },
