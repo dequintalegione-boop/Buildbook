@@ -10,7 +10,7 @@ import { createTelegramStatus } from './telegram-status.mjs';
 import { buildTelegramFinanceTransactionFromUpdate } from './telegram-finance-command.mjs';
 import { createTelegramCommandAdapter } from './telegram-command-adapter.mjs';
 import { createTelegramReplySender } from './telegram-reply.mjs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 /**
  * Compose the Telegram host from validated host-only configuration and a
@@ -67,8 +67,14 @@ export function createTelegramHostService({
   }
   const paths = [config.inboxPath, config.offsetPath, config.instanceLockPath];
   if (paths.some(path => !isAbsolute(path))) throw new TypeError('Telegram host data paths must be absolute.');
-  if (new Set(paths.map(path => resolve(path).toLowerCase())).size !== paths.length) {
-    throw new TypeError('Telegram host inbox, offset and instance-lock paths must be distinct.');
+  const normalizedPaths = paths.map(path => resolve(path).toLowerCase());
+  const pathsOverlap = (left, right) => {
+    const rel = relative(left, right);
+    return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel));
+  };
+  if (normalizedPaths.some((path, index) => normalizedPaths.some((other, otherIndex) =>
+    index !== otherIndex && pathsOverlap(path, other)))) {
+    throw new TypeError('Telegram host data paths must not overlap.');
   }
 
   const status = createTelegramStatus();
