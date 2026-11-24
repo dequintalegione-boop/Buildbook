@@ -4360,7 +4360,7 @@ document.addEventListener('change',e=>{
    if(!readback||readback.revision!==imported.revision||!isPlainRecord(readback.profile))throw new Error('Импорт записан, но повторное чтение профиля не подтвердило ревизию. Не переключайте приложение на хост до проверки.');
    const actual=await window.BuildbookProfileExport.createEnvelope({state:readback.profile.state,logs:readback.profile.logs,photos:readback.profile.photos});
    if(actual.sha256!==verified.sha256)throw new Error('Импорт записан, но контрольная сумма прочитанного профиля не совпала. Исходный IndexedDB-профиль сохранён; не переключайте режим хранения.');
-   toast('Профиль перенесён в локальный хост и проверен чтением обратно. Buildbook пока продолжает работать с IndexedDB.');
+   toast('Профиль перенесён в локальный хост и проверен чтением обратно.');
    alert('Перенос завершён и проверен.\n\nРевизия локального профиля: '+readback.revision+'\nКонтрольная сумма совпадает.');
    if(confirm('Переключить Buildbook на проверенный файловый профиль сейчас? IndexedDB останется нетронутой резервной копией.')){
     try{localStorage.setItem(STORAGE_MODE_KEY,'canonical');location.reload()}
