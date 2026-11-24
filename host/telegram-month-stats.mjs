@@ -1,6 +1,9 @@
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 
 export function formatTelegramMoney(amount) {
+  if (!Number.isFinite(amount) || !Number.isSafeInteger(Math.round(Math.abs(amount) * 100))) {
+    throw new TypeError('Money amount must be finite and representable in safe integer cents.');
+  }
   const negative = amount < 0;
   const cents = Math.round(Math.abs(amount) * 100);
   const whole = Math.floor(cents / 100);
@@ -25,7 +28,9 @@ export function formatTelegramMonthSummary(profile, month) {
   }
   const monthNumber = Number(month.slice(5, 7));
   const year = Number(month.slice(0, 4));
-  if (monthNumber < 1 || monthNumber > 12) throw new TypeError('Month statistics require a real calendar month.');
+  if (monthNumber < 1 || monthNumber > 12 || year < 2000 || year > 2100) {
+    throw new TypeError('Month statistics require a real calendar month between 2000 and 2100.');
+  }
   const transactions = profile?.state?.tx;
   if (!Array.isArray(transactions)) {
     const error = new Error('Canonical profile does not contain the Buildbook finance state.');
@@ -39,14 +44,23 @@ export function formatTelegramMonthSummary(profile, month) {
   for (const item of transactions) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     if (item.deletedAt) continue;
-    if (typeof item.date !== 'string' || item.date.slice(0, 7) !== month) continue;
+    if (typeof item.date !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)
+      || item.date.slice(0, 7) !== month) continue;
+    const day = Number(item.date.slice(8, 10));
+    const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    if (day < 1 || day > daysInMonth) continue;
     if (item.kind !== 'i' && item.kind !== 'e') continue;
-    const amount = Number(item.amount);
-    if (!Number.isFinite(amount) || amount <= 0) continue;
+    if (typeof item.amount !== 'number' || !Number.isFinite(item.amount) || item.amount <= 0) continue;
+    const amount = item.amount;
     const cents = Math.round(amount * 100);
     if (!Number.isSafeInteger(cents) || cents <= 0) continue;
-    if (item.kind === 'i') incomeCents += cents;
-    else expenseCents += cents;
+    if (item.kind === 'i') {
+      if (!Number.isSafeInteger(incomeCents + cents)) throw new RangeError('Monthly income exceeds safe integer cents.');
+      incomeCents += cents;
+    } else {
+      if (!Number.isSafeInteger(expenseCents + cents)) throw new RangeError('Monthly expenses exceed safe integer cents.');
+      expenseCents += cents;
+    }
     count += 1;
   }
 
