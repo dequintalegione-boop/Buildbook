@@ -68,3 +68,15 @@ test('canonical revision conflicts lock the UI and preserve a backup path', () =
   assert.match(html, /const save=\(\)=>\{\s*if\(APP_FATAL_ERROR\)return/);
   assert.match(html, /Скачать резервную копию текущего состояния/);
 });
+
+
+test('expired canonical sessions can be reconnected without accepting stale in-memory state', () => {
+  assert.match(html, /function telegramConnectForm\(\)/);
+  assert.match(html, /base!==location\.origin/);
+  assert.match(html, /const latest=await runtime\.client\.readProfile\(\)/);
+  assert.match(html, /canonicalReconnectReady=true/);
+  assert.match(html, /data-a="tgconnect">Повторно подключить хост/);
+  assert.match(html, /data-a="canonical-reload">Загрузить актуальный профиль/);
+  assert.match(html, /Несохранённые изменения этой вкладки не будут перенесены/);
+  assert.match(html, /if\(STARTUP_STAGE==='ready'&&!confirm\(/);
+});
