@@ -50,6 +50,31 @@ test('drains already accepted updates even when Telegram polling fails', async (
   assert.deepEqual(calls, ['process', 'process', 'poll']);
 });
 
+test('aborted runtime stops draining queued work and skips polling', async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let pending = 3;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return { pending }; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); return {}; } },
+    processor: {
+      async processOne() {
+        calls.push('process');
+        pending -= 1;
+        controller.abort(new Error('shutdown'));
+        return { processed: true };
+      },
+    },
+  });
+
+  await assert.rejects(runtime.runOnce({ signal: controller.signal }), /shutdown/);
+  assert.deepEqual(calls, ['process']);
+  assert.equal(pending, 2);
+});
+
 test('does not poll again while a cycle is active', async () => {
   let release;
   const waiting = new Promise(resolve => { release = resolve; });
