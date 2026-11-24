@@ -35,14 +35,25 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
       // Drain durable work before network I/O: a Telegram outage must not block
       // updates already accepted into the local inbox.
       let processed = await drainInbox();
+
+      // Free acknowledged terminal rows before receiving more updates. This
+      // prevents a full inbox from blocking the very poll cycle that would
+      // otherwise compact it. readCheckpoint comes from the durable offset store.
+      if (typeof inbox.compactAcknowledged === 'function'
+        && typeof poller.readCheckpoint === 'function') {
+        const checkpoint = await poller.readCheckpoint();
+        if (Number.isSafeInteger(checkpoint) && checkpoint >= 0) {
+          await inbox.compactAcknowledged(checkpoint);
+        }
+      }
+
       const polling = await poller.pollOnce(options);
       processed += await drainInbox();
 
       // pollOnce returns only after the offset file has been durably committed.
-      // Compacting terminal entries below that checkpoint bounds inbox growth
-      // without dropping retryable work or relying on a volatile poll result.
+      // Compact newly terminal rows using that confirmed checkpoint as well.
       if (typeof inbox.compactAcknowledged === 'function'
-        && Number.isSafeInteger(polling.nextOffset) && polling.nextOffset >= 0) {
+        && Number.isSafeInteger(polling?.nextOffset) && polling.nextOffset >= 0) {
         await inbox.compactAcknowledged(polling.nextOffset);
       }
 
