@@ -218,7 +218,7 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
 .transaction-filters .money-totals{margin-left:auto}
 .transaction-history{flex:1 1 0;min-width:0;min-height:150px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .transaction-history>.tw{height:100%;overflow:auto;border-radius:11px}
-.transaction-history table{width:100%;min-width:900px;table-layout:auto}
+.transaction-history table{display:table;width:100%;min-width:max(100%,900px);table-layout:fixed}
 .transaction-history th,.transaction-history td{padding:clamp(5px,.72vh,9px) clamp(8px,.7vw,13px)}
 .transaction-history td:nth-child(3){white-space:normal;min-width:260px;max-width:55vw;line-height:1.35}
 .transaction-history td:nth-child(3) small{font-size:11px}
@@ -1798,7 +1798,7 @@ function calendar(){
  '<section class="calendar-shell" data-calendar-month="'+monthKey+'"><div class="calendar-toolbar"><button class="btn" data-a="calprev" aria-label="Предыдущий месяц">←</button><strong class="calendar-month-title">'+esc(monthName)+'</strong><div><button class="btn" data-a="calnow">Сегодня</button> <button class="btn" data-a="calnext" aria-label="Следующий месяц">→</button></div></div>'+
  '<div class="calendar-grid">'+weekdayHtml+blanks+dayHtml+'</div>'+
  '<div class="calendar-legend"><span><i style="background:var(--ok)"></i>Положительный итог</span><span><i style="background:var(--bad)"></i>Отрицательный итог</span><span><i style="background:var(--a)"></i>Активность с нулевым итогом</span></div>'+
- '<p class="calendar-note">В ячейке показано движение денег, количество выполненных задач и задачи с дедлайном на этот день. Дни с задачами подсвечиваются, а приоритет отображается прямо в календаре. Чем насыщеннее цвет, тем больше сумма относительно других дней месяца. Внутренние переводы между кассами исключены. Нажмите на день с операциями или задачами, чтобы открыть подробности.</p></section>'+((V.calendar&&V.calendar.selectedDate||'').startsWith(monthKey)?calendarDayPanel(V.calendar.selectedDate):'');
+ '<p class="calendar-note">В ячейке показано движение денег, количество выполненных задач и задачи с дедлайном на этот день. Дни с задачами подсвечиваются, а приоритет отображается прямо в календаре. Чем насыщеннее цвет, тем больше сумма относительно других дней месяца. Внутренние переводы между кассами исключены. Нажмите на день с операциями или задачами, чтобы открыть подробности.</p></section>'+((V.calendar&&V.calendar.selectedDate)?calendarDayPanel(V.calendar.selectedDate):'');
 }
 function money(){
  const f=V.t,q=f.q.toLowerCase(),matchesKind=t=>!f.k||(f.k==='loans'?String(t.kind).startsWith('loan_'):f.k==='investments'?String(t.kind).startsWith('investment_'):t.kind===f.k);
