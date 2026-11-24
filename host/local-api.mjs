@@ -350,7 +350,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     const session = sessions.get(sessionId);
     const sessionMatches = !!session && session.expiresAt > now();
     if (session && !sessionMatches) sessions.delete(sessionId);
-    if (!tokenMatches && !sessionMatches) {
+    // The bootstrap bearer is a one-time exchange credential, not a reusable
+    // API credential. All other routes require the HttpOnly browser session.
+    if (!sessionMatches) {
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
       return;
     }
