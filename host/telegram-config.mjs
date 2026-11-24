@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 function requiredString(env, name) {
   const value = String(env[name] ?? '').trim();
@@ -44,8 +44,13 @@ export function readTelegramServiceConfig(env = process.env) {
     throw new TypeError('Telegram inbox, offset and instance-lock paths must be absolute.');
   }
   const normalizedPaths = [resolve(inboxPath), resolve(offsetPath), resolve(instanceLockPath)].map(path => path.toLowerCase());
-  if (new Set(normalizedPaths).size !== normalizedPaths.length) {
-    throw new TypeError('Telegram inbox, offset and instance-lock paths must be different.');
+  const pathsOverlap = (left, right) => {
+    const rel = relative(left, right);
+    return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel));
+  };
+  if (normalizedPaths.some((path, index) => normalizedPaths.some((other, otherIndex) =>
+    index !== otherIndex && pathsOverlap(path, other)))) {
+    throw new TypeError('Telegram inbox, offset and instance-lock paths must not overlap.');
   }
 
   const retryBaseMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_BASE_MS', 1000, 100, 60000);
