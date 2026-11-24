@@ -24,12 +24,29 @@ export async function migrateProfileToLocalApi({ client, sourceProfile, createEn
   }
 
   // Explicit allowlist prevents IndexedDB bookkeeping or host-owned metadata
-  // from leaking into the canonical profile.
-  const snapshot = {
-    state: sourceProfile.state,
-    logs: sourceProfile.logs,
-    photos: sourceProfile.photos,
+  // from leaking into the canonical profile. Detach the migration snapshot from
+  // IndexedDB objects before the first await: the UI may continue editing them
+  // while the envelope is being hashed or the API request is in flight.
+  let serializedSnapshot;
+  try {
+    serializedSnapshot = JSON.stringify({
+      state: sourceProfile.state,
+      logs: sourceProfile.logs,
+      photos: sourceProfile.photos,
+    });
+  } catch {
+    throw new TypeError('Исходный профиль содержит данные, которые нельзя безопасно перенести в JSON.');
+  }
+  if (typeof serializedSnapshot !== 'string') {
+    throw new TypeError('Исходный профиль не удалось безопасно сериализовать.');
+  }
+  const snapshot = JSON.parse(serializedSnapshot);
+  const freezeDeep = value => {
+    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+    for (const child of Object.values(value)) freezeDeep(child);
+    return Object.freeze(value);
   };
+  freezeDeep(snapshot);
   const target = await client.readProfile();
   if (!target || !Number.isSafeInteger(target.revision) || target.revision < 0
     || !(target.profile === null || isPlainObject(target.profile))) {
