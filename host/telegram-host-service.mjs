@@ -43,7 +43,10 @@ export function createTelegramHostService({
     ? applyUpdate
     : createTelegramCommandAdapter({
       profileStore,
-      buildTransaction: buildTransaction || buildTelegramFinanceTransactionFromUpdate,
+      buildTransaction: buildTransaction || ((update, options) => buildTelegramFinanceTransactionFromUpdate(update, {
+        ...options,
+        defaults: { accountId: config.defaultAccountId || null },
+      })),
     });
   if (typeof config.botToken !== 'string' || !config.botToken
     || typeof config.botId !== 'string' || !config.botId
