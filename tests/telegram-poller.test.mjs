@@ -212,3 +212,17 @@ test('does not checkpoint when Telegram returns malformed JSON', async () => {
   await assert.rejects(poller.pollOnce(), /invalid UTF-8 JSON/);
   assert.equal(checkpointed, false);
 });
+
+test('exposes only a validated durable checkpoint to the runtime', async () => {
+  const f = fixture({ offset: 19 });
+  assert.equal(await f.poller.readCheckpoint(), 19);
+
+  const invalid = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => Number.MAX_SAFE_INTEGER, write: async () => {} },
+    fetchImpl: async () => assert.fail('must not poll'),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(invalid.readCheckpoint(), /invalid checkpoint/);
+});
