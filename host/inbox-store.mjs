@@ -171,7 +171,16 @@ export function createInboxStore(filePath) {
       // update that was never safely stored.
       const draft = structuredClone(current);
       const result = await change(draft);
-      await persist(draft);
+      try {
+        await persist(draft);
+      } catch (error) {
+        // Persistence can fail after rename (for example, directory sync). The
+        // canonical path may then contain the draft even though it was not
+        // confirmed durable. Drop the cache so the next operation reconciles
+        // with disk instead of overwriting that possibly-visible replacement.
+        statePromise = undefined;
+        throw error;
+      }
       statePromise = Promise.resolve(draft);
       return result;
     });
