@@ -111,3 +111,33 @@ test('ignores an orphaned temporary file after an interrupted write and preserve
   assert.deepEqual(await store.read(), { revision: 2, profile: { marker: 'next-commit' } });
   assert.match(await readFile(orphan, 'utf8'), /uncommitted/);
 });
+
+
+test('refuses 20 malformed canonical disk envelopes without replacing their bytes', async t => {
+  const invalid = [
+    '', '{', 'null', '[]', 'true', '0', '"profile"',
+    '{"version":2,"revision":0,"profile":{}}',
+    '{"version":1,"revision":-1,"profile":{}}',
+    '{"version":1,"revision":1.5,"profile":{}}',
+    '{"version":1,"revision":9007199254740992,"profile":{}}',
+    '{"version":1,"revision":0,"profile":null}',
+    '{"version":1,"revision":0,"profile":[]}',
+    '{"version":1,"revision":0,"profile":"x"}',
+    '{"version":1,"revision":"0","profile":{}}',
+    '{"version":1,"profile":{}}',
+    '{"revision":0,"profile":{}}',
+    '{"version":1,"revision":0}',
+    '{"version":1,"revision":0,"profile":false}',
+    '{"version":1,"revision":0,"profile":{}} trailing',
+    '{"version":1,"revision":0,"profile":{},"checksum":"wrong"}',
+  ];
+  for (const [index, raw] of invalid.entries()) {
+    await t.test('invalid envelope ' + (index + 1), async t => {
+      const { file, store } = await fixture(t);
+      await writeFile(file, raw, 'utf8');
+      await assert.rejects(store.read());
+      await assert.rejects(store.write({ marker: 'must-not-replace' }, 0));
+      assert.equal(await readFile(file, 'utf8'), raw);
+    });
+  }
+});
