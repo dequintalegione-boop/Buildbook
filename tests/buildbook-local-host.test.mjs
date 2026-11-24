@@ -14,7 +14,11 @@ test('combined local host keeps Telegram disabled until the shared UI profile is
   t.after(() => rm(dir, { recursive: true, force: true }));
   assert.deepEqual(host.telegramStatus, { enabled: false, running: false });
   const address = await host.start();
-  const response = await fetch('http://127.0.0.1:' + address.port + '/api/telegram/status', { headers: { authorization: 'Bearer ' + token } });
+  const base = 'http://127.0.0.1:' + address.port;
+  const app = await fetch(base + '/');
+  assert.equal(app.status, 200);
+  assert.match(await app.text(), /Buildbook/);
+  const response = await fetch(base + '/api/telegram/status', { headers: { authorization: 'Bearer ' + token } });
   assert.equal(response.status, 200);
   const status = await response.json();
   assert.equal(status.enabled, false);
