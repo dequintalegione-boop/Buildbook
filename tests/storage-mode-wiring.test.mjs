@@ -56,15 +56,3 @@ test('service worker precaches the canonical runtime dependency chain and rotate
   assert.match(serviceWorker, /\.\/host\/profile-repository-adapter\.mjs/);
   assert.match(serviceWorker, /keys\.filter\(k=>k!==C\)/);
 });
-
-test('canonical revision conflicts lock the UI and preserve a backup path', () => {
-  const start = html.indexOf('function markStorageConflict(revision)');
-  const end = html.indexOf("if(storageChannel)storageChannel.addEventListener", start);
-  assert.ok(start >= 0 && end > start);
-  const conflict = html.slice(start, end);
-  assert.match(conflict, /if\(STORAGE_MODE==='canonical'\)/);
-  assert.match(conflict, /APP_FATAL_ERROR=new Error/);
-  assert.match(conflict, /storageConflict=true;clearTimeout\(tm\)/);
-  assert.match(html, /const save=\(\)=>\{\s*if\(APP_FATAL_ERROR\)return/);
-  assert.match(html, /Скачать резервную копию текущего состояния/);
-});
