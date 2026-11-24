@@ -54,9 +54,12 @@ export function installTelegramHostLifecycle({ host, processRef = process, onErr
       // Register before starting so a signal cannot be missed during startup.
       processRef.once('SIGINT', onSigint);
       processRef.once('SIGTERM', onSigterm);
+      // Mark startup as active before calling into the service. start() may
+      // synchronously trigger a signal (for example, through an injected
+      // process target); that signal must be able to stop the in-flight start.
+      started = true;
       try {
         const loop = host.service.start();
-        started = true;
         // A loop that ends unexpectedly must not leave stale signal handlers
         // or report the host as running. Normal shutdown performs its own cleanup.
         void Promise.resolve(loop).then(() => {
