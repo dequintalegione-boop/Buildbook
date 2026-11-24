@@ -76,6 +76,26 @@ test('host factory rejects relative lock paths even when config is hand-built', 
   }
 });
 
+test('host factory accepts numeric bot token identity and rejects malformed token syntax', () => {
+  const root = mkdtempSync(join(tmpdir(), 'buildbook-host-token-'));
+  try {
+    const valid = createTelegramHostService({
+      config: config(root),
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    });
+    assert.equal(valid.service.running, false);
+
+    const malformed = config(root);
+    malformed.botToken = '\\d+:secret';
+    assert.throws(() => createTelegramHostService({
+      config: malformed,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /bot ID must match the bot token identity/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('host factory rejects a bot ID that does not match the token identity', () => {
   const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
   try {
