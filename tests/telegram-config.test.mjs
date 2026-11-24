@@ -22,6 +22,7 @@ test('parses host-only configuration and deduplicates allowlist IDs', () => {
 
 test('rejects missing secrets, malformed allowlists, and unsafe paths', () => {
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_BOT_TOKEN: '' }), /is required/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_BOT_TOKEN: '012345:secret_token_value' }), /invalid format/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: '1001, nope' }), /numeric IDs/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INBOX_PATH: 'data/inbox.json' }), /absolute/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_OFFSET_PATH: valid.BUILDBOOK_TELEGRAM_INBOX_PATH }), /overlap/);
