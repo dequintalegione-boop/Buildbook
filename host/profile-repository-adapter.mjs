@@ -22,6 +22,13 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+function isCanonicalProfile(value) {
+  return isPlainObject(value)
+    && isPlainObject(value.state)
+    && Array.isArray(value.logs)
+    && isPlainObject(value.photos);
+}
+
 function setOwnDataProperty(target, key, value) {
   Object.defineProperty(target, key, {
     configurable: true,
@@ -110,7 +117,7 @@ export function createProfileRepositoryAdapter(client) {
       }
       const profile = result.profile;
       if (profile === null) return { state: undefined, logs: undefined, photos: undefined, revision: result.revision };
-      if (!isPlainObject(profile)) throw new Error('Канонический профиль имеет неверный формат.');
+      if (!isCanonicalProfile(profile)) throw new Error('Канонический профиль имеет неверный формат: ожидаются state, logs и photos.');
       return {
         state: decode(profile.state),
         logs: decode(profile.logs),
@@ -127,7 +134,7 @@ export function createProfileRepositoryAdapter(client) {
       // that would overwrite a concurrent finance operation.
       const current = await client.readProfile();
       if (!isPlainObject(current) || !Number.isSafeInteger(current.revision) || current.revision < 0
-        || !(current.profile === null || isPlainObject(current.profile))) {
+        || !(current.profile === null || isCanonicalProfile(current.profile))) {
         throw new Error('Канонический профильный API вернул некорректный ответ.');
       }
       if (current.revision !== expectedRevision) {
@@ -139,7 +146,7 @@ export function createProfileRepositoryAdapter(client) {
         throw error;
       }
       const base = current.profile === null ? {} : decode(current.profile);
-      if (!isPlainObject(base)) throw new Error('Канонический профиль имеет неверный формат.');
+      if (current.profile !== null && !isCanonicalProfile(base)) throw new Error('Канонический профиль имеет неверный формат: ожидаются state, logs и photos.');
       const profile = encode({ ...base, state, logs, photos });
       const nextRevision = await client.writeProfile(profile, expectedRevision);
       if (nextRevision !== expectedRevision + 1) {
