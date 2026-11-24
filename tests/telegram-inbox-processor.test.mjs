@@ -169,7 +169,8 @@ test('rejects non-canonical numeric identity aliases in persisted inbox records'
     inbox,
     async applyUpdate() { called = true; return { operationId: 'should-not-exist' }; },
   });
-  await assert.rejects(processor.processOne(), /private-text command validation/);
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1', reason: 'invalid_inbox_item' });
   assert.equal(called, false);
   assert.equal(inbox.state.status, 'rejected');
 });
@@ -202,7 +203,8 @@ test('malformed inbox items are quarantined rather than retried', async () => {
   tampered.update.message.chat.id = 2002;
   const inbox = makeInbox(tampered);
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { assert.fail('adapter must not run'); } });
-  await assert.rejects(processor.processOne(), /private-text command validation/);
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1', reason: 'invalid_inbox_item' });
   assert.equal(inbox.state.status, 'rejected');
   assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
@@ -257,7 +259,7 @@ test('retries after canonical commit but before inbox completion without duplica
   assert.equal(profileStore.profile.state.tx.length, 1);
   assert.equal(buildCalls, 1);
   assert.equal(inbox.state.status, 'completed');
-  assert.equal(inbox.state.operationId, profileStore.profile.state.tx[0].id);
+  assert.equal(inbox.state.operationId, 'telegram-replay:123456:44');
 });
 
 
