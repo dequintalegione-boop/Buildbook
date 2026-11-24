@@ -45,7 +45,7 @@ export function createLocalProfileClient({
         // The bearer token must never follow a redirect or accompany ambient
         // cookies/referrer data to another origin.
         redirect: 'error',
-        credentials: sessionMode ? 'include' : 'omit',
+        credentials: options.credentials || (sessionMode ? 'include' : 'omit'),
         cache: 'no-store',
         referrerPolicy: 'no-referrer',
         headers: {
@@ -87,6 +87,7 @@ export function createLocalProfileClient({
       const result = await request('/api/session/bootstrap', {
         method: 'POST',
         body: '{}',
+        credentials: 'include',
         headers: { authorization: 'Bearer ' + accessToken },
       });
       if (!result || result.ok !== true || result.expiresIn !== 12 * 60 * 60 * 1000) {
