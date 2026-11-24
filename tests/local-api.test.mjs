@@ -43,7 +43,7 @@ test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t)
   assert.equal(bootstrap.status, 200);
   assert.deepEqual(await bootstrap.json(), { ok: true, expiresIn: 12 * 60 * 60 * 1000 });
   const cookie = bootstrap.headers.get('set-cookie');
-  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\\/api$/);
+  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\/api$/);
   const withoutSession = await fetch(base + '/api/health');
   assert.equal(withoutSession.status, 401);
   const withSession = await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } });
