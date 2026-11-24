@@ -68,6 +68,21 @@ test('rejects invalid source and mismatched export envelope before import', asyn
   assert.equal(data.readRevision(), 0);
 });
 
+test('refuses to report migration success when verification differs from the imported snapshot', async () => {
+  const sourceProfile = { state: { marker: 'source' }, logs: [], photos: {} };
+  const data = fixture(sourceProfile);
+  const originalRead = data.client.readProfile;
+  let reads = 0;
+  data.client.readProfile = async () => {
+    reads += 1;
+    if (reads === 1) return originalRead();
+    return { revision: 1, profile: { state: { marker: 'different' }, logs: [], photos: {} } };
+  };
+  await assert.rejects(migrateProfileToLocalApi(data), error =>
+    error.code === 'BUILD_BOOK_MIGRATION_VERIFY_FAILED');
+  assert.deepEqual(sourceProfile, { state: { marker: 'source' }, logs: [], photos: {} });
+});
+
 test('keeps the source untouched if the target revision changes before import', async () => {
   const sourceProfile = { state: { tx: [] }, logs: [], photos: {} };
   const data = fixture(sourceProfile);
