@@ -16,7 +16,6 @@ function validateInboxCommand(item) {
     || !/^\d{1,16}$/.test(botId)
     || Number(botId) <= 0 || !Number.isSafeInteger(Number(botId))
     || String(Number(botId)) !== botId
-    || String(Number(botId)) !== botId
     || !/^\d{1,16}:\d+$/.test(key)
     || key !== botId + ':' + String(item?.updateId)
     || !Number.isSafeInteger(item?.updateId) || item.updateId < 0 || item.updateId >= Number.MAX_SAFE_INTEGER
