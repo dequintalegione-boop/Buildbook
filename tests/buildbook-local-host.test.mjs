@@ -18,7 +18,15 @@ test('combined local host keeps Telegram disabled until the shared UI profile is
   const app = await fetch(base + '/');
   assert.equal(app.status, 200);
   assert.match(await app.text(), /Buildbook/);
-  const response = await fetch(base + '/api/telegram/status', { headers: { authorization: 'Bearer ' + token } });
+  const bootstrap = await fetch(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const sessionCookie = bootstrap.headers.get('set-cookie')?.split(';', 1)[0];
+  assert.ok(sessionCookie, 'bootstrap should issue a browser-managed session cookie');
+  const response = await fetch(base + '/api/telegram/status', { headers: { cookie: sessionCookie } });
   assert.equal(response.status, 200);
   const status = await response.json();
   assert.equal(status.enabled, false);
