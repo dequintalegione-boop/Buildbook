@@ -184,7 +184,7 @@ export function createLocalProfileClient({
         throw new RangeError('Размер запроса импорта превышает допустимые 34 MiB.');
       }
       const result = await request('/api/profile/import', { method: 'POST', body });
-      if (!result || result.imported !== true || !Number.isSafeInteger(result.revision)
+      if (!result || result.imported !== true || result.verified !== true || !Number.isSafeInteger(result.revision)
         || result.revision !== expectedRevision + 1) {
         throw new Error('Локальный сервис вернул некорректный результат импорта.');
       }
