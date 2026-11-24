@@ -137,7 +137,7 @@ export function createLocalProfileClient({
       }
     },
     async closeSession() {
-      if (closePromise) return closePromise;
+      if (closePromise) return closePromise.then(() => false);
       closePromise = Promise.resolve().then(async () => {
         if (connectPromise) await connectPromise;
         if (!sessionMode) return false;
