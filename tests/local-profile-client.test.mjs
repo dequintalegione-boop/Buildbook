@@ -67,6 +67,7 @@ test('exchanges the bootstrap token once and uses only a browser-managed session
   assert.equal(calls[1].options.headers.authorization, undefined);
   await client.closeSession();
   assert.equal(client.connected, false);
+  await assert.rejects(client.connectSession(), /создайте новый клиент/);
 });
 
 test('disables redirects, ambient credentials, caching and referrer on token requests', async () => {
