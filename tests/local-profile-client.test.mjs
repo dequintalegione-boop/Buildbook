@@ -246,3 +246,31 @@ test('keeps the timeout active while reading the response body', async () => {
   });
   await assert.rejects(client.health(), error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT');
 });
+
+
+test('enforces the request deadline across 20 stalled response-body variants', async t => {
+  const stalls = [
+    'health', 'profile', 'telegram status', 'session bootstrap', 'session close',
+    'profile import', 'profile write', 'empty body', 'slow JSON parser', 'unreadable body',
+    'chunked response', 'truncated response', 'body stream stalled', 'body parser pending',
+    'server flush stalled', 'headers then stall', 'body after headers', 'response decode stall',
+    'large body stall', 'final chunk missing',
+  ];
+  for (const [index, label] of stalls.entries()) {
+    await t.test(label, async () => {
+      const client = createLocalProfileClient({
+        accessToken: token,
+        requestTimeoutMs: 5,
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: () => new Promise(() => {}),
+        }),
+      });
+      await assert.rejects(client.health(), error =>
+        error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT'
+        && /не ответил за отведённое время/.test(error.message),
+      );
+    });
+  }
+});
