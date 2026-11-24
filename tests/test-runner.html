@@ -1424,7 +1424,7 @@ d.tx=[
 api.setState(d);api.action('nav','calendar');api.action('calnow');
 const dayButton=w.document.querySelector('[data-calendar-date="'+date+'"]');assert(dayButton&&!dayButton.disabled,'Не найдена активная ячейка календаря для '+date);dayButton.click();
 const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
-assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня: '+JSON.stringify(api.calendarDiagnostics()));
+assert(panel&&panel.textContent.includes('Действия за '+date.split('-').reverse().join('.')),'Не открылся блок действий выбранного дня с локальной датой: '+JSON.stringify(api.calendarDiagnostics()));
 assert(panel.textContent.includes('Расход')&&!panel.textContent.includes('Выбыло'),'Подпись «Выбыло» не заменена на «Расход».');
 assert(panel.textContent.includes('Продажа видеокарты')&&panel.textContent.includes('Закупка SSD'),'В блоке не показаны все сделки за день');
 assert(normalize(panel.textContent).includes('+12 000')&&normalize(panel.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
