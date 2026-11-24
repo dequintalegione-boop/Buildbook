@@ -70,6 +70,14 @@ test('rejects impossible calendar dates even when Date.parse normalizes them', a
     await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt }), /некорректная дата/);
   }
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, '2026-02-30T10:00:00.000Z'), /Некорректная дата/);
+  for (const exportedAt of ['2026-01-01T10:00:00+14:01', '2026-01-01T10:00:00-14:01', '2026-01-01T10:00:00+15:00']) {
+    await assert.rejects(importer.validateEnvelope({ ...envelope, exportedAt }), /некорректная дата/);
+    await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, exportedAt), /Некорректная дата/);
+  }
+  for (const exportedAt of ['2026-01-01T10:00:00+14:00', '2026-01-01T10:00:00-14:00']) {
+    assert.equal((await importer.validateEnvelope({ ...envelope, exportedAt })).exportedAt, exportedAt);
+    assert.equal((await exporter.createEnvelope({ state: {}, logs: [], photos: {} }, exportedAt)).exportedAt, exportedAt);
+  }
 });
 
 test('rejects malformed envelope fields and oversized payloads', async () => {
