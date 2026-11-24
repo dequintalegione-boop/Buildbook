@@ -409,3 +409,40 @@ test('marks 20 ambiguous write outcomes so callers reread instead of blindly ret
     });
   }
 });
+
+
+test('preserves valid conflict revision metadata and ignores malformed values', async t => {
+  const cases = [
+    { expectedRevision: 0, currentRevision: 1 },
+    { expectedRevision: 1, currentRevision: 2 },
+    { expectedRevision: 2, currentRevision: 9 },
+    { expectedRevision: 10, currentRevision: 11 },
+    { expectedRevision: 99, currentRevision: 100 },
+    { expectedRevision: 0, currentRevision: 900 },
+    { expectedRevision: 900, currentRevision: 901 },
+    { expectedRevision: 1, currentRevision: 9007199254740991 },
+    { expectedRevision: 42, currentRevision: 43 },
+    { expectedRevision: 123456, currentRevision: 123457 },
+    { expectedRevision: -1, currentRevision: 1 },
+    { expectedRevision: 1, currentRevision: -1 },
+    { expectedRevision: 1.5, currentRevision: 2 },
+    { expectedRevision: 1, currentRevision: 2.5 },
+    { expectedRevision: '1', currentRevision: '2' },
+    { expectedRevision: null, currentRevision: 1 },
+    { expectedRevision: 1, currentRevision: null },
+    { expectedRevision: Number.MAX_SAFE_INTEGER + 1, currentRevision: 1 },
+    { expectedRevision: 1, currentRevision: Number.MAX_SAFE_INTEGER + 1 },
+    { expectedRevision: {}, currentRevision: [] },
+  ];
+  for (const [index, metadata] of cases.entries()) {
+    await t.test('conflict metadata ' + (index + 1), async () => {
+      const client = createLocalProfileClient({ accessToken: token, fetchImpl: fakeFetch(async () => ({ status: 409, body: { code: 'BUILD_BOOK_STORAGE_CONFLICT', error: 'stale', ...metadata } })) });
+      await assert.rejects(client.readProfile(), error => {
+        assert.equal(error.code, 'BUILD_BOOK_STORAGE_CONFLICT');
+        assert.equal(error.expectedRevision, Number.isSafeInteger(metadata.expectedRevision) && metadata.expectedRevision >= 0 ? metadata.expectedRevision : undefined);
+        assert.equal(error.currentRevision, Number.isSafeInteger(metadata.currentRevision) && metadata.currentRevision >= 0 ? metadata.currentRevision : undefined);
+        return true;
+      });
+    });
+  }
+});
