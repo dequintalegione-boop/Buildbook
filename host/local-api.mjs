@@ -19,6 +19,8 @@ const STATIC_ASSETS = new Map([
   ['/repository.js', ['repository.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-export.js', ['client/profile-export.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-import.js', ['client/profile-import.js', 'text/javascript; charset=utf-8']],
+  ['/client/canonical-profile-runtime.mjs', ['client/canonical-profile-runtime.mjs', 'text/javascript; charset=utf-8']],
+  ['/host/profile-repository-adapter.mjs', ['host/profile-repository-adapter.mjs', 'text/javascript; charset=utf-8']],
   ['/vendor/xlsx.full.min.js', ['vendor/xlsx.full.min.js', 'text/javascript; charset=utf-8']],
   ['/manifest.webmanifest', ['manifest.webmanifest', 'application/manifest+json; charset=utf-8']],
   ['/icon.svg', ['icon.svg', 'image/svg+xml']],
@@ -261,7 +263,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           return;
         }
         const decodedPath = decodeURIComponent(pathname);
-        if (decodedPath !== pathname || pathname.includes('\\\\') || pathname.includes('\0')
+        if (decodedPath !== pathname || pathname.includes('\\') || pathname.includes('\0')
           || pathname.split('/').some(segment => segment.startsWith('.') || segment === '..')) {
           response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
           response.end();
