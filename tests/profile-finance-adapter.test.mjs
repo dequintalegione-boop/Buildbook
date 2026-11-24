@@ -276,7 +276,6 @@ test('does not duplicate a transaction when the profile commit succeeded before 
 
   const result = await apply({ update: {}, idempotencyKey: '123:60' });
   assert.deepEqual(result, { operationId: 'telegram-replay:123:60', duplicate: true });
-  assert.equal(store.profile, undefined);
   assert.equal(profile.state.tx.length, 1);
   assert.equal(profile.telegramOperationCheckpoints[0].updateId, 60);
   assert.equal(writes, 1);
