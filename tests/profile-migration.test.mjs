@@ -139,7 +139,8 @@ test('rejects 20 malformed migration inputs and target states before unsafe impo
       if (options.client !== undefined) data.client = options.client;
       if (options.createEnvelope !== undefined) data.createEnvelope = options.createEnvelope;
       if (options.sourceProfile !== undefined) data.sourceProfile = options.sourceProfile;
-      if (options.envelope !== undefined) data.createEnvelope = async payload => ({
+      if (name === 'null envelope') data.createEnvelope = async () => null;
+      else if (options.envelope !== undefined) data.createEnvelope = async payload => ({
         ...validEnvelope(payload),
         ...options.envelope,
       });
