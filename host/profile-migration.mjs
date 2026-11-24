@@ -58,6 +58,9 @@ export async function migrateProfileToLocalApi({ client, sourceProfile, createEn
     error.currentRevision = target.revision;
     throw error;
   }
+  if (target.revision === Number.MAX_SAFE_INTEGER) {
+    throw new RangeError('Исчерпан диапазон ревизий канонического профиля; перенос остановлен.');
+  }
 
   const envelope = await createEnvelope(snapshot);
   if (!isPlainObject(envelope) || !isPlainObject(envelope.payload)
@@ -72,7 +75,9 @@ export async function migrateProfileToLocalApi({ client, sourceProfile, createEn
 
   const revision = await client.importProfile(envelope, target.revision);
   const verified = await client.readProfile();
-  if (!verified || verified.revision !== revision || !isPlainObject(verified.profile)
+  const expectedRevision = target.revision + 1;
+  if (!Number.isSafeInteger(revision) || revision !== expectedRevision
+    || !verified || verified.revision !== expectedRevision || !isPlainObject(verified.profile)
     || JSON.stringify(verified.profile) !== expectedPayload) {
     const error = new Error('Импорт выполнен, но контрольное чтение не подтвердило точное совпадение профиля. Исходная база сохранена; не переключайте хранилище.');
     error.code = 'BUILD_BOOK_MIGRATION_VERIFY_FAILED';
