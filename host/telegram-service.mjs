@@ -30,7 +30,7 @@ export function createTelegramService({
 } = {}) {
   if (!runtime || typeof runtime.runOnce !== 'function') throw new TypeError('A Telegram runtime is required.');
   for (const [name, value] of Object.entries({ intervalMs, retryBaseMs, retryMaxMs })) {
-    if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(name + ' must be a non-negative safe integer.');
+    if (!Number.isSafeInteger(value) || value < (name === 'intervalMs' ? 100 : 0)) throw new TypeError(name + ' must be a valid non-negative safe integer; intervalMs must be at least 100.');
   }
   if (retryMaxMs < retryBaseMs) throw new TypeError('retryMaxMs must be at least retryBaseMs.');
   if (typeof onCycle !== 'function' || typeof onError !== 'function') throw new TypeError('Service callbacks must be functions.');
