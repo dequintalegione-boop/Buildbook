@@ -39,8 +39,8 @@ function makeInbox(item) {
 
 const sample = {
   id: 'inbox-1',
-  botId: 'bot-1',
-  key: 'bot-1:44',
+  botId: '123456',
+  key: '123456:44',
   userId: '1001',
   update: { update_id: 44, message: { message_id: 44, from: { id: 1001 }, chat: { id: 1001, type: 'private' }, text: 'income 100' } },
 };
@@ -56,7 +56,7 @@ test('passes stable idempotency key and completes after adapter succeeds', async
     },
   });
   const result = await processor.processOne();
-  assert.equal(received.idempotencyKey, 'bot-1:44');
+  assert.equal(received.idempotencyKey, '123456:44');
   assert.equal(received.userId, '1001');
   assert.deepEqual(inbox.state.calls, ['processing', 'completed']);
   assert.equal(inbox.state.operationId, 'operation-7');
