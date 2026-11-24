@@ -11,15 +11,15 @@ The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled 
 - Telegram IDs are checked for safe integer representation before being normalized; text is limited to 4096 characters.
 - The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.
 - The processor validates the queued envelope again before calling the domain adapter: update IDs must match, sender/chat IDs must match the queued user, chat type must be private, and text must be non-empty and at most 4096 characters. A malformed or tampered inbox item is not passed to the domain adapter; it is quarantined as `rejected` rather than retried indefinitely.
-- The processor marks an item complete only after the domain adapter succeeds, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must enforce that key atomically with its domain write. The inbox cannot itself guarantee exactly-once financial writes.
+- The processor marks an item complete only after the domain adapter confirms a committed operation or a replay protected by the durable checkpoint, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must commit the finance write and replay checkpoint atomically. The inbox cannot itself guarantee exactly-once financial writes.
 - When the adapter returns a `reply` string, the processor delivers it to the already validated private chat before completion. Delivery failure returns the item to `pending` and does not store the reply text or the transport exception. Read-only commands such as help and month statistics complete with a synthetic operation id (`help:` / `stats:` plus the idempotency key) and must not write the financial profile. A permanent user-command error can carry its own safe `reply`; if that reply is delivered, the item is rejected and is not retried.
 - Deduplicates by bot identity and Telegram update ID.
 - The runtime compacts terminal inbox rows below the durable Telegram checkpoint both before polling (to free capacity before receiving more work) and after processing newly accepted updates. Pending/processing rows are retained. The canonical profile adapter stores a monotonic per-bot replay checkpoint in the same profile revision as each finance transaction; this prevents duplicate writes after inbox compaction. Updates must be processed serially in Telegram update-ID order for the checkpoint to be safe.
-- Tracks pending, processing, completed and rejected states, attempts, timestamps, a bounded error message and the committed Buildbook operation ID.
+- Tracks pending, processing, completed and rejected states, attempts, timestamps, a bounded error message and the adapter's operation/completion ID.
 - Invalid/tampered inbox envelopes are quarantined as `rejected` and their raw payload is purged; they are not retried. Adapter/storage failures remain `pending` for retry.
 - Recovers interrupted processing to pending after a host restart.
 - Exposes counts for the future Telegram status screen.
-- Does not itself write financial records. The processor must mark an item complete only after the canonical Buildbook storage adapter commits the operation.
+- Does not itself write financial records. The processor completes an item only after the canonical Buildbook adapter has committed it or confirmed it as an already-processed replay.
 
 ## Important boundaries
 
