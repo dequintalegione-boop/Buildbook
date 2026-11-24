@@ -272,6 +272,7 @@ test('restart recovery preserves the original idempotency key and records a new 
     assert.equal(await restarted.markProcessing(recovered.id), true);
 
     const afterRetry = createInboxStore(file);
+    assert.equal(await afterRetry.recoverInterrupted(), 1);
     const persisted = await afterRetry.nextPending();
     assert.equal(persisted.key, '123456:18');
     assert.equal(persisted.attempts, 2);
