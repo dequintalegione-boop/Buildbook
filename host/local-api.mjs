@@ -164,6 +164,16 @@ function isValidExportDate(value) {
   return Number.isFinite(Date.parse(value)) && (sign === '+' || sign === '-' || zone === 'Z');
 }
 
+function readSessionCookie(request) {
+  const entries = String(request.headers.cookie || '').split(';')
+    .map(part => part.trim())
+    .filter(part => part.startsWith(SESSION_COOKIE + '='));
+  if (entries.length === 0) return { present: false, value: '' };
+  if (entries.length !== 1) return { present: true, value: null };
+  const value = entries[0].slice(SESSION_COOKIE.length + 1);
+  return { present: true, value: /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null };
+}
+
 function requestHostAllowed(request) {
   const rawHost = String(request.headers.host || '').toLowerCase();
   const host = rawHost.startsWith('[')
@@ -316,9 +326,12 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
         return;
       }
-      const previousCookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
-        .find(part => part.startsWith(SESSION_COOKIE + '='));
-      if (previousCookie) sessions.delete(previousCookie.slice(SESSION_COOKIE.length + 1));
+      const previousCookie = readSessionCookie(request);
+      if (previousCookie.present && previousCookie.value === null) {
+        send(response, 400, { error: 'Заголовок браузерной сессии имеет неоднозначный формат.' });
+        return;
+      }
+      if (previousCookie.value) sessions.delete(previousCookie.value);
       for (const [key, session] of sessions) if (session.expiresAt <= now()) sessions.delete(key);
       if (sessions.size >= MAX_SESSIONS) {
         send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
@@ -336,17 +349,15 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 403, { error: 'Для закрытия сессии требуется локальный браузерный Origin.' });
         return;
       }
-      const cookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
-        .find(part => part.startsWith(SESSION_COOKIE + '='));
-      if (cookie) sessions.delete(cookie.slice(SESSION_COOKIE.length + 1));
+      const cookie = readSessionCookie(request);
+      if (cookie.value) sessions.delete(cookie.value);
       response.setHeader('set-cookie', SESSION_COOKIE + '=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0');
       send(response, 200, { ok: true });
       return;
     }
 
-    const cookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
-      .find(part => part.startsWith(SESSION_COOKIE + '='));
-    const sessionId = cookie ? cookie.slice(SESSION_COOKIE.length + 1) : '';
+    const cookie = readSessionCookie(request);
+    const sessionId = cookie.value || '';
     const session = sessions.get(sessionId);
     const sessionMatches = !!session && session.expiresAt > now();
     if (session && !sessionMatches) sessions.delete(sessionId);
