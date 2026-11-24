@@ -132,6 +132,7 @@ test('allows authenticated browser clients to preflight profile import POST', as
   assert.equal(response.status, 204);
   assert.match(response.headers.get('access-control-allow-methods'), /POST/);
   assert.equal(response.headers.get('access-control-allow-origin'), 'http://localhost:43127');
+  assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
 });
 
 test('rejects query and fragment components in local API request targets', async (t) => {
