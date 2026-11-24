@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
   assert.match(html, /const STORAGE_MODE_KEY='buildbook\.storage-mode'/);
@@ -47,4 +48,11 @@ test('closing the session is blocked while canonical profile is active', () => {
   const end = html.indexOf('function telegram()', start);
   assert.ok(start >= 0 && end > start);
   assert.match(html.slice(start, end), /if\(STORAGE_MODE==='canonical'\)/);
+});
+
+test('service worker precaches the canonical runtime dependency chain and rotates its cache', () => {
+  assert.match(serviceWorker, /const C='buildbook-48'/);
+  assert.match(serviceWorker, /\.\/client\/canonical-profile-runtime\.mjs/);
+  assert.match(serviceWorker, /\.\/host\/profile-repository-adapter\.mjs/);
+  assert.match(serviceWorker, /keys\.filter\(k=>k!==C\)/);
 });
