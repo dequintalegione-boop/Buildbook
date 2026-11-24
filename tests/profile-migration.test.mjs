@@ -63,7 +63,7 @@ test('rejects invalid source and mismatched export envelope before import', asyn
   const mismatch = { ...data, createEnvelope: async () => ({
     payload: { state: {}, logs: [], photos: { altered: true } },
   }) };
-  await assert.rejects(migrateProfileToLocalApi(mismatch), /не совпадает с исходным снимком/);
+  await assert.rejects(migrateProfileToLocalApi(mismatch), /не совпадает с исходным снимком/i);
   assert.equal(data.readStored(), null);
   assert.equal(data.readRevision(), 0);
 });
