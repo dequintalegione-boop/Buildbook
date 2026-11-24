@@ -26,6 +26,7 @@ export function createTelegramService({
   retryMaxMs = 60000,
   onCycle = () => {},
   onError = () => {},
+  onStart = () => {},
   acquireInstanceLock = null,
 } = {}) {
   if (!runtime || typeof runtime.runOnce !== 'function') throw new TypeError('A Telegram runtime is required.');
@@ -35,7 +36,7 @@ export function createTelegramService({
     }
   }
   if (retryMaxMs < retryBaseMs) throw new TypeError('retryMaxMs must be at least retryBaseMs.');
-  if (typeof onCycle !== 'function' || typeof onError !== 'function') throw new TypeError('Service callbacks must be functions.');
+  if (typeof onCycle !== 'function' || typeof onError !== 'function' || typeof onStart !== 'function') throw new TypeError('Service callbacks must be functions.');
   if (acquireInstanceLock !== null && typeof acquireInstanceLock !== 'function') throw new TypeError('acquireInstanceLock must be a function.');
 
   let controller = null;
@@ -78,6 +79,9 @@ export function createTelegramService({
         throw error;
       }
       controller = new AbortController();
+      try { onStart(); } catch (error) {
+        try { onError(error, { failures: 0, phase: 'onStart' }); } catch {}
+      }
       loopPromise = loop(controller.signal).finally(() => {
         try { releaseInstanceLock?.(); } finally {
           releaseInstanceLock = null;
