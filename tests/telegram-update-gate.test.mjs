@@ -28,7 +28,7 @@ function privateMessage({ updateId = 1, userId = 1001, chatId = userId, text = '
 
 test('persists only private text messages from explicitly allowed Telegram users', async () => {
   const inbox = fakeInbox();
-  const gate = createTelegramUpdateGate({ inbox, botId: 'bot-1', allowlist: ['1001'] });
+  const gate = createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['1001'] });
 
   const denied = await gate.accept(privateMessage({ userId: 2002, text: 'secret message' }));
   assert.deepEqual(denied, { accepted: false, reason: 'not_allowed' });
@@ -52,7 +52,7 @@ test('persists only private text messages from explicitly allowed Telegram users
 
 test('rejects group chats, mismatched chat IDs, non-text updates and oversized text', async () => {
   const inbox = fakeInbox();
-  const gate = createTelegramUpdateGate({ inbox, botId: 'bot-1', allowlist: ['1001'] });
+  const gate = createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['1001'] });
 
   const group = privateMessage({ extra: { chat: { id: -100, type: 'group' } } });
   const mismatched = privateMessage({ chatId: 9999 });
@@ -67,7 +67,7 @@ test('rejects group chats, mismatched chat IDs, non-text updates and oversized t
 
 test('does not accept callback queries or inline queries as financial commands', async () => {
   const inbox = fakeInbox();
-  const gate = createTelegramUpdateGate({ inbox, botId: 'bot-1', allowlist: ['1001'] });
+  const gate = createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['1001'] });
   assert.deepEqual(await gate.accept({
     update_id: 4,
     callback_query: { from: { id: 1001 }, data: 'confirm' },
@@ -81,8 +81,8 @@ test('does not accept callback queries or inline queries as financial commands',
 
 test('rejects malformed allowlist and invalid update IDs', async () => {
   const inbox = fakeInbox();
-  assert.throws(() => createTelegramUpdateGate({ inbox, botId: 'bot-1', allowlist: ['not-an-id'] }), /invalid user ID/);
-  const gate = createTelegramUpdateGate({ inbox, botId: 'bot-1', allowlist: ['1001'] });
+  assert.throws(() => createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['not-an-id'] }), /invalid user ID/);
+  const gate = createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['1001'] });
   await assert.rejects(gate.accept(privateMessage({ updateId: 'bad' })), /update_id/);
   assert.equal(inbox.items.length, 0);
 });
