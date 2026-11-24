@@ -88,12 +88,19 @@ export function createInboxStore(filePath) {
   async function load() {
     if (!statePromise) {
       statePromise = (async () => {
+        let pathInfo;
         try {
-          const pathInfo = await lstat(path);
-          if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
-            throw new Error('Telegram inbox path must be a regular file, not a link or special file.');
-          }
-          const handle = await open(path, 'r');
+          pathInfo = await lstat(path);
+        } catch (error) {
+          // An absent inbox at the initial path check is a valid empty queue.
+          // A later ENOENT is a path race and must never discard queued updates.
+          if (error.code === 'ENOENT') return emptyState();
+          throw error;
+        }
+        if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
+          throw new Error('Telegram inbox path must be a regular file, not a link or special file.');
+        }
+        const handle = await open(path, 'r');
           let text;
           try {
             const openedInfo = await handle.stat();
@@ -113,10 +120,6 @@ export function createInboxStore(filePath) {
             throw new Error('Unsupported or corrupt Telegram inbox file.');
           }
           return parsed;
-        } catch (error) {
-          if (error.code === 'ENOENT') return emptyState();
-          throw error;
-        }
       })();
     }
     return statePromise;
