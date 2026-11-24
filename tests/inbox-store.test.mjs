@@ -253,6 +253,23 @@ test('compacts only terminal inbox records below the durable Telegram checkpoint
 });
 
 
+test('durable reply-delivery marker survives retry and restart', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({ botId: '123456', updateId: 19, userId: '1001', update: { update_id: 19, message: { text: 'income 100' } } });
+    await inbox.markProcessing(item.id);
+    assert.equal(await inbox.markReplyDelivered(item.id), true);
+    await inbox.markPending(item.id, 'retry after completion failure');
+
+    const restarted = createInboxStore(file);
+    const pending = await restarted.nextPending();
+    assert.equal(pending.replyDeliveredAt !== null, true);
+    await restarted.markProcessing(item.id);
+    assert.equal(await restarted.markReplyDelivered(item.id), true);
+    assert.equal((await createInboxStore(file).nextPending()).replyDeliveredAt, pending.replyDeliveredAt);
+  });
+});
+
 test('restart recovery preserves the original idempotency key and records a new attempt', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
