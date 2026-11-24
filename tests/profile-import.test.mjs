@@ -24,7 +24,7 @@ test('validates a genuine exported profile and returns its byte size', async () 
   const validated = await importer.validateEnvelope(envelope);
   assert.equal(validated.sourceSchemaVersion, 5);
   assert.equal(validated.sizeBytes, new TextEncoder().encode(JSON.stringify(envelope.payload)).byteLength);
-  assert.deepEqual(JSON.parse(JSON.stringify(validated.payload)), envelope.payload);
+  assert.deepEqual(JSON.parse(JSON.stringify(validated.payload)), JSON.parse(JSON.stringify(envelope.payload)));
 });
 
 test('parses JSON and rejects malformed JSON or non-text input', async () => {
