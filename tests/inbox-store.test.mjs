@@ -266,6 +266,7 @@ test('durable reply-delivery marker survives retry and restart', async () => {
     assert.equal(pending.replyDeliveredAt !== null, true);
     await restarted.markProcessing(item.id);
     assert.equal(await restarted.markReplyDelivered(item.id), true);
+    await restarted.markPending(item.id, 'retry again');
     assert.equal((await createInboxStore(file).nextPending()).replyDeliveredAt, pending.replyDeliveredAt);
   });
 });
