@@ -195,7 +195,10 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+  if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
+    throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
+  }
   if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32
     || Buffer.byteLength(accessToken, 'utf8') > 4096) {
     throw new TypeError('Для локального API требуется секретный токен длиной от 32 до 4096 байт.');
@@ -307,15 +310,18 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
         return;
       }
-      for (const [key, session] of sessions) if (session.expiresAt <= Date.now()) sessions.delete(key);
+      const previousCookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
+        .find(part => part.startsWith(SESSION_COOKIE + '='));
+      if (previousCookie) sessions.delete(previousCookie.slice(SESSION_COOKIE.length + 1));
+      for (const [key, session] of sessions) if (session.expiresAt <= now()) sessions.delete(key);
       if (sessions.size >= MAX_SESSIONS) {
         send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
         return;
       }
       const sessionId = randomBytes(32).toString('base64url');
-      sessions.set(sessionId, { expiresAt: Date.now() + SESSION_TTL_MS });
-      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api');
-      send(response, 200, { ok: true, expiresIn: SESSION_TTL_MS });
+      sessions.set(sessionId, { expiresAt: now() + sessionTtlMs });
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.floor(sessionTtlMs / 1000));
+      send(response, 200, { ok: true, expiresIn: sessionTtlMs });
       return;
     }
 
@@ -336,7 +342,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       .find(part => part.startsWith(SESSION_COOKIE + '='));
     const sessionId = cookie ? cookie.slice(SESSION_COOKIE.length + 1) : '';
     const session = sessions.get(sessionId);
-    const sessionMatches = !!session && session.expiresAt > Date.now();
+    const sessionMatches = !!session && session.expiresAt > now();
     if (session && !sessionMatches) sessions.delete(sessionId);
     if (!tokenMatches && !sessionMatches) {
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
