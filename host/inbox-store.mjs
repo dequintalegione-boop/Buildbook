@@ -138,8 +138,24 @@ export function createInboxStore(filePath) {
     try {
       // mode is applied when the temp file is created; rename then preserves
       // its restrictive permissions for the durable inbox, including updates.
-      await writeFile(temporaryPath, serialized, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      const handle = await open(temporaryPath, 'wx', 0o600);
+      try {
+        await handle.writeFile(serialized, 'utf8');
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
       await rename(temporaryPath, path);
+      // Make the replacement durable across power loss, not merely visible in
+      // the OS page cache. Sync the directory entry after the atomic rename.
+      if (process.platform !== 'win32') {
+        const directoryHandle = await open(dirname(path), 'r');
+        try {
+          await directoryHandle.sync();
+        } finally {
+          await directoryHandle.close();
+        }
+      }
     } catch (error) {
       // A failed write must not leave plaintext Telegram messages in a temp file.
       await rm(temporaryPath, { force: true }).catch(() => {});
