@@ -729,6 +729,46 @@ test('expires HttpOnly sessions and rotates an existing browser session on recon
 });
 
 
+
+test('rejects duplicate or malformed session cookies instead of accepting the first value', async t => {
+  const { base, request } = await fixture(t);
+  const token = 'test-local-api-token-0123456789abcdef';
+  const bootstrap = await request(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: base,
+      authorization: 'Bearer ' + token,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const cookie = bootstrap.headers.get('set-cookie').split(';')[0];
+  const value = cookie.slice(cookie.indexOf('=') + 1);
+
+  for (const header of [
+    cookie + '; buildbook_local_session=attacker-controlled',
+    cookie + '; buildbook_local_session=' + value,
+    'buildbook_local_session=not-a-valid-session-id',
+  ]) {
+    const response = await request(base + '/api/health', { headers: { cookie: header } });
+    assert.equal(response.status, 401, header);
+  }
+
+  const ambiguousBootstrap = await request(base + '/api/session/bootstrap', {
+    method: 'POST',
+    headers: {
+      origin: base,
+      authorization: 'Bearer ' + token,
+      'content-type': 'application/json',
+      cookie: cookie + '; buildbook_local_session=' + value,
+    },
+    body: '{}',
+  });
+  assert.equal(ambiguousBootstrap.status, 400);
+});
+
+
 test('preserves compare-and-swap semantics across 20 concurrent API write races', async t => {
   for (let round = 1; round <= 20; round += 1) {
     await t.test('race ' + round, async t => {
