@@ -115,19 +115,38 @@ function resolveCategory(state, kind) {
 
 function resolveAccount(state, preferredId = null) {
   const accounts = Array.isArray(state?.accounts) ? state.accounts : [];
+  const validAccounts = accounts.filter(account =>
+    account && typeof account.id === 'string' && account.id.trim()
+  );
+  const requireUniqueId = account => {
+    const matches = validAccounts.filter(candidate => candidate.id === account.id);
+    if (matches.length !== 1) {
+      const error = commandError('В профиле Buildbook повторяется ID выбранного счёта. Исправьте список счетов перед записью через Telegram.');
+      error.code = 'TELEGRAM_FINANCE_ACCOUNT_AMBIGUOUS';
+      throw error;
+    }
+    return account.id;
+  };
+
   if (preferredId) {
-    const matches = accounts.filter(account => account && account.id === preferredId
-      && typeof account.id === 'string' && account.id.trim());
-    if (matches.length === 1) return matches[0].id;
+    const matches = validAccounts.filter(account => account.id === preferredId);
+    if (matches.length === 1) return requireUniqueId(matches[0]);
     const error = commandError(matches.length > 1
       ? 'Выбранный счёт Telegram неоднозначен: в профиле Buildbook повторяется его ID.'
       : 'Выбранный счёт Telegram не найден в текущем профиле Buildbook. Проверьте BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID.');
     error.code = 'TELEGRAM_FINANCE_ACCOUNT_UNAVAILABLE';
     throw error;
   }
-  const preferred = accounts.find(account => account && account.name === 'Наличные' && typeof account.id === 'string' && account.id.trim());
-  const account = preferred || accounts.find(item => item && typeof item.id === 'string' && item.id.trim());
-  if (account) return account.id;
+
+  const cashAccounts = validAccounts.filter(account => account.name === 'Наличные');
+  if (cashAccounts.length > 1) {
+    const error = commandError('В Buildbook несколько счетов «Наличные». Укажите BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID, чтобы выбрать счёт однозначно.');
+    error.code = 'TELEGRAM_FINANCE_ACCOUNT_AMBIGUOUS';
+    throw error;
+  }
+  if (cashAccounts.length === 1) return requireUniqueId(cashAccounts[0]);
+  if (validAccounts.length) return requireUniqueId(validAccounts[0]);
+
   const error = commandError('В Buildbook не найден счёт для Telegram-операций.');
   error.code = 'TELEGRAM_FINANCE_ACCOUNT_UNAVAILABLE';
   throw error;
