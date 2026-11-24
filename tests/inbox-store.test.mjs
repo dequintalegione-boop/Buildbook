@@ -219,7 +219,7 @@ test('compacts only terminal inbox records below the durable Telegram checkpoint
     });
     const completedOld = (await enqueue(3)).item;
     const rejectedOld = (await enqueue(4)).item;
-    const pendingAtBoundary = (await enqueue(5)).item;
+    await enqueue(5);
     const completedNew = (await enqueue(8)).item;
 
     await inbox.markProcessing(completedOld.id);
