@@ -6,7 +6,7 @@ function isPlainObject(value) {
 
 function isValidExportDate(value) {
   if (typeof value !== 'string') return false;
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone, sign, offsetHourText, offsetMinuteText] = match;
   const year = Number(yearText), month = Number(monthText), day = Number(dayText);
