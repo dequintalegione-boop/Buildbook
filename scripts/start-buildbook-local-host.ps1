@@ -9,5 +9,15 @@ if (-not (Test-Path $envFile)) {
   exit 1
 }
 
-node --env-file="$envFile" .\host\run-buildbook-local-host.mjs
-exit $LASTEXITCODE
+$logDir = Join-Path $root 'data'
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$logFile = Join-Path $logDir 'local-host.log'
+if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 5MB) {
+  $previousLog = "$logFile.1"
+  if (Test-Path $previousLog) { Remove-Item $previousLog -Force }
+  Move-Item $logFile $previousLog -Force
+}
+
+& node --env-file="$envFile" .\host\run-buildbook-local-host.mjs 2>&1 | Tee-Object -FilePath $logFile -Append
+$exitCode = $LASTEXITCODE
+exit $exitCode
