@@ -66,7 +66,7 @@ Polling не получает новые updates, пока host выключен
 
 ## Хранилище и ограничения
 
-**host/profile-store.mjs** управляет файловым профилем и его ревизией. **host/profile-repository-adapter.mjs** адаптирует контракт **repository.readProfile()** / **repository.writeProfile(...)**, включая бинарные фотографии. **client/canonical-profile-runtime.mjs** использует только cookie-сессию, ограничивает адрес HTTP loopback и не содержит IndexedDB fallback.
+**host/profile-store.mjs** управляет файловым профилем и его ревизией. **host/profile-repository-adapter.mjs** адаптирует контракт **repository.readProfile()** / **repository.writeProfile(...)**, включая бинарные фотографии. **client/canonical-profile-runtime.mjs** использует только cookie-сессию, ограничивает адрес HTTP loopback и не содержит IndexedDB fallback. Браузерные запросы имеют ограничение времени: 30 секунд по умолчанию и до 120 секунд для переноса профиля; таймер остаётся активным до чтения тела ответа, а не только до получения заголовков.
 
 Совместный **host/run-buildbook-local-host.mjs** создаёт один экземпляр файлового хранилища для API и Telegram. Не запускайте параллельно независимый Telegram-процесс с другим путём профиля. Telegram polling по умолчанию выключен (**BUILDBOOK_TELEGRAM_ENABLED=false**); включайте его только после проверки, что UI и Telegram работают с одним каноническим профилем.
 
