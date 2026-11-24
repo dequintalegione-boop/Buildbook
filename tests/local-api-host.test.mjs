@@ -72,7 +72,7 @@ test('starts a loopback API and serves the configured profile store', async (t) 
   const baseUrl = `http://127.0.0.1:${address.port}`;
   const bootstrap = await fetch(`${baseUrl}/api/session/bootstrap`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers: { origin: baseUrl, authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: '{}',
   });
   assert.equal(bootstrap.status, 200);
