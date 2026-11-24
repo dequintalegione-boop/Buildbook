@@ -28,15 +28,15 @@
 ## Token and configuration
 
 - The bot token is a secret and must be stored by the host service in an OS-protected local secret store or a restricted local configuration file, never in the web app bundle, browser localStorage, or Git.
-- The Buildbook UI now has a Telegram tab for one-time host-session bootstrap and sanitized status/queue monitoring. The bootstrap key is exchanged for an HttpOnly browser session and is not stored in the app. The bot token remains host-only; the UI does not configure or reveal it. Keep `BUILDBOOK_TELEGRAM_ENABLED=false` until the UI storage adapter and migration are complete. The service must not return the token in status responses or logs.
+- The Buildbook UI has a Telegram tab for one-time host-session bootstrap and sanitized status/queue monitoring. The bootstrap key is exchanged for an HttpOnly browser session and is not stored in the app. The bot token remains host-only; the UI does not configure or reveal it. The regular browser UI can now use the canonical file-backed profile after the user explicitly imports and verifies the profile, confirms the switch, and establishes a valid host session. Keep `BUILDBOOK_TELEGRAM_ENABLED=false` until the operator has verified that the browser UI is using that same canonical profile; the flag remains an explicit host-side setting. The service must not return the token in status responses or logs.
 - Bind the local control API to loopback only; protect configuration-changing requests against cross-site requests and validate the expected local origin.
 - Allowlist entries are numeric Telegram user IDs, normalized and validated by the service.
 
 ## Host and storage decision
 
-The current app uses browser IndexedDB, which is unavailable to a separate background process when the browser is closed. The local service therefore cannot safely write financial records into the current browser database directly.
+The app supports two explicit storage modes. The default and standalone/test mode use browser IndexedDB. In the regular browser UI, the user can connect to the loopback host, export a migration package, import it only into an empty canonical file-backed profile, verify the read-back checksum, and explicitly confirm switching modes. The UI then initializes through the canonical repository adapter and uses the same profile-store instance as the Telegram processor. If the session/API is unavailable or the canonical profile is empty, startup fails closed; there is no automatic IndexedDB fallback. Switching back to IndexedDB is a separate explicit action, and the two profiles remain independent.
 
-The combined local host now shares one file-backed profile store between its API and Telegram processor. Telegram polling is disabled by default (`BUILDBOOK_TELEGRAM_ENABLED=false`) and must be explicitly enabled only after the browser repository has been switched to the same canonical profile; this prevents silent writes to a separate ledger during migration. The browser UI still initializes directly from IndexedDB; the repository adapter is not yet wired into app startup, and a recoverable migration/bootstrap path is not complete. Until that is finished, do not treat the browser UI and host as one live ledger or enable Telegram writes against a separate profile.
+Telegram polling remains disabled by default (`BUILDBOOK_TELEGRAM_ENABLED=false`). Enable it only after confirming the browser UI is actively using the same canonical profile. The migration leaves the original IndexedDB profile untouched as a user-controlled backup. The standalone HTML and `?test=1` continue to use IndexedDB.
 
 ## Outage caveat
 
