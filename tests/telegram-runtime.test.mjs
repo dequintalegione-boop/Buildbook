@@ -174,5 +174,5 @@ test('continues draining after a terminally rejected inbox item', async () => {
 
   const result = await runtime.runOnce();
   assert.equal(result.processed, 2);
-  assert.deepEqual(calls, ['process:1', 'process:2', 'process:3', 'poll']);
+  assert.deepEqual(calls, ['process:1', 'process:2', 'process:3', 'poll', 'process:4']);
 });
