@@ -97,6 +97,12 @@ export function createLocalProfileClient({
       error.code = payload && payload.code || (response.status === 409
         ? 'BUILD_BOOK_STORAGE_CONFLICT'
         : 'BUILD_BOOK_LOCAL_API_ERROR');
+      if (Number.isSafeInteger(payload?.expectedRevision) && payload.expectedRevision >= 0) {
+        error.expectedRevision = payload.expectedRevision;
+      }
+      if (Number.isSafeInteger(payload?.currentRevision) && payload.currentRevision >= 0) {
+        error.currentRevision = payload.currentRevision;
+      }
       throw error;
     }
     return payload;
