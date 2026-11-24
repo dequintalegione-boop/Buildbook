@@ -37,6 +37,7 @@ test('canonical mode is selected only after verified import and explicit user co
 test('canonical save failures stop editing and never silently continue on IndexedDB', () => {
   assert.match(html, /if\(STORAGE_MODE==='canonical'&&error&&error\.code!=='BUILD_BOOK_STORAGE_CONFLICT'\)/);
   assert.match(html, /if\(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR\)return/);
+  assert.match(html, /STORAGE_MODE==='canonical'&&\(error\.status===401\|\|error\.code==='BUILD_BOOK_LOCAL_API_UNAVAILABLE'\)/);
   assert.match(html, /data-a="storage-indexeddb"/);
   assert.match(html, /Автоматического перехода на другое хранилище не будет/);
 });
