@@ -1,11 +1,24 @@
 import test from 'node:test';
 import { createHash } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
 import { createLocalApiServer } from '../host/local-api.mjs';
+
+function requestWithHost(base, host) {
+  const url = new URL('/api/health', base);
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({ hostname: url.hostname, port: Number(url.port), path: url.pathname, method: 'GET', headers: { host, authorization: 'Bearer test-local-api-token-0123456789abcdef' } }, response => {
+      response.resume();
+      response.on('end', () => resolve({ status: response.statusCode }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
@@ -187,7 +200,7 @@ test('returns 413 for request bodies above the configured limit', async (t) => {
     body: oversized,
   });
   assert.equal(response.status, 413);
-  assert.match((await response.json()).error, /превышает допустимый размер/);
+  assert.match((await response.json()).error, /слишком большой Content-Length|превышает допустимый размер/);
 });
 
 test('serializes simultaneous writes with the same revision and preserves one winner', async (t) => {
@@ -240,9 +253,7 @@ test('rejects opaque file origins and malformed origins before checking credenti
 
 test('rejects non-loopback Host headers even with a valid token', async (t) => {
   const { base } = await fixture(t);
-  const response = await fetch(`${base}/api/health`, {
-    headers: { host: 'attacker.example', authorization: 'Bearer test-local-api-token-0123456789abcdef' },
-  });
+  const response = await requestWithHost(base, 'attacker.example');
   assert.equal(response.status, 403);
 });
 
@@ -531,9 +542,7 @@ test('validates ISO 8601 export timezone offsets at the import boundary', async 
 test('rejects malformed Host ports and non-origin Origin values', async (t) => {
   const { base } = await fixture(t);
   for (const host of ['localhost:65536', 'localhost:abc', '127.0.0.1:99999']) {
-    const response = await fetch(base + '/api/health', {
-      headers: { host, authorization: 'Bearer test-local-api-token-0123456789abcdef' },
-    });
+    const response = await requestWithHost(base, host);
     assert.equal(response.status, 403, host);
   }
   for (const origin of [
