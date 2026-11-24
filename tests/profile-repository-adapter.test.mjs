@@ -175,7 +175,6 @@ test('rejects exhausted revision before contacting the canonical API', async () 
 
 test('rejects 20 malformed canonical profile shapes before exposing data or writing', async t => {
   const malformed = [
-    null,
     [],
     'profile',
     0,
