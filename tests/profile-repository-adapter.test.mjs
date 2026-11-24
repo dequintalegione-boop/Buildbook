@@ -171,3 +171,61 @@ test('rejects exhausted revision before contacting the canonical API', async () 
   );
   assert.equal(calls, 0);
 });
+
+
+test('rejects 20 malformed canonical profile shapes before exposing data or writing', async t => {
+  const malformed = [
+    null,
+    [],
+    'profile',
+    0,
+    { logs: [], photos: {} },
+    { state: {}, photos: {} },
+    { state: {}, logs: [] },
+    { state: null, logs: [], photos: {} },
+    { state: [], logs: [], photos: {} },
+    { state: 'state', logs: [], photos: {} },
+    { state: {}, logs: {}, photos: {} },
+    { state: {}, logs: 'logs', photos: {} },
+    { state: {}, logs: [], photos: [] },
+    { state: {}, logs: [], photos: null },
+    { state: {}, logs: [], photos: 'photos' },
+    { state: {}, logs: [], photos: {}, version: 'bad', extra: true },
+    { state: {}, logs: {}, photos: [] },
+    { state: false, logs: false, photos: false },
+    { state: {}, logs: [], photos: {}, revision: -1 },
+    { state: {}, logs: [], photos: {}, schema: [] },
+  ];
+  for (const [index, profile] of malformed.entries()) {
+    await t.test('shape ' + (index + 1), async () => {
+      const adapter = createProfileRepositoryAdapter({
+        async readProfile() { return { profile, revision: 1 }; },
+        async writeProfile() { throw new Error('write must not be called'); },
+      });
+      await assert.rejects(adapter.readProfile(), /некорректный ответ|неверный формат/);
+      await assert.rejects(adapter.writeProfile({}, [], {}, 1), /некорректный ответ/);
+    });
+  }
+});
+
+test('preserves extra host metadata while enforcing canonical core fields', async () => {
+  let stored = {
+    state: { tx: [] }, logs: [], photos: {},
+    telegram: { idempotency: { 'bot:42': 'operation-42' } },
+    hostMetadata: { version: 3 },
+  };
+  let revision = 7;
+  const adapter = createProfileRepositoryAdapter({
+    async readProfile() { return { profile: stored, revision }; },
+    async writeProfile(profile, expectedRevision) {
+      assert.equal(expectedRevision, revision);
+      stored = profile;
+      return ++revision;
+    },
+  });
+  await adapter.writeProfile({ tx: [{ id: 'ui-update' }] }, [], {}, 7);
+  const loaded = await adapter.readProfile();
+  assert.deepEqual(loaded.state, { tx: [{ id: 'ui-update' }] });
+  assert.deepEqual(stored.telegram, { idempotency: { 'bot:42': 'operation-42' } });
+  assert.deepEqual(stored.hostMetadata, { version: 3 });
+});
