@@ -32,6 +32,7 @@ export function createLocalProfileClient({
     throw new RangeError('Тайм-аут локального API должен быть целым числом от 1 до 120000 мс.');
   }
   const base = normalizeBaseUrl(baseUrl);
+  let sessionMode = false;
 
   async function request(path, options = {}) {
     let response;
@@ -44,11 +45,11 @@ export function createLocalProfileClient({
         // The bearer token must never follow a redirect or accompany ambient
         // cookies/referrer data to another origin.
         redirect: 'error',
-        credentials: 'omit',
+        credentials: sessionMode ? 'include' : 'omit',
         cache: 'no-store',
         referrerPolicy: 'no-referrer',
         headers: {
-          authorization: 'Bearer ' + accessToken,
+          ...(!sessionMode && accessToken ? { authorization: 'Bearer ' + accessToken } : {}),
           ...(options.body ? { 'content-type': 'application/json' } : {}),
           ...(options.headers || {}),
         },
@@ -81,6 +82,30 @@ export function createLocalProfileClient({
   }
 
   return Object.freeze({
+    async connectSession() {
+      if (sessionMode) return true;
+      const result = await request('/api/session/bootstrap', {
+        method: 'POST',
+        body: '{}',
+        headers: { authorization: 'Bearer ' + accessToken },
+      });
+      if (!result || result.ok !== true || result.expiresIn !== 12 * 60 * 60 * 1000) {
+        throw new Error('Локальный сервис вернул некорректный результат подключения.');
+      }
+      // Drop the bootstrap secret from the client closure after exchanging it
+      // for an HttpOnly, SameSite=Strict, browser-managed session cookie.
+      sessionMode = true;
+      accessToken = null;
+      return true;
+    },
+    async closeSession() {
+      if (!sessionMode) return false;
+      const result = await request('/api/session/close', { method: 'POST' });
+      if (!result || result.ok !== true) throw new Error('Не удалось закрыть сессию локального API.');
+      sessionMode = false;
+      return true;
+    },
+    get connected() { return sessionMode; },
     async health() {
       const result = await request('/api/health');
       if (!result || result.ok !== true) throw new Error('Локальный сервис вернул некорректный ответ проверки состояния.');
