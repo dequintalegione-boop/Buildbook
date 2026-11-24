@@ -75,3 +75,17 @@ test('host factory rejects relative lock paths even when config is hand-built', 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('host factory rejects a bot ID that does not match the token identity', () => {
+  const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
+  try {
+    const cfg = config(root);
+    cfg.botId = '654321';
+    assert.throws(() => createTelegramHostService({
+      config: cfg,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /bot ID must match the bot token identity/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
