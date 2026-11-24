@@ -28,13 +28,17 @@ export function acquireInstanceLock(lockPath, { pid = process.pid } = {}) {
   }
 
   const ownerToken = randomUUID();
+  const ownerPath = resolve(path, 'owner.json');
   try {
-    writeFileSync(resolve(path, 'owner.json'), JSON.stringify({
+    writeFileSync(ownerPath, JSON.stringify({
       pid,
       ownerToken,
       startedAt: new Date().toISOString(),
     }), { flag: 'wx', mode: 0o600 });
   } catch (error) {
+    // We created this directory exclusively. Remove a partially written owner
+    // marker as well, otherwise a failed acquisition can leave a false stale lock.
+    try { unlinkSync(ownerPath); } catch {}
     try { rmdirSync(path); } catch {}
     throw error;
   }
@@ -43,7 +47,6 @@ export function acquireInstanceLock(lockPath, { pid = process.pid } = {}) {
   let ownerRemovedByThisRelease = false;
   return function releaseInstanceLock() {
     if (released) return;
-    const ownerPath = resolve(path, 'owner.json');
     let owner;
     try {
       owner = JSON.parse(readFileSync(ownerPath, 'utf8'));
