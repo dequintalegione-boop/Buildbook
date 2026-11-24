@@ -95,7 +95,8 @@ test('sends a permanent command error reply only once', async () => {
     async deliverReply(message) { replies.push(message); },
   });
 
-  await assert.rejects(processor.processOne(), /Unsupported command/);
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1' });
   assert.equal(replies.length, 1);
   assert.equal(replies[0].text, 'Команда не распознана');
   assert.equal(inbox.state.status, 'rejected');
@@ -289,7 +290,8 @@ test('terminal silent command rejection is acknowledged without sending a Telegr
     async deliverReply() { replyCalls += 1; },
   });
 
-  await assert.rejects(processor.processOne(), error => error.code === 'IGNORED_TELEGRAM_TEXT');
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1' });
   assert.equal(replyCalls, 0);
   assert.equal(inbox.state.status, 'rejected');
   assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
