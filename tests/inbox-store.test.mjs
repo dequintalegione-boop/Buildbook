@@ -86,9 +86,18 @@ test('failed durable enqueue does not poison the in-memory dedupe snapshot', asy
       inbox.enqueue({ botId: '123456', updateId: 13, userId: '1001', update: { update_id: 13, message: { text: 'income' } } })
     );
     await rm(file, { recursive: true, force: true });
+    const receivedAt = new Date().toISOString();
+    const externalItem = {
+      id: 'external-item', key: '123456:12', botId: '123456', updateId: 12, userId: '1001',
+      update: { update_id: 12, message: { text: 'other update' } }, status: 'pending', attempts: 0,
+      receivedAt, processedAt: null, lastError: null,
+    };
+    await writeFile(file, JSON.stringify({ version: 1, items: [externalItem] }), 'utf8');
     const retry = await inbox.enqueue({ botId: '123456', updateId: 13, userId: '1001', update: { update_id: 13, message: { text: 'income' } } });
     assert.equal(retry.inserted, true);
-    assert.equal((await inbox.nextPending()).key, '123456:13');
+    assert.equal((await inbox.nextPending()).key, '123456:12');
+    const persisted = JSON.parse(await readFile(file, 'utf8'));
+    assert.deepEqual(persisted.items.map(item => item.key), ['123456:12', '123456:13']);
   });
 });
 
