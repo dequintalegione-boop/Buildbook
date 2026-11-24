@@ -21,6 +21,10 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function hasControlCharacters(value) {
+  return /[\u0000-\u001f\u007f]/u.test(value);
+}
+
 function validateTransaction(value) {
   if (!isRecord(value)
     || !['i', 'e'].includes(value.kind)
@@ -28,13 +32,14 @@ function validateTransaction(value) {
     || !Number.isFinite(Date.parse(value.date + 'T00:00:00Z'))
     || new Date(value.date + 'T00:00:00Z').toISOString().slice(0, 10) !== value.date
     || !Number.isFinite(value.amount) || value.amount <= 0 || value.amount > 1_000_000_000
+    || !Number.isSafeInteger(Math.round(value.amount * 100))
     || Math.abs(value.amount * 100 - Math.round(value.amount * 100)) > 1e-8
-    || typeof value.desc !== 'string' || !value.desc.trim() || value.desc.length > 500
-    || typeof value.cat !== 'string' || !value.cat.trim() || value.cat.length > 200
-    || typeof value.grp !== 'string' || !value.grp.trim() || value.grp.length > 200
+    || typeof value.desc !== 'string' || !value.desc.trim() || value.desc.length > 500 || hasControlCharacters(value.desc)
+    || typeof value.cat !== 'string' || !value.cat.trim() || value.cat.length > 200 || hasControlCharacters(value.cat)
+    || typeof value.grp !== 'string' || !value.grp.trim() || value.grp.length > 200 || hasControlCharacters(value.grp)
     || !(value.qty === undefined || value.qty === null || Number.isFinite(value.qty))
-    || typeof value.acc !== 'string' || !value.acc.trim() || value.acc.length > 200
-    || !(value.note === undefined || value.note === null || typeof value.note === 'string' && value.note.length <= 2000)) {
+    || typeof value.acc !== 'string' || !value.acc.trim() || value.acc.length > 200 || hasControlCharacters(value.acc)
+    || !(value.note === undefined || value.note === null || typeof value.note === 'string' && value.note.length <= 2000 && !hasControlCharacters(value.note))) {
     const error = new TypeError('Telegram adapter produced an invalid Buildbook transaction.');
     error.code = 'INVALID_BUILD_BOOK_TRANSACTION';
     throw error;
