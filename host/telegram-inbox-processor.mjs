@@ -59,6 +59,9 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
   if (deliverReply !== undefined && typeof deliverReply !== 'function') {
     throw new TypeError('deliverReply must be a function when supplied.');
   }
+  if (typeof deliverReply === 'function' && typeof inbox.markReplyDelivered !== 'function') {
+    throw new TypeError('A durable inbox reply-delivery transition is required when Telegram replies are enabled.');
+  }
 
   let active = false;
 
@@ -71,7 +74,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
   }
 
   async function sendReply(item, text) {
-    if (!text || typeof deliverReply !== 'function') return;
+    if (!text || typeof deliverReply !== 'function') return false;
     if (typeof text !== 'string' || !text.trim() || text.length > 3500) {
       const error = new Error('Telegram reply was rejected before sending.');
       error.code = 'INVALID_TELEGRAM_REPLY';
@@ -82,6 +85,15 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
       text,
       replyToMessageId: item.validatedUpdate?.message?.message_id,
     });
+    return true;
+  }
+
+  async function deliverReplyOnce(item, text) {
+    if (item.replyDeliveredAt) return;
+    if (await sendReply(item, text)) {
+      requireTransition(await inbox.markReplyDelivered(item.id), 'reply-delivered');
+      item.replyDeliveredAt = new Date().toISOString();
+    }
   }
 
   async function processOne() {
@@ -117,10 +129,11 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
           error.code = 'MISSING_CANONICAL_OPERATION_ID';
           throw error;
         }
-        // Reply before completion. A crash after a successful reply retries the
-        // same idempotent command and may send the reply once more; a failed
-        // reply must not acknowledge the inbox item.
-        await sendReply(item, typeof result?.reply === 'string' ? result.reply : '');
+        // Persist successful delivery before completion so retries after a later
+        // local failure do not intentionally send the same reply again. A crash
+        // between Telegram accepting the message and this durable transition is
+        // still ambiguous; Telegram does not provide an idempotency key for sends.
+        await deliverReplyOnce(item, typeof result?.reply === 'string' ? result.reply : '');
         const completed = await inbox.markCompleted(item.id, normalizedOperationId);
         if (completed === false) {
           throw new Error('Telegram inbox item could not be marked completed; retry requires an idempotent domain adapter.');
@@ -131,7 +144,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
           if (error?.permanent === true) {
             if (typeof error.reply === 'string' && error.reply.trim()) {
               try {
-                await sendReply(item, error.reply);
+                await deliverReplyOnce(item, error.reply);
               } catch (replyError) {
                 permanentFailureHandled = true;
                 requireTransition(await inbox.markPending(item.id, 'Canonical adapter failed; retry scheduled.'), 'pending');
