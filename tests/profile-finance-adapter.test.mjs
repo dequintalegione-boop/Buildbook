@@ -252,3 +252,32 @@ test('rejects malformed persisted replay checkpoints before writing', async () =
   );
   assert.equal(store.snapshot().revision, 0);
 });
+
+test('does not duplicate a transaction when the profile commit succeeded before a retryable error', async () => {
+  let revision = 0;
+  let profile = { state: { tx: [] } };
+  let writes = 0;
+  const store = {
+    async read() { return { revision, profile: structuredClone(profile) }; },
+    async write(next, expectedRevision) {
+      assert.equal(expectedRevision, revision);
+      writes++;
+      profile = structuredClone(next);
+      revision++;
+      const error = new Error('commit outcome was ambiguous');
+      error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+      throw error;
+    },
+  };
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction({ id: 'committed-once' }),
+  });
+
+  const result = await apply({ update: {}, idempotencyKey: '123:60' });
+  assert.deepEqual(result, { operationId: 'telegram-replay:123:60', duplicate: true });
+  assert.equal(store.profile, undefined);
+  assert.equal(profile.state.tx.length, 1);
+  assert.equal(profile.telegramOperationCheckpoints[0].updateId, 60);
+  assert.equal(writes, 1);
+});
