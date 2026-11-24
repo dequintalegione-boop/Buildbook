@@ -228,3 +228,39 @@ test('preserves extra host metadata while enforcing canonical core fields', asyn
   assert.deepEqual(stored.telegram, { idempotency: { 'bot:42': 'operation-42' } });
   assert.deepEqual(stored.hostMetadata, { version: 3 });
 });
+
+
+test('does not retry a write that races after the adapter preflight read', async t => {
+  for (let currentRevision = 2; currentRevision <= 21; currentRevision += 1) {
+    await t.test('raced revision ' + currentRevision, async () => {
+      let reads = 0;
+      let writes = 0;
+      const adapter = createProfileRepositoryAdapter({
+        async readProfile() {
+          reads += 1;
+          return {
+            revision: 1,
+            profile: { state: { tx: [] }, logs: [], photos: {} },
+          };
+        },
+        async writeProfile(_profile, expectedRevision) {
+          writes += 1;
+          assert.equal(expectedRevision, 1);
+          const error = new Error('another client committed');
+          error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+          error.expectedRevision = expectedRevision;
+          error.currentRevision = currentRevision;
+          throw error;
+        },
+      });
+      await assert.rejects(adapter.writeProfile({ tx: [{ id: 'local' }] }, [], {}, 1), error => {
+        assert.equal(error.code, 'BUILD_BOOK_STORAGE_CONFLICT');
+        assert.equal(error.expectedRevision, 1);
+        assert.equal(error.currentRevision, currentRevision);
+        return true;
+      });
+      assert.equal(reads, 1, 'adapter must not silently reload and replay stale UI state');
+      assert.equal(writes, 1, 'adapter must not retry a conflicting financial write');
+    });
+  }
+});
