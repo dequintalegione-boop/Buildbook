@@ -287,7 +287,7 @@ main{width:100%;max-width:none;min-width:0;box-sizing:border-box}
 #nav-other-folder *{box-sizing:border-box;max-width:100%}
 html.transaction-screen,body.transaction-screen{overflow-x:hidden;overflow-y:hidden}
 @media(max-width:760px){
- html.transaction-screen,body.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto}
+ html.transaction-screen,body.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto!important}
 }
 </style></head><body>
 <nav><button type="button" data-a="navcollapse" class="nav-toggle" title="Свернуть или развернуть меню" data-short="☰">Свернуть меню</button><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home" data-short="С" title="Сводка">Сводка</button><button data-a="nav" data-id="dash" data-short="Д" title="Дашборд">Дашборд</button><button data-a="nav" data-id="planning" data-short="Пл" title="Планирование">Планирование</button><button data-a="nav" data-id="calendar" data-short="К" title="Календарь">Календарь</button><button data-a="nav" data-id="stock" data-short="С" title="Склад">Склад</button><button data-a="nav" data-id="builds" data-short="Сб" title="Сборки">Сборки</button><button data-a="nav" data-id="tx" data-short="₽" title="Транзакции">Транзакции</button><button data-a="nav" data-id="assets" data-short="ДИ" title="Долги и инвестиции">Долги и инвестиции</button><button data-a="nav" data-id="reports" data-short="О" title="Отчёты">Отчёты</button><button data-a="nav" data-id="tasks" data-short="З" title="Задачи">Задачи</button><button data-a="nav" data-id="trash" data-short="К" title="Корзина">Корзина</button><button data-a="nav" data-id="log" data-short="Ж" title="Журнал">Журнал</button><button data-a="nav" data-id="set" data-short="Н" title="Настройки">Настройки</button><div id="nav-other-folder" class="nav-other-folder" data-nav-other-drop hidden><button type="button" data-a="other-toggle" data-short="•••" title="Дополнительные вкладки" aria-expanded="false">Прочее <span aria-hidden="true">▾</span></button><div id="nav-other-list" class="nav-other-list" aria-label="Дополнительные вкладки"></div><div class="nav-other-drop-label">Перетащите сюда ненужные вкладки</div></div></nav>
@@ -1308,7 +1308,7 @@ if(kitMode){
 }else if(linkedKit){alert('Состав комплектной покупки нельзя преобразовать в обычную операцию.');return false}
 if(d.cat==='Проебы'&&!kitMode&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
 const cashCheck=checkTransactionBalance({...o,kind:d.kind,date:d.date,amount,acc:d.acc},o||null);
-if(!cashCheck.ok){alert(cashCheck.error);return false}
+if(!cashCheck.ok)return showModalError(form,cashCheck.error);
 if(stockType){
  if(!desc||!Number.isFinite(amount)||amount<=0||!Number.isInteger(qty)||qty<1||!accountExists){alert('Для закупки укажите описание, положительную сумму, целое количество и кассу.');return false}
  if(linkedBatch&&qty<writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch)){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка.');return false}
@@ -2545,7 +2545,7 @@ function tasks(){
     '<button class="btn ic g" data-a="ke" data-id="'+esc(t.id)+'" title="Изменить">✎</button>'+
     '<button class="btn ic g" data-a="kd" data-id="'+esc(t.id)+'" title="Удалить">✕</button></div>';
   }).join('');
-  return '<section class="qd task-priority task-priority-'+i+'" data-q="'+i+'"><div class="hd" style="margin:0 0 8px"><b>'+n+'</b>'+
+  return '<section class="qd task-priority task-priority-'+i+'" style="--task-priority:'+['#d65353','#d39a27','#4389d5','#839397','#9071ca'][i]+'" data-q="'+i+'"><div class="hd" style="margin:0 0 8px"><b>'+n+'</b>'+
    '<button class="btn ic" data-a="kadd" data-id="'+i+'" title="Добавить задачу">+</button></div>'+
    (items||'<small>Пусто. Перетащите сюда задачу или нажмите +</small>')+'</section>';
  };
@@ -4020,7 +4020,7 @@ function persistLayoutOrder(source){
  save.skip=1;save();render();
 }
 function syncTransactionOverflow(){
- const active=V.tab==='tx',mobile=!!(window.matchMedia&&window.matchMedia('(max-width:760px)').matches),value=active&&!mobile?'hidden':'';
+ const active=V.tab==='tx',value=active?'hidden':'';
  document.documentElement.style.overflowY=value;document.body.style.overflowY=value;
 }
 window.addEventListener('resize',syncTransactionOverflow);
@@ -4035,6 +4035,7 @@ function render(){
  document.body.classList.toggle('transaction-screen',V.tab==='tx');
  document.documentElement.classList.toggle('transaction-screen',V.tab==='tx');
  syncTransactionOverflow();
+ const main=document.querySelector('main');if(main){main.style.maxWidth='none';main.style.minWidth='0';main.style.width='auto';main.style.boxSizing='border-box'}
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
  document.body.classList.toggle('nav-collapsed',!!S.set.navCollapsed);
  applyLayoutEditing();
@@ -4148,16 +4149,21 @@ function trash(){
 function renameCategory(kind,group,oldName){
  const categories=kind==='e'?EXP:INC;
  if(!categories[group]||!categories[group].includes(oldName))return false;
- const nextName=String(window.prompt('Новое название категории',oldName)||'').trim();
- if(!nextName||nextName===oldName)return false;
- if(Object.values(categories).some(items=>items.includes(nextName))){window.alert('Категория с таким названием уже существует.');return false}
- categories[group][categories[group].indexOf(oldName)]=nextName;
- S.tx.forEach(transaction=>{if(transaction.cat===oldName&&(transaction.grp===group||!transaction.grp))transaction.cat=nextName});
- const oldKey=group+'::'+oldName,newKey=group+'::'+nextName;
- S.hiddenCategories[kind]=(S.hiddenCategories[kind]||[]).map(item=>item===oldKey?newKey:item);
- if(kind==='e'&&group===S.stockGroup)S.batches.forEach(batch=>{if(batch.type===oldName)batch.type=nextName});
- if(kind==='i'&&group===S.partSaleGroup&&S.partSaleCategory===oldName)S.partSaleCategory=nextName;
- syncCategories();save();render();return true;
+ const body=fld('name','Новое название категории','text',oldName,'required');
+ modal('Переименовать категорию',body,form=>{
+  const nextName=String(form.elements.name.value||'').trim();
+  if(!nextName)return showModalError(form,'Введите название категории.');
+  if(nextName===oldName)return true;
+  if(Object.values(categories).some(items=>items.includes(nextName)))return showModalError(form,'Категория с таким названием уже существует.');
+  categories[group][categories[group].indexOf(oldName)]=nextName;
+  S.tx.forEach(transaction=>{if(transaction.cat===oldName&&(transaction.grp===group||!transaction.grp))transaction.cat=nextName});
+  const oldKey=group+'::'+oldName,newKey=group+'::'+nextName;
+  S.hiddenCategories[kind]=(S.hiddenCategories[kind]||[]).map(item=>item===oldKey?newKey:item);
+  if(kind==='e'&&group===S.stockGroup)S.batches.forEach(batch=>{if(batch.type===oldName)batch.type=nextName});
+  if(kind==='i'&&group===S.partSaleGroup&&S.partSaleCategory===oldName)S.partSaleCategory=nextName;
+  syncCategories();save();render();
+ });
+ return true;
 }
 
 function act(a,id){const A={
