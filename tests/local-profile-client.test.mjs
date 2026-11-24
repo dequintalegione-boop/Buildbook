@@ -274,3 +274,38 @@ test('enforces the request deadline across 20 stalled response-body variants', a
     });
   }
 });
+
+
+test('coalesces 20 concurrent connect and close bursts into one session transition', async t => {
+  for (let burst = 2; burst <= 21; burst += 1) {
+    await t.test('concurrent callers: ' + burst, async () => {
+      let bootstrapCalls = 0;
+      let closeCalls = 0;
+      const client = createLocalProfileClient({
+        accessToken: token,
+        fetchImpl: fakeFetch(async url => {
+          if (url.endsWith('/api/session/bootstrap')) {
+            bootstrapCalls += 1;
+            await Promise.resolve();
+            return { status: 200, body: { ok: true, expiresIn: 12 * 60 * 60 * 1000 } };
+          }
+          if (url.endsWith('/api/session/close')) {
+            closeCalls += 1;
+            await Promise.resolve();
+            return { status: 200, body: { ok: true } };
+          }
+          throw new Error('unexpected request');
+        }),
+      });
+
+      const connects = await Promise.all(Array.from({ length: burst }, () => client.connectSession()));
+      assert.ok(connects.every(value => value === true));
+      assert.equal(bootstrapCalls, 1, 'one bootstrap should create exactly one server session');
+
+      const closes = await Promise.all(Array.from({ length: burst }, () => client.closeSession()));
+      assert.equal(closes.filter(Boolean).length, 1, 'only one caller performs the close transition');
+      assert.equal(closeCalls, 1, 'one close request should revoke the session once');
+      assert.equal(client.connected, false);
+    });
+  }
+});
