@@ -110,7 +110,10 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
           item.validatedUpdate = validateInboxCommand(item);
         } catch (error) {
           requireTransition(await inbox.markRejected(item.id, error?.message || 'Invalid inbox item'), 'rejected');
-          throw error;
+          // The malformed record is now terminal and its payload has been
+          // purged. Treat it as consumed work so one corrupt item cannot stall
+          // the remaining durable queue or prevent the next poll cycle.
+          return { processed: true, rejected: true, itemId: item.id, reason: 'invalid_inbox_item' };
         }
         const result = await applyUpdate({
           update: structuredClone(item.validatedUpdate),
