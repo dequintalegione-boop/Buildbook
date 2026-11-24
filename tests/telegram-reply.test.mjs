@@ -29,3 +29,19 @@ test('reply sender validates timeout configuration', () => {
     fetchImpl: async () => ({}),
   }), /timeout must be an integer/);
 });
+
+test('reply sender does not wait for stalled HTTP error body cleanup', async () => {
+  const sendReply = createTelegramReplySender({
+    botToken: '123456:secret',
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      body: { cancel: () => new Promise(() => {}) },
+    }),
+  });
+
+  await assert.rejects(
+    sendReply({ chatId: '1001', text: 'Готово' }),
+    error => error.code === 'TELEGRAM_REPLY_FAILED' && /HTTP 502/.test(error.message),
+  );
+});
