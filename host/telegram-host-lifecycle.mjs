@@ -27,6 +27,9 @@ export function installTelegramHostLifecycle({ host, processRef = process, onErr
 
   const stop = async (signal = 'shutdown') => {
     if (stopping) return stopping;
+    // A stop request before start is a no-op; it must not permanently poison
+    // the lifecycle wrapper and prevent a later legitimate start.
+    if (!started) return { stopped: true, signal };
     stopping = (async () => {
       try {
         await host.service.stop();
