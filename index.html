@@ -752,7 +752,7 @@ function persistCurrent(){
  const state=JSON.parse(JSON.stringify(S)),logs=JSON.parse(JSON.stringify(LOG)),photos=JSON.parse(JSON.stringify(PH));
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
-  if(storageConflict)return false;
+  if(storageConflict||(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR))return false;
   const photoBlobs=await photosAsBinary(photos);
   try{
    storageRevision=await repository.writeProfile(state,logs,photoBlobs,storageRevision);
@@ -787,6 +787,7 @@ function reportStorageError(error){
 }
 function flushSave(){
  clearTimeout(tm);
+ if(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR)return Promise.resolve(false);
  if(!storageDirty)return storageWrite;
  return persistCurrent();
 }
@@ -961,6 +962,7 @@ function undoJournalEntry(index){
  return {ok:true,restored:entry.changes.length};
 }
 const save=()=>{
+ if(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR)return;
  if(!Number.isSafeInteger(+S.schemaVersion)||+S.schemaVersion<DATA_SCHEMA_VERSION)S.schemaVersion=DATA_SCHEMA_VERSION;
  let cur=JSON.stringify(S);
  if(cur!=last&&!save.skip){
@@ -4106,7 +4108,7 @@ function syncTransactionOverflow(){
 window.addEventListener('resize',syncTransactionOverflow);
 function render(){
  if(APP_LOCKED){renderLegacyUnlockScreen();return}
- const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=false;
+ const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=!!APP_FATAL_ERROR;
  if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Работа с хранилищем остановлена</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Автоматического перехода на другое хранилище не будет. Данные в памяти не удаляются, но новые изменения не принимаются.</p>'+(STORAGE_MODE==='canonical'?'<p class="mu">Проверьте локальный хост и браузерную сессию. Если ошибка возникла во время работы, сначала скачайте резервную копию текущего состояния.</p>'+(STARTUP_STAGE==='ready'?'<button class="btn p" data-a="expzip">Скачать резервную копию текущего состояния</button> ':'')+'<button class="btn" data-a="storage-indexeddb">Вернуться к IndexedDB</button>':'<p>Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p>')+'</section>';return}
  const conflictBanner=storageConflict?'<section class="tw" style="padding:16px;margin-bottom:14px;border:1px solid var(--bad)"><b>Данные изменены в другой вкладке</b><p class="mu">Сохранение в этой вкладке остановлено, чтобы не перезаписать более свежий профиль. Изменения, сделанные здесь после конфликта, пока остаются только в памяти этой вкладки. Скачайте отдельную копию, затем перезагрузите приложение и при необходимости объедините резервную копию.</p><button class="btn p" data-a="expzip">Скачать полный бэкап этой вкладки</button> <button class="btn" data-a="reload">Перезагрузить Buildbook</button></section>':'';
  archiveOldCompletedTasks();
