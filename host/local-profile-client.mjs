@@ -115,7 +115,7 @@ export function createLocalProfileClient({
       if (typeof accessToken !== 'string') {
         throw new Error('Для повторного подключения создайте новый клиент и введите ключ локального сервиса заново.');
       }
-      connectPromise = (async () => {
+      connectPromise = Promise.resolve().then(async () => {
         const result = await request('/api/session/bootstrap', {
           method: 'POST',
           body: '{}',
@@ -138,7 +138,7 @@ export function createLocalProfileClient({
     },
     async closeSession() {
       if (closePromise) return closePromise;
-      closePromise = (async () => {
+      closePromise = Promise.resolve().then(async () => {
         if (connectPromise) await connectPromise;
         if (!sessionMode) return false;
         const result = await request('/api/session/close', { method: 'POST' });
