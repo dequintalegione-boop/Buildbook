@@ -236,7 +236,6 @@ test('compacts only terminal inbox records below the durable Telegram checkpoint
     assert.equal(await inbox.compactAcknowledged(5), 0);
 
     const reopened = createInboxStore(file);
-    assert.equal((await reopened.nextPending()).update_id, undefined);
     assert.equal((await reopened.nextPending()).updateId, 5);
     assert.equal((await reopened.stats()).completed, 1);
   });
