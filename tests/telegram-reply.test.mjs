@@ -95,3 +95,32 @@ test('reply sender rejects non-canonical chat IDs before making a request', asyn
   }
   assert.equal(calls, 0);
 });
+
+test('reply sender times out while reading a stalled successful response body', async () => {
+  let receivedSignal;
+  const sendReply = createTelegramReplySender({
+    botToken: '123456:secret',
+    timeoutMs: 5,
+    fetchImpl: async (_url, options) => {
+      receivedSignal = options.signal;
+      return {
+        ok: true,
+        headers: { get: () => null },
+        body: {
+          getReader() {
+            return {
+              read: () => new Promise(() => {}),
+              releaseLock() {},
+            };
+          },
+        },
+      };
+    },
+  });
+
+  await assert.rejects(
+    sendReply({ chatId: '1001', text: 'Готово' }),
+    error => error.code === 'TELEGRAM_REPLY_TIMEOUT' && !error.message.includes('secret'),
+  );
+  assert.equal(receivedSignal.aborted, true);
+});
