@@ -35,6 +35,22 @@ test('shutdown is idempotent and removes signal handlers', async () => {
   assert.equal(lifecycle.running, false);
 });
 
+test('unexpected service loop exit clears running state and signal handlers', async () => {
+  const processRef = new EventEmitter();
+  const host = { service: {
+    start() { return Promise.resolve(); },
+    async stop() {},
+  } };
+  const lifecycle = installTelegramHostLifecycle({ host, processRef });
+
+  lifecycle.start();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(lifecycle.running, false);
+  assert.equal(processRef.listenerCount('SIGINT'), 0);
+  assert.equal(processRef.listenerCount('SIGTERM'), 0);
+});
+
 test('service loop rejection is reported without an unhandled rejection', async () => {
   const processRef = new EventEmitter();
   const reported = [];
