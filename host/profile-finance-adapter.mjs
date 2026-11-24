@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
 const MAX_OPERATION_KEYS = 100_000;
-const KEY_PATTERN = /^[1-9]\d{0,15}:(?:0|[1-9]\d*)$/;
+function isValidIdempotencyKey(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^([1-9]\d{0,15}):(0|[1-9]\d*)$/.exec(value);
+  if (!match || !Number.isSafeInteger(Number(match[1]))) return false;
+  const updateId = Number(match[2]);
+  return Number.isSafeInteger(updateId)
+    && updateId >= 0
+    && updateId < Number.MAX_SAFE_INTEGER
+    && String(updateId) === match[2];
+}
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -47,7 +56,7 @@ function validateProfile(profile) {
       throw error;
     }
     for (const entry of ledger) {
-      if (!isRecord(entry) || typeof entry.key !== 'string' || !KEY_PATTERN.test(entry.key)
+      if (!isRecord(entry) || !isValidIdempotencyKey(entry.key)
         || typeof entry.operationId !== 'string' || !entry.operationId
         || keys.has(entry.key) || operationIds.has(entry.operationId)) {
         const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
@@ -77,7 +86,7 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
   }
 
   return async function applyUpdate({ update, idempotencyKey } = {}) {
-    if (typeof idempotencyKey !== 'string' || !KEY_PATTERN.test(idempotencyKey)) {
+    if (!isValidIdempotencyKey(idempotencyKey)) {
       const error = new TypeError('A canonical Telegram idempotency key is required.');
       error.code = 'INVALID_TELEGRAM_IDEMPOTENCY_KEY';
       throw error;
