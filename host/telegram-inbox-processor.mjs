@@ -62,6 +62,14 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
 
   let active = false;
 
+  function requireTransition(result, transition) {
+    if (result === false) {
+      const error = new Error(`Telegram inbox item could not be moved to ${transition}.`);
+      error.code = 'TELEGRAM_INBOX_TRANSITION_FAILED';
+      throw error;
+    }
+  }
+
   async function sendReply(item, text) {
     if (!text || typeof deliverReply !== 'function') return;
     if (typeof text !== 'string' || !text.trim() || text.length > 3500) {
@@ -89,7 +97,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
         try {
           item.validatedUpdate = validateInboxCommand(item);
         } catch (error) {
-          await inbox.markRejected(item.id, error?.message || 'Invalid inbox item');
+          requireTransition(await inbox.markRejected(item.id, error?.message || 'Invalid inbox item'), 'rejected');
           throw error;
         }
         const result = await applyUpdate({
@@ -126,19 +134,19 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
                 await sendReply(item, error.reply);
               } catch (replyError) {
                 permanentFailureHandled = true;
-                await inbox.markPending(item.id, 'Canonical adapter failed; retry scheduled.');
+                requireTransition(await inbox.markPending(item.id, 'Canonical adapter failed; retry scheduled.'), 'pending');
                 throw replyError;
               }
             }
             // Unsupported or malformed user commands are terminal; retrying them
             // forever would block every later item in the ordered inbox.
-            await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.');
+            requireTransition(await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.'), 'rejected');
             permanentFailureHandled = true;
           } else {
             const safeMessage = 'Canonical adapter failed; retry scheduled.';
             // Do not persist arbitrary exception text: adapters may include user data,
             // request bodies, filesystem paths, or credentials in error messages.
-            await inbox.markPending(item.id, safeMessage);
+            requireTransition(await inbox.markPending(item.id, safeMessage), 'pending');
           }
         }
         throw error;
