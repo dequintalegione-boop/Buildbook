@@ -156,7 +156,11 @@ function resolveAccount(state, preferredId = null) {
 export function buildTelegramFinanceTransaction(command, { now = new Date(), profile, defaults } = {}) {
   if (!command || !['i', 'e'].includes(command.kind)
     || !Number.isFinite(command.amount) || command.amount <= 0
-    || typeof command.desc !== 'string' || !command.desc.trim()) {
+    || command.amount > MAX_AMOUNT_CENTS / 100
+    || !Number.isSafeInteger(Math.round(command.amount * 100))
+    || Math.abs(command.amount * 100 - Math.round(command.amount * 100)) > 1e-8
+    || typeof command.desc !== 'string' || !command.desc.trim()
+    || command.desc.length > 300 || /[\u0000-\u001f\u007f]/u.test(command.desc)) {
     throw commandError('Некорректная финансовая команда.');
   }
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError('now must be a valid Date.');
