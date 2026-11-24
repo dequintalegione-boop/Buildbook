@@ -435,8 +435,39 @@ test('imports a valid profile export into an empty canonical profile', async (t)
     body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope(payload) }),
   });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { revision: 1, imported: true });
+  assert.deepEqual(await response.json(), { revision: 1, imported: true, verified: true });
   assert.deepEqual((await (await request(`${base}/api/profile`)).json()).profile, payload);
+});
+
+test('reports a failed canonical read-back after profile import instead of claiming success', async (t) => {
+  let writes = 0;
+  const profileStore = {
+    async read() {
+      return writes === 0
+        ? { revision: 0, profile: null }
+        : { revision: 1, profile: { state: { unexpected: true }, logs: [], photos: {} } };
+    },
+    async write() { writes += 1; return 1; },
+  };
+  const api = createLocalApiServer({
+    profileStore,
+    accessToken: 'test-local-api-token-0123456789abcdef',
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = `http://127.0.0.1:${address.port}`;
+  const payload = { state: { tx: [{ id: 'verify-me' }] }, logs: [], photos: {} };
+  const response = await fetch(base + '/api/profile/import', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer test-local-api-token-0123456789abcdef',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ expectedRevision: 0, envelope: makeImportEnvelope(payload) }),
+  });
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).code, 'BUILD_BOOK_IMPORT_READBACK_FAILED');
+  assert.equal(writes, 1);
 });
 
 test('rejects profile import with a modified payload or unsupported envelope', async (t) => {
