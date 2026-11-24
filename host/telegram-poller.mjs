@@ -49,32 +49,42 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       const abortFromCaller = () => controller.abort(signal.reason || new Error('Telegram polling was aborted.'));
       if (signal?.aborted) abortFromCaller();
       else signal?.addEventListener('abort', abortFromCaller, { once: true });
+      let rejectTimeout;
+      const timeoutPromise = new Promise((resolve, reject) => {
+        rejectTimeout = reject;
+      });
       const timeout = setTimeout(() => {
         timedOut = true;
         controller.abort(new Error('Telegram request timed out.'));
+        const timeoutError = new Error('Telegram getUpdates request timed out.');
+        timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
+        rejectTimeout(timeoutError);
       }, requestTimeoutMs);
 
-      let response;
       let payload;
       try {
-        try {
-          response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
-        } catch (error) {
-          if (timedOut) {
-            const timeoutError = new Error('Telegram getUpdates request timed out.');
-            timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
-            throw timeoutError;
+        const request = (async () => {
+          let response;
+          try {
+            response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+          } catch (error) {
+            if (timedOut) {
+              const timeoutError = new Error('Telegram getUpdates request timed out.');
+              timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
+              throw timeoutError;
+            }
+            if (signal?.aborted) throw signal.reason || new Error('Telegram polling was aborted.');
+            // Fetch errors can contain the request URL, which includes the bot token.
+            const requestError = new Error('Telegram getUpdates request failed.');
+            requestError.code = 'TELEGRAM_POLL_FAILED';
+            throw requestError;
           }
-          if (signal?.aborted) throw signal.reason || new Error('Telegram polling was aborted.');
-          // Fetch errors can contain the request URL, which includes the bot token.
-          const requestError = new Error('Telegram getUpdates request failed.');
-          requestError.code = 'TELEGRAM_POLL_FAILED';
-          throw requestError;
-        }
-        if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
-        // Reader errors are locally-authored and safe to preserve: they tell
-        // callers whether the response was oversized, unreadable, or invalid UTF-8.
-        payload = await readBoundedTelegramJson(response);
+          if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
+          // The deadline covers both fetch and bounded body consumption; abort alone
+          // is insufficient if a custom stream or transport ignores cancellation.
+          return readBoundedTelegramJson(response);
+        })();
+        payload = await Promise.race([request, timeoutPromise]);
       } finally {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abortFromCaller);
