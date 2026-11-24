@@ -53,6 +53,18 @@ test('rejects malformed profile values and invalid expected revisions', async (t
   await assert.rejects(store.write({}, -1), TypeError);
 });
 
+test('treats only a missing profile path as empty and refuses a directory at the profile path', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-profile-path-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const missingStore = createProfileStore(join(dir, 'not-created', 'profile.json'));
+  assert.deepEqual(await missingStore.read(), { revision: 0, profile: null });
+
+  const directoryPath = join(dir, 'profile-directory');
+  const directoryStore = createProfileStore(directoryPath);
+  await (await import('node:fs/promises')).mkdir(directoryPath);
+  await assert.rejects(directoryStore.read(), /обычным файлом|ссылкой/i);
+});
+
 test('reads canonical profile through the verified opened file handle', async (t) => {
   const { store } = await fixture(t);
   await store.write({ marker: 'stable' }, 0);
