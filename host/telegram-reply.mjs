@@ -16,7 +16,7 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
 
   return async function sendReply({ chatId, text, replyToMessageId } = {}) {
     const chat = String(chatId ?? '');
-    if (!/^\d{1,16}$/.test(chat) || !Number.isSafeInteger(Number(chat)) || String(Number(chat)) !== chat || Number(chat) <= 0) {
+    if (!/^\\d{1,16}$/.test(chat) || !Number.isSafeInteger(Number(chat)) || String(Number(chat)) !== chat || Number(chat) <= 0) {
       throw new TypeError('Telegram reply requires a canonical numeric chat ID.');
     }
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_REPLY_CHARS) {
@@ -33,11 +33,20 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
 
     const controller = new AbortController();
     let timedOut = false;
+    let rejectTimeout;
+    const timeoutError = () => {
+      const error = new Error('Telegram sendMessage request timed out.');
+      error.code = 'TELEGRAM_REPLY_TIMEOUT';
+      return error;
+    };
+    const timeoutPromise = new Promise((_, reject) => { rejectTimeout = reject; });
     const timeout = setTimeout(() => {
       timedOut = true;
       controller.abort(new Error('Telegram reply timed out.'));
+      rejectTimeout(timeoutError());
     }, timeoutMs);
-    try {
+
+    const request = (async () => {
       let response;
       try {
         response = await fetchImpl(new URL(`https://api.telegram.org/bot${botToken}/sendMessage`), {
@@ -47,12 +56,11 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
           signal: controller.signal,
         });
       } catch {
-        const error = new Error(timedOut ? 'Telegram sendMessage request timed out.' : 'Telegram sendMessage request failed.');
-        error.code = timedOut ? 'TELEGRAM_REPLY_TIMEOUT' : 'TELEGRAM_REPLY_FAILED';
+        const error = new Error('Telegram sendMessage request failed.');
+        error.code = 'TELEGRAM_REPLY_FAILED';
         throw error;
       }
       if (!response?.ok) {
-        // Best-effort cleanup must not hold the caller open past the request timeout.
         try {
           const cleanup = response?.body?.cancel?.();
           cleanup?.catch?.(() => {});
@@ -67,8 +75,8 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
       try {
         payload = await readBoundedTelegramJson(response);
       } catch {
-        const error = new Error(timedOut ? 'Telegram sendMessage response timed out.' : 'Telegram sendMessage returned an unreadable response.');
-        error.code = timedOut ? 'TELEGRAM_REPLY_TIMEOUT' : 'TELEGRAM_REPLY_FAILED';
+        const error = new Error('Telegram sendMessage returned an unreadable response.');
+        error.code = 'TELEGRAM_REPLY_FAILED';
         throw error;
       }
       if (!payload?.ok || !payload.result || !Number.isSafeInteger(payload.result.message_id)) {
@@ -76,6 +84,13 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
         error.code = 'TELEGRAM_REPLY_FAILED';
         throw error;
       }
+    })();
+
+    try {
+      await Promise.race([request, timeoutPromise]);
+    } catch (error) {
+      if (timedOut) throw timeoutError();
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
