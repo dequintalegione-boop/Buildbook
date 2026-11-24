@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-const MAX_OPERATION_KEYS = 100_000;
+const MAX_LEGACY_OPERATION_KEYS = 100_000;
+const MAX_OPERATION_CHECKPOINT_BOTS = 1000;
 function isValidIdempotencyKey(value) {
   if (typeof value !== 'string') return false;
   const match = /^([1-9]\d{0,15}):(0|[1-9]\d*)$/.exec(value);
@@ -50,7 +51,7 @@ function validateProfile(profile) {
   if (profile.telegramOperationCheckpoints !== undefined) {
     const checkpoints = profile.telegramOperationCheckpoints;
     const bots = new Set();
-    if (!Array.isArray(checkpoints) || checkpoints.length > 1000) {
+    if (!Array.isArray(checkpoints) || checkpoints.length > MAX_OPERATION_CHECKPOINT_BOTS) {
       const error = new Error('Canonical profile contains invalid Telegram operation checkpoints.');
       error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
       throw error;
@@ -77,7 +78,7 @@ function validateProfile(profile) {
     const ledger = profile.telegramOperations;
     const keys = new Set();
     const operationIds = new Set();
-    if (!Array.isArray(ledger) || ledger.length > MAX_OPERATION_KEYS) {
+    if (!Array.isArray(ledger) || ledger.length > MAX_LEGACY_OPERATION_KEYS) {
       const error = new Error('Canonical profile contains an invalid Telegram idempotency ledger.');
       error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
       throw error;
@@ -110,6 +111,11 @@ function getOperationCheckpoints(profile, ledger) {
     const [botId, rawUpdateId] = entry.key.split(':');
     const updateId = Number(rawUpdateId);
     checkpoints.set(botId, Math.max(checkpoints.get(botId) ?? -1, updateId));
+  }
+  if (checkpoints.size > MAX_OPERATION_CHECKPOINT_BOTS) {
+    const error = new RangeError('Telegram replay checkpoint capacity reached.');
+    error.code = 'TELEGRAM_OPERATION_CHECKPOINTS_FULL';
+    throw error;
   }
   return checkpoints;
 }
@@ -156,6 +162,11 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
       const [botId, rawUpdateId] = idempotencyKey.split(':');
       const updateId = Number(rawUpdateId);
       const checkpoints = getOperationCheckpoints(profile, ledger);
+      if (!checkpoints.has(botId) && checkpoints.size >= MAX_OPERATION_CHECKPOINT_BOTS) {
+        const error = new RangeError('Telegram replay checkpoint capacity reached.');
+        error.code = 'TELEGRAM_OPERATION_CHECKPOINTS_FULL';
+        throw error;
+      }
       const checkpoint = checkpoints.get(botId) ?? -1;
       if (updateId <= checkpoint) {
         // A replay older than the committed boundary has no need to recreate
