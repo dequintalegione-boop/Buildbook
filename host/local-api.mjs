@@ -209,6 +209,17 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       if (!tokenMatches) {
         send(response, 401, { error: 'Неверный ключ первоначального подключения.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 0) {
+          send(response, 400, { error: 'Запрос подключения должен содержать пустой JSON-объект.' });
+          return;
+        }
+      } catch (error) {
+        send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
         return;
       }
       for (const [key, session] of sessions) if (session.expiresAt <= Date.now()) sessions.delete(key);
