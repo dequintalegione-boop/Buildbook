@@ -145,16 +145,33 @@ test('posts a transfer envelope with the target revision and validates the impor
       assert.equal(url, 'http://127.0.0.1:43127/api/profile/import');
       assert.equal(options.method, 'POST');
       assert.deepEqual(JSON.parse(options.body), { envelope, expectedRevision: 0 });
-      return { status: 200, body: { revision: 1, imported: true } };
+      return { status: 200, body: { revision: 1, imported: true, verified: true } };
     }),
   });
   assert.equal(await client.importProfile(envelope, 0), 1);
 });
 
-test('rejects malformed import results and oversized transfer requests', async () => {
+test('rejects malformed or unverified import results and oversized transfer requests', async () => {
+  for (const body of [
+    { revision: 1, imported: false, verified: true },
+    { revision: 1, imported: true, verified: false },
+    { revision: 1, imported: true },
+    { revision: 2, imported: true, verified: true },
+    { revision: -1, imported: true, verified: true },
+    { revision: 1.5, imported: true, verified: true },
+    null,
+    [],
+    {},
+  ]) {
+    const client = createLocalProfileClient({
+      accessToken: token,
+      fetchImpl: fakeFetch(async () => ({ status: 200, body })),
+    });
+    await assert.rejects(client.importProfile({ payload: {} }, 0), /некорректный результат импорта/);
+  }
   const client = createLocalProfileClient({
     accessToken: token,
-    fetchImpl: fakeFetch(async () => ({ status: 200, body: { revision: 1, imported: false } })),
+    fetchImpl: fakeFetch(async () => ({ status: 200, body: { revision: 1, imported: false, verified: false } })),
   });
   await assert.rejects(client.importProfile({}, 0), /некорректный результат импорта/);
   let calls = 0;
