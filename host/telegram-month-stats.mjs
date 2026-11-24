@@ -28,9 +28,12 @@ export function formatTelegramMonthSummary(profile, month) {
   }
   const monthNumber = Number(month.slice(5, 7));
   const year = Number(month.slice(0, 4));
-  if (monthNumber < 1 || monthNumber > 12 || year < 2000 || year > 2100) {
-    throw new TypeError('Month statistics require a real calendar month between 2000 and 2100.');
+  if (monthNumber < 1 || monthNumber > 12 || year < 1) {
+    throw new TypeError('Month statistics require a real calendar month.');
   }
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const daysInMonth = monthDays[monthNumber - 1];
   const transactions = profile?.state?.tx;
   if (!Array.isArray(transactions)) {
     const error = new Error('Canonical profile does not contain the Buildbook finance state.');
@@ -44,10 +47,9 @@ export function formatTelegramMonthSummary(profile, month) {
   for (const item of transactions) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     if (item.deletedAt) continue;
-    if (typeof item.date !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(item.date)
+    if (typeof item.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(item.date)
       || item.date.slice(0, 7) !== month) continue;
     const day = Number(item.date.slice(8, 10));
-    const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
     if (day < 1 || day > daysInMonth) continue;
     if (item.kind !== 'i' && item.kind !== 'e') continue;
     if (typeof item.amount !== 'number' || !Number.isFinite(item.amount) || item.amount <= 0) continue;
