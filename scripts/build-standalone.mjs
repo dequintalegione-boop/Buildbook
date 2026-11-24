@@ -1,25 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, relative, isAbsolute } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const htmlPath = resolve(root, 'index.html');
-const repositoryPath = resolve(root, 'repository.js');
-const xlsxPath = resolve(root, 'vendor/xlsx.full.min.js');
 const outputPath = resolve(root, 'Buildbook-standalone.html');
 
-const [html, repository, xlsx] = await Promise.all([
-  readFile(htmlPath, 'utf8'),
-  readFile(repositoryPath, 'utf8'),
-  readFile(xlsxPath, 'utf8')
-]);
-
-function assertOneReference(source, needle, label) {
-  const count = source.split(needle).length - 1;
-  if (count !== 1) {
-    throw new Error(`Expected exactly one ${label} reference in index.html, found ${count}.`);
-  }
-}
+const html = await readFile(htmlPath, 'utf8');
 
 function inlinePayload(id, source) {
   const encoded = Buffer.from(source, 'utf8').toString('base64');
@@ -38,23 +25,39 @@ function inlinePayload(id, source) {
 </script>`;
 }
 
-const xlsxTag = '<script src="./vendor/xlsx.full.min.js"></script>';
-const repositoryTag = '<script src="./repository.js"></script>';
-const xlsxSlot = '<!-- BUILDBOOK_XLSX_BUNDLE -->';
-const repositorySlot = '<!-- BUILDBOOK_REPOSITORY_BUNDLE -->';
-assertOneReference(html, xlsxTag, 'SheetJS');
-assertOneReference(html, repositoryTag, 'IndexedDB repository');
-
-let standalone = html.replace(xlsxTag, xlsxSlot).replace(repositoryTag, repositorySlot);
-if (standalone.includes('<script src=')) {
-  throw new Error('The standalone template still contains an external script dependency.');
+// Bundle every local script dependency, not just the original XLSX and
+// IndexedDB files. New client modules must not silently break the standalone
+// artifact when they are added to index.html.
+const scriptTagPattern = /<script\b([^>]*?)\bsrc=(["'])([^"']+)\2([^>]*)>\s*<\/script>/gi;
+const matches = [...html.matchAll(scriptTagPattern)];
+if (matches.length === 0) {
+  throw new Error('Expected at least one local script dependency in index.html.');
 }
-standalone = standalone.replace(xlsxSlot, inlinePayload('buildbook-xlsx-payload', xlsx));
-standalone = standalone.replace(repositorySlot, inlinePayload('buildbook-repository-payload', repository));
 
-if (standalone.includes(xlsxSlot) || standalone.includes(repositorySlot)) {
-  throw new Error('A standalone bundle placeholder was not replaced.');
+let standalone = html;
+for (let index = matches.length - 1; index >= 0; index -= 1) {
+  const match = matches[index];
+  const sourcePath = match[3];
+  if (/^(?:[a-z]+:|\/\/|\/)/i.test(sourcePath) || sourcePath.includes('?') || sourcePath.includes('#')) {
+    throw new Error(`Standalone build cannot bundle a remote or ambiguous script dependency: ${sourcePath}`);
+  }
+
+  const absolutePath = resolve(root, sourcePath);
+  const pathFromRoot = relative(root, absolutePath);
+  if (!pathFromRoot || pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
+    throw new Error(`Script dependency escapes the project root: ${sourcePath}`);
+  }
+
+  const source = await readFile(absolutePath, 'utf8');
+  const id = `buildbook-script-payload-${index}`;
+  standalone = standalone.slice(0, match.index)
+    + inlinePayload(id, source)
+    + standalone.slice(match.index + match[0].length);
+}
+
+if (/<script\b[^>]*\bsrc\s*=/i.test(standalone)) {
+  throw new Error('The standalone template still contains an external script dependency.');
 }
 
 await writeFile(outputPath, standalone, 'utf8');
-console.log(`Built ${outputPath} (${Buffer.byteLength(standalone, 'utf8')} bytes).`);
+console.log(`Built ${outputPath} with ${matches.length} bundled scripts (${Buffer.byteLength(standalone, 'utf8')} bytes).`);
