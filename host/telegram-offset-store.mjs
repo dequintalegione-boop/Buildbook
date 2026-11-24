@@ -1,4 +1,4 @@
-import { mkdir, rename, unlink, writeFile, lstat, open } from 'node:fs/promises';
+import { mkdir, rename, unlink, lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -77,8 +77,25 @@ export function createTelegramOffsetStore(filePath) {
         await mkdir(dirname(filePath), { recursive: true });
         const temporary = filePath + '.' + randomUUID() + '.tmp';
         try {
-          await writeFile(temporary, JSON.stringify({ version: 1, offset }), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+          const handle = await open(temporary, 'wx', 0o600);
+          try {
+            await handle.writeFile(JSON.stringify({ version: 1, offset }), 'utf8');
+            await handle.sync();
+          } finally {
+            await handle.close();
+          }
           await rename(temporary, filePath);
+          // Persist the checkpoint's directory entry as well as its contents.
+          // Otherwise a power loss after rename may roll back the acknowledged
+          // offset on filesystems that defer directory metadata.
+          if (process.platform !== 'win32') {
+            const directoryHandle = await open(dirname(filePath), 'r');
+            try {
+              await directoryHandle.sync();
+            } finally {
+              await directoryHandle.close();
+            }
+          }
         } catch (error) {
           await unlink(temporary).catch(() => {});
           throw error;
