@@ -1592,7 +1592,7 @@ for(const [period,label,amount] of cases){
 data.set.per=period;api.setState(data);api.action('nav','home');
 const earned=[...w.document.querySelectorAll('#m .kp')].find(card=>card.textContent.includes('Заработок'));
 assert(earned&&earned.textContent.includes(label),'Для периода '+period+' неверная подпись заработка');
-assert(earned.textContent.replace(/\\s/g,'').includes(String(amount).replace(/\\s/g,'')),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
+assert(earned.textContent.replace(/\s/g,'').includes(String(amount).replace(/\s/g,'')),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
 }
 });
 
@@ -1615,11 +1615,11 @@ await test('Сводка рассчитывает чистую прибыль п
 });
 await test('Расход сверх остатка кассы блокируется',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
-const f=form(),beforeAlerts=alerts.length;
+const f=form();
 setv(f,'kind','e');setv(f,'date','2026-04-04');setv(f,'amount','1200');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Расход сверх остатка');setv(f,'acc','cash');submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Расход сверх остатка'),'Расход с отрицательным итоговым балансом был сохранён');
 assert(api.balance('cash')===1000,'Баланс изменился после отклонённого расхода');
-assert(alerts.length>beforeAlerts&&alerts[alerts.length-1].includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств: '+alerts.slice(beforeAlerts).join(' | '));
+assert(f.querySelector('[data-modal-error]')?.textContent.includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств в форме.');
 });
 
 await test('Перевод не может списать больше доступного остатка',()=>{
@@ -1649,10 +1649,10 @@ await test('Редактирование расхода также провер�
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
 let f=form();setv(f,'kind','e');setv(f,'date','2026-04-08');setv(f,'amount','800');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Редактируемый расход');setv(f,'acc','cash');submit(f);
 const tx=state().tx.find(item=>item.desc==='Редактируемый расход');assert(tx,'Тестовый расход не создан');
-api.action('te',tx.id);f=form();const beforeAlerts=alerts.length;setv(f,'amount','1200');submit(f);
+api.action('te',tx.id);f=form();setv(f,'amount','1200');submit(f);
 assert(state().tx.find(item=>item.id===tx.id).amount===800,'Редактирование позволило уйти балансу в минус');
 assert(api.balance('cash')===200,'Баланс изменился после отклонённого редактирования');
-assert(alerts.length>beforeAlerts,'Не показано предупреждение при редактировании: '+alerts.slice(beforeAlerts).join(' | '));
+assert(f.querySelector('[data-modal-error]')?.textContent.includes('Недостаточно средств'),'Не показано предупреждение при редактировании в форме.');
 });
 
 await test('Удаление дохода не может сделать баланс отрицательным',()=>{
