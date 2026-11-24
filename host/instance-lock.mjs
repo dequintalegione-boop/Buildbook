@@ -40,18 +40,28 @@ export function acquireInstanceLock(lockPath, { pid = process.pid } = {}) {
   }
 
   let released = false;
+  let ownerRemovedByThisRelease = false;
   return function releaseInstanceLock() {
     if (released) return;
-    released = true;
     const ownerPath = resolve(path, 'owner.json');
     let owner;
-    try { owner = JSON.parse(readFileSync(ownerPath, 'utf8')); } catch {
-      throw new Error('Buildbook instance lock ownership could not be verified; lock was left in place.');
+    try {
+      owner = JSON.parse(readFileSync(ownerPath, 'utf8'));
+    } catch (error) {
+      // A retry after this function removed its own marker may finish the
+      // directory cleanup. Missing or unreadable ownership otherwise fails closed.
+      if (!(ownerRemovedByThisRelease && error?.code === 'ENOENT')) {
+        throw new Error('Buildbook instance lock ownership could not be verified; lock was left in place.');
+      }
     }
-    if (owner?.ownerToken !== ownerToken || owner?.pid !== pid) {
+    if (owner !== undefined && (owner?.ownerToken !== ownerToken || owner?.pid !== pid)) {
       throw new Error('Buildbook instance lock ownership changed; lock was left in place.');
     }
-    unlinkSync(ownerPath);
+    if (!ownerRemovedByThisRelease) {
+      unlinkSync(ownerPath);
+      ownerRemovedByThisRelease = true;
+    }
     rmdirSync(path);
+    released = true;
   };
 }
