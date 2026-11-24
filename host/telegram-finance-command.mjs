@@ -29,6 +29,8 @@ function splitCommand(text) {
   if (typeof text !== 'string') return null;
   const trimmed = text.trim();
   if (!trimmed.startsWith('/')) return null;
+  // The host does not know its bot username, so do not execute commands
+  // explicitly addressed to a possibly different Telegram bot.
   const match = /^\/([^\s@]{1,64})(?:\s+([\s\S]*))?$/u.exec(trimmed);
   if (!match) return null;
   return { name: '/' + match[1].toLowerCase(), rest: String(match[2] || '').trim() };
