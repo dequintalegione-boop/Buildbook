@@ -1770,7 +1770,7 @@ const calendarTransactionType=t=>({
  investment_in:'Пополнение инвестиции',investment_out:'Вывод из инвестиции'
 }[t.kind]||'Операция');
 function calendarDay(date){
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date||'')))return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))return;
  V.calendar=Object.assign({},V.calendar||{}, {selectedDate:date});
  render();
 }
