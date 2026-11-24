@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
 import { readFile, lstat, realpath } from 'node:fs/promises';
-import { resolve, relative, isAbsolute, dirname, sep } from 'node:path';
+import { resolve, relative, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
 
