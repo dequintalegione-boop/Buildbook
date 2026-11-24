@@ -2,7 +2,7 @@
 
 ## Status
 
-The authenticated host import endpoint and browser-side export-envelope utility are implemented. The utility is `client/profile-export.js` and exposes `BuildbookProfileExport.createEnvelope(profile)` / `serialize(profile)`; it emits only state, logs, and photos, computes SHA-256 with Web Crypto, and does not include host metadata or credentials. It is loaded by the app and exposed as **Export for local host** in Settings; this creates a downloadable transfer file. Import preview/confirmation, backup verification, host import wiring, read-back verification, and storage-mode switching remain unimplemented. The browser UI remains on IndexedDB until backup verification, import preview/confirmation, read-back verification, startup selection, and recovery behavior are implemented and reviewed. Telegram finance writes must remain disabled while the UI and host can use different profiles.
+The authenticated host import endpoint, browser export-envelope utility, and guarded browser-to-host import flow are implemented. The export utility is `client/profile-export.js` and exposes `BuildbookProfileExport.createEnvelope(profile)` / `serialize(profile)`; it exports only state/logs/photos, computes SHA-256 with Web Crypto, and excludes host metadata and credentials. Settings now lets the user select a transfer file, validate its schema/size/checksum, confirm that a separate ordinary backup has been saved, inspect the source record counts, and check that the authenticated local host profile is empty. Import uses the observed target revision (compare-and-swap), then reads the profile back and verifies its SHA-256 digest. The original IndexedDB profile is not changed. The backup prompt is a user attestation; the browser cannot independently prove that a downloaded backup was saved to durable storage. The UI still starts on IndexedDB: startup repository selection, switching to the host adapter, rollback/recovery UX, and end-to-end migration tests remain unimplemented. Telegram finance writes must remain disabled while the UI and host can use different profiles.
 
 ## Safety invariants
 
@@ -19,13 +19,13 @@ The authenticated host import endpoint and browser-side export-envelope utility 
 
 ## Proposed user flow
 
-1. User opens the local host setup screen and chooses **Import browser profile**.
-2. The app reads the existing IndexedDB profile through the current repository, packages state/logs/photos using the same binary-safe transport format as the profile adapter, and asks the user to save a backup.
-3. The app verifies that the backup file was created and is readable, then shows the source profile summary (record counts and schema version, without sensitive content).
-4. The host validates the import envelope and reports whether the canonical profile is empty, its current revision, and any compatibility issues.
-5. User confirms the import. The host performs a compare-and-swap write against the revision observed during validation. If the revision changed, abort and require a fresh review.
-6. The app reads the canonical profile back and verifies the revision and stable record counts. Only then may the user choose **Use local host storage**.
-7. The old IndexedDB profile remains intact as a rollback source. Rollback means switching the app back to IndexedDB; it does not copy newer canonical data over the old profile automatically.
+1. User downloads a separate ordinary JSON backup and the dedicated **Export for local host** transfer file from Settings.
+2. User selects the transfer file with **Проверить файл переноса**. The app validates the format, schema version, size limit, and SHA-256 digest before contacting the host.
+3. The app asks the user to confirm that the separate backup was saved. This is an explicit user attestation, not an automated filesystem verification.
+4. The app authenticates to the already-connected local host, reads its canonical profile, and refuses to continue unless the target is empty. It displays schema/date/size and record counts before the final confirmation.
+5. User confirms the import. The host performs a compare-and-swap write against the observed revision. If the revision changed or the target became non-empty, the import is rejected.
+6. The app reads the canonical profile back and verifies the new revision and SHA-256 digest. A mismatch is reported as a recovery issue; the app does not switch storage.
+7. The old IndexedDB profile remains intact. The app continues using IndexedDB until a separate reviewed storage-mode/startup-selection stage is implemented.
 
 ## Import envelope
 
