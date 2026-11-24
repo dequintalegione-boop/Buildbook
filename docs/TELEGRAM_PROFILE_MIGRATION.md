@@ -50,11 +50,12 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 - Interrupted import: atomic profile-store replacement must leave either the old complete profile or the new complete profile, never a partial profile.
 - Post-import verification failure: retain the backup and source IndexedDB; display a recovery error and do not switch the UI to the host repository.
 
-## Implementation sequence
+## Implementation status
 
-1. [Implemented] Add a version-1 import envelope validator and authenticated host import operation; accept only schema version 5, verify SHA-256, require an empty target, and use revision compare-and-swap.
-3. Add an explicit UI backup/export step and confirmation screen.
-4. Add host import preview and confirmation, with no automatic startup migration.
-5. Add a storage-mode selector that is enabled only after successful read-back verification.
-6. Add rollback guidance and Windows recovery instructions.
-7. Perform static review; execute tests only after the user authorizes them.
+1. [Implemented] Version-1 transfer-envelope validation and authenticated host import; schema 5, SHA-256, empty-target requirement, and revision compare-and-swap.
+2. [Implemented] Separate browser backup/export flow and explicit user confirmations before transfer.
+3. [Implemented] Import preview, confirmation, host-side import, and browser read-back/checksum verification. The source IndexedDB profile is not modified.
+4. [Implemented] The UI offers a separate storage-mode switch only after successful verification. The existing IndexedDB profile remains untouched as a fallback/backup; the standalone build continues to use IndexedDB.
+5. [Documented] Recovery behavior for conflicts, expired sessions, and failed verification is described in the local API and setup guides. Confirm the Windows recovery procedure on a real Windows machine before release.
+6. [Pending] End-to-end verification on Windows with a real local profile and Telegram bot, including restart/recovery scenarios.
+7. Tests have not been run in this work session. Run the relevant suites only after the user authorizes testing.
