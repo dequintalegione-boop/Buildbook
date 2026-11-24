@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, symlink, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
 
 async function fixture(t) {
@@ -103,7 +103,7 @@ test('creates canonical profile files with owner-only permissions on POSIX', asy
 test('ignores an orphaned temporary file after an interrupted write and preserves the canonical revision', async (t) => {
   const { file, store } = await fixture(t);
   await store.write({ marker: 'committed-before-crash' }, 0);
-  const orphan = join(file.slice(0, file.lastIndexOf('/')), '.profile.json.interrupted-write.tmp');
+  const orphan = join(dirname(file), '.profile.json.interrupted-write.tmp');
   await writeFile(orphan, JSON.stringify({ version: 1, revision: 99, profile: { marker: 'uncommitted' } }), 'utf8');
 
   assert.deepEqual(await store.read(), { revision: 1, profile: { marker: 'committed-before-crash' } });
