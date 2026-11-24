@@ -63,13 +63,26 @@ export async function migrateProfileToLocalApi({ client, sourceProfile, createEn
   }
 
   const envelope = await createEnvelope(snapshot);
-  if (!isPlainObject(envelope) || !isPlainObject(envelope.payload)
-    || !isPlainObject(envelope.payload.state) || !Array.isArray(envelope.payload.logs)
+  if (!isPlainObject(envelope)
+    || envelope.format !== 'buildbook-profile-export'
+    || envelope.version !== 1
+    || envelope.sourceSchemaVersion !== 5
+    || typeof envelope.exportedAt !== 'string'
+    || !Number.isFinite(Date.parse(envelope.exportedAt))
+    || typeof envelope.sha256 !== 'string'
+    || !/^[a-f0-9]{64}$/.test(envelope.sha256)
+    || !isPlainObject(envelope.payload)
+    || !isPlainObject(envelope.payload.state)
+    || !Array.isArray(envelope.payload.logs)
     || !isPlainObject(envelope.payload.photos)) {
     throw new Error('Генератор переноса вернул некорректный конверт; исходная база не изменена.');
   }
   const expectedPayload = JSON.stringify(snapshot);
-  if (JSON.stringify(envelope.payload) !== expectedPayload) {
+  let actualPayload;
+  try { actualPayload = JSON.stringify(envelope.payload); } catch {
+    throw new Error('Конверт переноса содержит несериализуемые данные; импорт отменён.');
+  }
+  if (actualPayload !== expectedPayload) {
     throw new Error('Конверт переноса не совпадает с исходным снимком; импорт отменён.');
   }
 
