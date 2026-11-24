@@ -62,6 +62,7 @@ export function createInboxStore(filePath) {
       || !Number.isSafeInteger(item.attempts) || item.attempts < 0
       || typeof item.receivedAt !== 'string' || !Number.isFinite(Date.parse(item.receivedAt))
       || !(item.processedAt === null || typeof item.processedAt === 'string')
+      || !(item.replyDeliveredAt === null || typeof item.replyDeliveredAt === 'string' && Number.isFinite(Date.parse(item.replyDeliveredAt)))
       || !(item.lastError === null || typeof item.lastError === 'string' && item.lastError.length <= 256)) return false;
     if (item.status === 'pending' || item.status === 'processing') {
       return !!item.update && typeof item.update === 'object' && !Array.isArray(item.update);
@@ -246,6 +247,7 @@ export function createInboxStore(filePath) {
           attempts: 0,
           receivedAt: new Date().toISOString(),
           processedAt: null,
+          replyDeliveredAt: null,
           lastError: null
         };
         state.items.push(item);
@@ -277,6 +279,17 @@ export function createInboxStore(filePath) {
         if (!item || item.status !== 'processing') return false;
         item.status = 'pending';
         item.lastError = safeInboxError('pending');
+        return true;
+      });
+    },
+
+    async markReplyDelivered(id) {
+      return mutate(state => {
+        const item = state.items.find(entry => entry.id === id);
+        if (!item) return false;
+        if (item.replyDeliveredAt) return item.status === 'processing' || item.status === 'pending';
+        if (item.status !== 'processing') return false;
+        item.replyDeliveredAt = new Date().toISOString();
         return true;
       });
     },
