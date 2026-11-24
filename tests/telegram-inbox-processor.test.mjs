@@ -300,7 +300,7 @@ test('terminal silent command rejection is acknowledged without sending a Telegr
   assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1' });
   assert.equal(replyCalls, 0);
   assert.equal(inbox.state.status, 'rejected');
-  assert.deepEqual(inbox.state.calls, ['processing', 'reply-delivered', 'rejected']);
+  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
 
 
