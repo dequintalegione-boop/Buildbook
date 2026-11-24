@@ -69,8 +69,18 @@ test('starts a loopback API and serves the configured profile store', async (t) 
   const host = await fixture(t);
   const address = await host.start();
   assert.equal(host.running, true);
-  const response = await fetch(`http://127.0.0.1:${address.port}/api/profile`, {
-    headers: { authorization: `Bearer ${token}` },
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const bootstrap = await fetch(`${baseUrl}/api/session/bootstrap`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(bootstrap.status, 200);
+  const sessionCookie = bootstrap.headers.get('set-cookie')?.split(';', 1)[0];
+  assert.ok(sessionCookie, 'bootstrap should issue a browser-managed session cookie');
+
+  const response = await fetch(`${baseUrl}/api/profile`, {
+    headers: { cookie: sessionCookie },
   });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { revision: 0, profile: null });
