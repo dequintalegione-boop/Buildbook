@@ -66,7 +66,12 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
           timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
           throw timeoutError;
         }
-        throw error;
+        // Fetch implementations may include the full request URL in error
+        // messages; Telegram URLs contain the bot token. Do not pass raw
+        // transport errors to lifecycle callbacks or logs.
+        const requestError = new Error('Telegram getUpdates request failed.');
+        requestError.code = 'TELEGRAM_POLL_FAILED';
+        throw requestError;
       } finally {
         clearTimeout(timeout);
         signal?.removeEventListener('abort', abortFromCaller);
