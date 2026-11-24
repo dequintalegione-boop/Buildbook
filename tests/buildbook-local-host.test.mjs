@@ -20,7 +20,7 @@ test('combined local host keeps Telegram disabled until the shared UI profile is
   assert.match(await app.text(), /Buildbook/);
   const bootstrap = await fetch(base + '/api/session/bootstrap', {
     method: 'POST',
-    headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+    headers: { origin: base, authorization: 'Bearer ' + token, 'content-type': 'application/json' },
     body: '{}',
   });
   assert.equal(bootstrap.status, 200);
