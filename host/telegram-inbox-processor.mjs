@@ -84,6 +84,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
       if (!item) return { processed: false, reason: 'empty' };
       if (!await inbox.markProcessing(item.id)) return { processed: false, reason: 'claimed_elsewhere' };
 
+      let permanentFailureHandled = false;
       try {
         try {
           item.validatedUpdate = validateInboxCommand(item);
@@ -118,12 +119,13 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
         }
         return { processed: true, itemId: item.id, operationId: normalizedOperationId };
       } catch (error) {
-        if (error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
+        if (!permanentFailureHandled && error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
           if (error?.permanent === true) {
             if (typeof error.reply === 'string' && error.reply.trim()) {
               try {
                 await sendReply(item, error.reply);
               } catch (replyError) {
+                permanentFailureHandled = true;
                 await inbox.markPending(item.id, 'Canonical adapter failed; retry scheduled.');
                 throw replyError;
               }
@@ -131,6 +133,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
             // Unsupported or malformed user commands are terminal; retrying them
             // forever would block every later item in the ordered inbox.
             await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.');
+            permanentFailureHandled = true;
           } else {
             const safeMessage = 'Canonical adapter failed; retry scheduled.';
             // Do not persist arbitrary exception text: adapters may include user data,
