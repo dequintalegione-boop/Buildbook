@@ -164,3 +164,15 @@ test('preserves valid conflict revision metadata and ignores malformed values', 
     });
   }
 });
+
+
+test('canonical runtime deadline settles even when fetch ignores abort', async () => {
+  const runtime = createCanonicalProfileRuntime({
+    requestTimeoutMs: 10,
+    fetchImpl: async () => new Promise(() => {}),
+  });
+  await assert.rejects(
+    runtime.client.readProfile(),
+    error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT',
+  );
+});
