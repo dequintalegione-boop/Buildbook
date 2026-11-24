@@ -52,6 +52,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       let nextOffset = offset;
       let previousUpdateId = null;
       for (const update of payload.result) {
+        if (signal?.aborted) throw signal.reason || new Error('Telegram polling was aborted.');
         if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0
           || update.update_id >= Number.MAX_SAFE_INTEGER
           || (previousUpdateId !== null && update.update_id <= previousUpdateId)) {
@@ -64,6 +65,9 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
         nextOffset = Math.max(nextOffset ?? 0, update.update_id + 1);
       }
 
+      // An abort after enqueue but before checkpoint intentionally causes replay;
+      // the durable inbox must make that replay idempotent.
+      if (signal?.aborted) throw signal.reason || new Error('Telegram polling was aborted.');
       // Checkpoint only after all allowed updates have been durably enqueued.
       if (nextOffset !== offset && nextOffset !== null) await offsetStore.write(nextOffset);
       return { received: payload.result.length, accepted, rejected, nextOffset };
