@@ -38,6 +38,12 @@ test('creates a versioned backup envelope with only profile data and a SHA-256 d
 test('rejects malformed profile fields and invalid export timestamps', async () => {
   const exporter = await loadExporter();
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, 'not-a-date'), /дата экспорта/);
+  for (const exportedAt of ['2026-01-01T10:00:00+14:01', '2026-01-01T10:00:00-14:01', '2026-01-01T10:00:00+15:00']) {
+    await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: {} }, exportedAt), /дата экспорта/);
+  }
+  for (const exportedAt of ['2026-01-01T10:00:00+14:00', '2026-01-01T10:00:00-14:00']) {
+    assert.equal((await exporter.createEnvelope({ state: {}, logs: [], photos: {} }, exportedAt)).exportedAt, exportedAt);
+  }
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: {}, photos: {} }), /массивом/);
   await assert.rejects(exporter.createEnvelope({ state: {}, logs: [], photos: [] }), /Фотографии/);
   const cyclic = {}; cyclic.self = cyclic;
