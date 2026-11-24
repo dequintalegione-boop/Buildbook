@@ -20,9 +20,23 @@ test('browser repository and Telegram finance adapter share one canonical profil
   try {
     await store.write({ state: { tx: [] }, logs: [], photos: {} }, 0);
     address = await server.listen();
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    // Node's fetch has no browser cookie jar. Model the browser's Origin and
+    // HttpOnly session-cookie handling for this integration test.
+    let sessionCookie = '';
+    const fetchImpl = async (url, options = {}) => {
+      const headers = new Headers(options.headers || {});
+      headers.set('origin', new URL(url).origin);
+      if (sessionCookie) headers.set('cookie', sessionCookie);
+      const response = await fetch(url, { ...options, headers });
+      const setCookie = response.headers.get('set-cookie');
+      if (setCookie) sessionCookie = setCookie.split(';', 1)[0];
+      return response;
+    };
     const client = createLocalProfileClient({
-      baseUrl: `http://127.0.0.1:${address.port}`,
+      baseUrl,
       accessToken: TOKEN,
+      fetchImpl,
     });
     const repository = createProfileRepositoryAdapter(client);
     const financeAdapter = createProfileFinanceAdapter({
