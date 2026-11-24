@@ -54,24 +54,27 @@ export function createProfileStore(filePath) {
     }
     const handle = await open(target, 'r');
     let text;
-      try {
-        const openedInfo = await handle.stat();
-        // Compare the opened object to the path checked above. This closes the
-        // lstat/read path-swap window on platforms without O_NOFOLLOW.
-        if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
-          throw new Error('Файл профиля был заменён во время чтения; операция отклонена.');
-        }
-        if (openedInfo.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
-        try { text = await readUtf8Bounded(handle, MAX_PROFILE_BYTES + 1024); }
-        catch (error) { if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Файл профиля превышает допустимый размер.'); throw error; }
-      } finally {
-        await handle.close();
+    try {
+      const openedInfo = await handle.stat();
+      // Compare the opened object to the path checked above. This closes the
+      // lstat/read path-swap window on platforms without O_NOFOLLOW.
+      if (!openedInfo.isFile() || openedInfo.dev !== pathInfo.dev || openedInfo.ino !== pathInfo.ino) {
+        throw new Error('Файл профиля был заменён во время чтения; операция отклонена.');
       }
-      const parsed = JSON.parse(text);
-      if (!parsed || parsed.version !== 1 || !Number.isSafeInteger(parsed.revision)
-        || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object' || Array.isArray(parsed.profile)) {
-        throw new Error('Файл профиля Buildbook имеет неизвестный или повреждённый формат.');
+      if (openedInfo.size > MAX_PROFILE_BYTES + 1024) throw new RangeError('Файл профиля превышает допустимый размер.');
+      try { text = await readUtf8Bounded(handle, MAX_PROFILE_BYTES + 1024); }
+      catch (error) {
+        if (error.message === 'BOUNDED_FILE_LIMIT') throw new RangeError('Файл профиля превышает допустимый размер.');
+        throw error;
       }
+    } finally {
+      await handle.close();
+    }
+    const parsed = JSON.parse(text);
+    if (!parsed || parsed.version !== 1 || !Number.isSafeInteger(parsed.revision)
+      || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object' || Array.isArray(parsed.profile)) {
+      throw new Error('Файл профиля Buildbook имеет неизвестный или повреждённый формат.');
+    }
     return parsed;
   }
 
