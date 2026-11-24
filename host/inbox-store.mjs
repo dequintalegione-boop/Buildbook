@@ -62,7 +62,7 @@ export function createInboxStore(filePath) {
       || !Number.isSafeInteger(item.attempts) || item.attempts < 0
       || typeof item.receivedAt !== 'string' || !Number.isFinite(Date.parse(item.receivedAt))
       || !(item.processedAt === null || typeof item.processedAt === 'string')
-      || !(item.replyDeliveredAt === null || typeof item.replyDeliveredAt === 'string' && Number.isFinite(Date.parse(item.replyDeliveredAt)))
+      || !(item.replyDeliveredAt === undefined || item.replyDeliveredAt === null || typeof item.replyDeliveredAt === 'string' && Number.isFinite(Date.parse(item.replyDeliveredAt)))
       || !(item.lastError === null || typeof item.lastError === 'string' && item.lastError.length <= 256)) return false;
     if (item.status === 'pending' || item.status === 'processing') {
       return !!item.update && typeof item.update === 'object' && !Array.isArray(item.update);
