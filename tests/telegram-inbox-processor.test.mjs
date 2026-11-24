@@ -153,7 +153,8 @@ test('rejects malformed or tampered inbox payload before calling domain adapter'
     inbox,
     async applyUpdate() { called = true; return { operationId: 'should-not-exist' }; },
   });
-  await assert.rejects(processor.processOne(), /private-text command validation/);
+  const result = await processor.processOne();
+  assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1', reason: 'invalid_inbox_item' });
   assert.equal(called, false);
   assert.equal(inbox.state.status, 'rejected');
 });
