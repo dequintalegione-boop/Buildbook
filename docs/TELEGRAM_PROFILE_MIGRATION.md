@@ -9,7 +9,7 @@ The authenticated host import endpoint, browser export-envelope utility, and gua
 1. Never silently replace a non-empty local profile with a host profile, or vice versa.
 2. Never merge finance arrays by display name or timestamp. Records must retain stable IDs; ambiguous or duplicate IDs stop the migration.
 3. A migration must not delete or mutate the source IndexedDB profile.
-4. Create and verify a downloadable backup before importing. If backup creation or verification fails, abort before writing the host profile.
+4. Require a separate ordinary backup before importing. The UI asks the user to confirm it was saved, but cannot independently verify the downloaded file; if the user cannot confirm, abort before writing the host profile.
 5. Import only into an empty canonical profile by default. Replacing a populated canonical profile requires an explicit separate recovery flow, not a normal startup action.
 6. Preserve host-owned metadata (including Telegram idempotency records) only when the target profile is already canonical and the expected revision matches.
 7. Treat imported JSON and binary photo descriptors as untrusted. Enforce size limits, validate the envelope and schema, and reject malformed or unsupported values.
