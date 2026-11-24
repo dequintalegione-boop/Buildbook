@@ -39,11 +39,20 @@ export function createProfileStore(filePath) {
   };
 
   async function readDisk() {
+    let pathInfo;
     try {
-      const pathInfo = await lstat(target);
-      if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
-        throw new Error('Файл профиля должен быть обычным файлом, не ссылкой или специальным объектом.');
-      }
+      pathInfo = await lstat(target);
+    } catch (error) {
+      // Only a genuinely absent canonical path means an empty profile.
+      // Do not turn a path-swap/open failure into revision zero: that could
+      // make a caller believe an existing profile is safe to initialize.
+      if (error.code === 'ENOENT') return { version: 1, revision: 0, profile: null };
+      throw error;
+    }
+    if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
+      throw new Error('Файл профиля должен быть обычным файлом, не ссылкой или специальным объектом.');
+    }
+    try {
       const handle = await open(target, 'r');
       let text;
       try {
@@ -66,7 +75,6 @@ export function createProfileStore(filePath) {
       }
       return parsed;
     } catch (error) {
-      if (error.code === 'ENOENT') return { version: 1, revision: 0, profile: null };
       throw error;
     }
   }
