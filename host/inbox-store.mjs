@@ -51,7 +51,9 @@ export function createInboxStore(filePath) {
     const botId = item.botId;
     const userId = item.userId;
     if (typeof item.id !== 'string' || !item.id || item.id.length > 128
-      || typeof botId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(botId)
+      || typeof botId !== 'string' || !/^\\d{1,16}$/.test(botId)
+      || !Number.isSafeInteger(Number(botId)) || Number(botId) <= 0
+      || String(Number(botId)) !== botId
       || !Number.isSafeInteger(item.updateId) || item.updateId < 0
       || item.key !== botId + ':' + String(item.updateId)
       || typeof userId !== 'string' || !/^\d{1,16}$/.test(userId)
