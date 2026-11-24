@@ -68,3 +68,40 @@ test('does not poll again while a cycle is active', async () => {
 test('requires all runtime components', () => {
   assert.throws(() => createTelegramRuntime({}), /durable Telegram inbox/);
 });
+
+test('compacts terminal inbox entries only after polling returns a durable checkpoint', async () => {
+  const calls = [];
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged(offset) { calls.push(['compact', offset]); },
+    },
+    poller: {
+      async pollOnce() {
+        calls.push(['poll']);
+        return { received: 0, accepted: 0, nextOffset: 27 };
+      },
+    },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await runtime.runOnce();
+  assert.deepEqual(calls, [['poll'], ['compact', 27]]);
+});
+
+test('does not compact inbox records when polling fails before checkpoint confirmation', async () => {
+  let compacted = false;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged() { compacted = true; },
+    },
+    poller: { async pollOnce() { throw new Error('checkpoint write failed'); } },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await assert.rejects(runtime.runOnce(), /checkpoint write failed/);
+  assert.equal(compacted, false);
+});
