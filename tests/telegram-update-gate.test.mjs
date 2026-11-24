@@ -13,13 +13,13 @@ function fakeInbox() {
   };
 }
 
-function privateMessage({ updateId = 1, userId = 1001, chatId = userId, text = 'income 500', extra = {} } = {}) {
+function privateMessage({ updateId = 1, userId = 1001, chatId = userId, chatType = 'private', text = 'income 500', extra = {} } = {}) {
   return {
     update_id: updateId,
     message: {
       message_id: typeof updateId === 'number' ? updateId : 1,
       from: { id: userId },
-      chat: { id: chatId, type: 'private' },
+      chat: { id: chatId, type: chatType },
       text,
       ...extra,
     },
@@ -54,7 +54,7 @@ test('rejects group chats, mismatched chat IDs, non-text updates and oversized t
   const inbox = fakeInbox();
   const gate = createTelegramUpdateGate({ inbox, botId: '123456', allowlist: ['1001'] });
 
-  const group = privateMessage({ extra: { chat: { id: -100, type: 'group' } } });
+  const group = privateMessage({ chatId: -100, chatType: 'group' });
   const mismatched = privateMessage({ chatId: 9999 });
   const mediaOnly = privateMessage({ text: undefined, extra: { photo: [{ file_id: 'sensitive-file' }] } });
   const oversized = privateMessage({ text: 'x'.repeat(4097) });
