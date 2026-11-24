@@ -69,7 +69,7 @@ test('returns the prior operation for a replay without calling the builder or wr
     },
   });
 
-  const result = await apply({ update: {}, idempotencyKey: '123:9' });
+  const result = await apply({ update: { update_id: 9, message: { text: 'test' } }, idempotencyKey: '123:9' });
   assert.deepEqual(result, { operationId: 'saved-id', duplicate: true });
   assert.equal(buildCalls, 0);
   assert.equal(store.snapshot().revision, 0);
@@ -100,7 +100,7 @@ test('retries a compare-and-swap conflict and rechecks idempotency against fresh
     buildTransaction: async () => transaction({ id: 'must-not-be-built-after-replay' }),
   });
 
-  const result = await apply({ update: {}, idempotencyKey: '123:11' });
+  const result = await apply({ update: { update_id: 11, message: { text: 'test' } }, idempotencyKey: '123:11' });
   assert.deepEqual(result, { operationId: 'already-committed', duplicate: true });
   assert.equal(writes, 1);
 });
@@ -113,7 +113,7 @@ test('rejects invalid transaction data without changing the canonical profile', 
   });
 
   await assert.rejects(
-    apply({ update: {}, idempotencyKey: '123:12' }),
+    apply({ update: { update_id: 12, message: { text: 'test' } }, idempotencyKey: '123:12' }),
     error => error.code === 'INVALID_BUILD_BOOK_TRANSACTION',
   );
   assert.equal(store.snapshot().revision, 0);
@@ -126,7 +126,7 @@ test('rejects missing finance state and malformed idempotency keys', async () =>
     buildTransaction: async () => transaction(),
   });
   await assert.rejects(
-    noFinance({ update: {}, idempotencyKey: '123:1' }),
+    noFinance({ update: { update_id: 1, message: { text: 'test' } }, idempotencyKey: '123:1' }),
     error => error.code === 'BUILD_BOOK_FINANCE_STATE_UNAVAILABLE',
   );
 
@@ -148,10 +148,10 @@ test('advances a per-bot replay checkpoint without growing the legacy key ledger
     buildTransaction: async () => transaction({ id: `tx-${++builds}` }),
   });
 
-  const first = await apply({ update: {}, idempotencyKey: '123:21' });
-  const replay = await apply({ update: {}, idempotencyKey: '123:21' });
-  const olderReplay = await apply({ update: {}, idempotencyKey: '123:20' });
-  const second = await apply({ update: {}, idempotencyKey: '123:22' });
+  const first = await apply({ update: { update_id: 21, message: { text: 'test' } }, idempotencyKey: '123:21' });
+  const replay = await apply({ update: { update_id: 21, message: { text: 'test' } }, idempotencyKey: '123:21' });
+  const olderReplay = await apply({ update: { update_id: 20, message: { text: 'test' } }, idempotencyKey: '123:20' });
+  const second = await apply({ update: { update_id: 22, message: { text: 'test' } }, idempotencyKey: '123:22' });
   const snapshot = store.snapshot();
 
   assert.equal(first.duplicate, false);
@@ -177,7 +177,7 @@ test('derives a checkpoint from legacy keys and preserves exact legacy replay ID
     buildTransaction: async () => transaction({ id: 'new-operation' }),
   });
 
-  const result = await apply({ update: {}, idempotencyKey: '123:33' });
+  const result = await apply({ update: { update_id: 33, message: { text: 'test' } }, idempotencyKey: '123:33' });
   const snapshot = store.snapshot();
 
   assert.equal(result.duplicate, false);
@@ -187,7 +187,7 @@ test('derives a checkpoint from legacy keys and preserves exact legacy replay ID
     { key: '123:32', operationId: 'legacy-2' },
   ]);
   assert.deepEqual(
-    await apply({ update: {}, idempotencyKey: '123:31' }),
+    await apply({ update: { update_id: 31, message: { text: 'test' } }, idempotencyKey: '123:31' }),
     { operationId: 'legacy-1', duplicate: true },
   );
 });
@@ -202,14 +202,14 @@ test('keeps legacy ledger entries and advances the replay boundary for new write
     buildTransaction: async () => transaction({ id: 'new-transaction' }),
   });
 
-  await apply({ update: {}, idempotencyKey: '123:42' });
+  await apply({ update: { update_id: 42, message: { text: 'test' } }, idempotencyKey: '123:42' });
   const snapshot = store.snapshot();
   assert.deepEqual(snapshot.profile.telegramOperations, [
     { key: '123:41', operationId: 'missing-transaction' },
   ]);
   assert.deepEqual(snapshot.profile.telegramOperationCheckpoints, [{ botId: '123', updateId: 42 }]);
   assert.deepEqual(
-    await apply({ update: {}, idempotencyKey: '123:40' }),
+    await apply({ update: { update_id: 40, message: { text: 'test' } }, idempotencyKey: '123:40' }),
     { operationId: 'telegram-replay:123:40', duplicate: true },
   );
 });
@@ -221,8 +221,8 @@ test('keeps replay checkpoints independent for each bot identity', async () => {
     buildTransaction: async ({ id } = {}) => transaction({ id }),
   });
 
-  await apply({ update: {}, idempotencyKey: '123:50' });
-  await apply({ update: {}, idempotencyKey: '456:3' });
+  await apply({ update: { update_id: 50, message: { text: 'test' } }, idempotencyKey: '123:50' });
+  await apply({ update: { update_id: 3, message: { text: 'test' } }, idempotencyKey: '456:3' });
   const snapshot = store.snapshot();
 
   assert.deepEqual(snapshot.profile.telegramOperationCheckpoints, [
@@ -230,7 +230,7 @@ test('keeps replay checkpoints independent for each bot identity', async () => {
     { botId: '456', updateId: 3 },
   ]);
   assert.deepEqual(
-    await apply({ update: {}, idempotencyKey: '456:2' }),
+    await apply({ update: { update_id: 2, message: { text: 'test' } }, idempotencyKey: '456:2' }),
     { operationId: 'telegram-replay:456:2', duplicate: true },
   );
   assert.equal(store.snapshot().profile.state.tx.length, 2);
@@ -247,7 +247,7 @@ test('rejects malformed persisted replay checkpoints before writing', async () =
   });
 
   await assert.rejects(
-    apply({ update: {}, idempotencyKey: '123:9' }),
+    apply({ update: { update_id: 9, message: { text: 'test' } }, idempotencyKey: '123:9' }),
     error => error.code === 'INVALID_TELEGRAM_OPERATION_LEDGER',
   );
   assert.equal(store.snapshot().revision, 0);
@@ -274,7 +274,7 @@ test('does not duplicate a transaction when the profile commit succeeded before 
     buildTransaction: async () => transaction({ id: 'committed-once' }),
   });
 
-  const result = await apply({ update: {}, idempotencyKey: '123:60' });
+  const result = await apply({ update: { update_id: 60, message: { text: 'test' } }, idempotencyKey: '123:60' });
   assert.deepEqual(result, { operationId: 'telegram-replay:123:60', duplicate: true });
   assert.equal(profile.state.tx.length, 1);
   assert.equal(profile.telegramOperationCheckpoints[0].updateId, 60);
@@ -290,8 +290,8 @@ test('accepts its own persisted bot checkpoint on the next Telegram finance writ
     buildTransaction: async () => transaction({ id: `checkpoint-tx-${++builds}` }),
   });
 
-  await apply({ update: {}, idempotencyKey: '123:1' });
-  const second = await apply({ update: {}, idempotencyKey: '123:2' });
+  await apply({ update: { update_id: 1, message: { text: 'test' } }, idempotencyKey: '123:1' });
+  const second = await apply({ update: { update_id: 2, message: { text: 'test' } }, idempotencyKey: '123:2' });
 
   assert.equal(second.duplicate, false);
   assert.equal(store.snapshot().profile.state.tx.length, 2);
