@@ -3845,6 +3845,10 @@ async function refreshTelegramStatus(silent=false){
  }catch(error){
   TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;
   TELEGRAM_UI.error=error.status===401?'Сессия не подключена или истекла.':'Локальный API недоступен. Запустите хост и проверьте адрес.';
+  if(STORAGE_MODE==='canonical'&&(error.status===401||error.code==='BUILD_BOOK_LOCAL_API_UNAVAILABLE')){
+   APP_FATAL_ERROR=new Error(error.status===401?'Сессия локального хранилища истекла. Скачайте резервную копию текущего состояния и подключите хост заново.':'Локальный хост недоступен. Работа остановлена до восстановления соединения; скачайте резервную копию текущего состояния.');
+   render();
+  }
  }finally{
   TELEGRAM_UI.checking=false;TELEGRAM_UI.checked=true;
   if(!silent&&V.tab==='telegram')render();
