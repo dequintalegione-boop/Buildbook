@@ -317,6 +317,7 @@ test('sanitizes Telegram status and never returns arbitrary error text or secret
   assert.equal(body.includes('allowedUserIds'), false);
   assert.equal(body.includes('rawUpdate'), false);
   assert.deepEqual(JSON.parse(body), {
+    enabled: true,
     running: true,
     startedAt: '2026-11-23T10:00:00.000Z',
     lastCycleAt: '2026-11-23T10:00:01.000Z',
