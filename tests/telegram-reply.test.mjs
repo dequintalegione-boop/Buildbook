@@ -90,7 +90,7 @@ test('reply sender rejects non-canonical chat IDs before making a request', asyn
     fetchImpl: async () => { calls += 1; return {}; },
   });
 
-  for (const chatId of ['abc', '01001', '0', '-1', '1001x']) {
+  for (const chatId of ['abc', '01001', '0', '-1', '1001x', '9007199254740992']) {
     await assert.rejects(sendReply({ chatId, text: 'Готово' }), /canonical numeric chat ID/);
   }
   assert.equal(calls, 0);
