@@ -44,6 +44,9 @@ export function createTelegramCommandAdapter({
       const error = new TypeError('Telegram message is not a command.');
       error.code = 'IGNORED_TELEGRAM_TEXT';
       error.permanent = true;
+      // Ordinary chat text is terminally ignored, not a request for help.
+      // The inbox processor sends only non-empty explicit replies.
+      error.reply = '';
       throw error;
     }
     if (command.type === 'help') {
