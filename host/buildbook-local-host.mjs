@@ -1,4 +1,5 @@
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
@@ -36,6 +37,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const normalizedProfilePaths = new Set([resolve(profilePath), profileLockPath].map(path => path.toLowerCase()));
   if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
+  const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   const telegramEnabled = telegramEnabledRaw === 'true';
@@ -46,6 +48,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
+    staticRoot: appRoot,
   });
   if (telegramEnabled) {
     const telegramConfig = readTelegramServiceConfig(env);
