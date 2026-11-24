@@ -67,7 +67,8 @@ export function createTelegramHostService({
   }
   const paths = [config.inboxPath, config.offsetPath, config.instanceLockPath];
   if (paths.some(path => !isAbsolute(path))) throw new TypeError('Telegram host data paths must be absolute.');
-  const normalizedPaths = paths.map(path => resolve(path).toLowerCase());
+  const normalizedPaths = paths.map(path => resolve(path))
+    .map(path => process.platform === 'win32' ? path.toLowerCase() : path);
   const pathsOverlap = (left, right) => {
     const rel = relative(left, right);
     return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel));
