@@ -4,8 +4,7 @@
  * process-global state, so it can be embedded in a CLI service or tested directly.
  */
 export function createTelegramRuntime({ inbox, poller, processor } = {}) {
-  if (!inbox || typeof inbox.recoverInterrupted !== 'function'
-    || typeof inbox.compactAcknowledged !== 'function' || typeof inbox.stats !== 'function') {
+  if (!inbox || typeof inbox.recoverInterrupted !== 'function' || typeof inbox.stats !== 'function') {
     throw new TypeError('A recoverable durable Telegram inbox is required.');
   }
   if (!poller || typeof poller.pollOnce !== 'function') throw new TypeError('A Telegram poller is required.');
@@ -42,7 +41,8 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
       // pollOnce returns only after the offset file has been durably committed.
       // Compacting terminal entries below that checkpoint bounds inbox growth
       // without dropping retryable work or relying on a volatile poll result.
-      if (Number.isSafeInteger(polling.nextOffset) && polling.nextOffset >= 0) {
+      if (typeof inbox.compactAcknowledged === 'function'
+        && Number.isSafeInteger(polling.nextOffset) && polling.nextOffset >= 0) {
         await inbox.compactAcknowledged(polling.nextOffset);
       }
 
