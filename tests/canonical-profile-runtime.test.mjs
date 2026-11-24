@@ -123,7 +123,7 @@ test('classifies 20 uncertain save responses and requires a fresh profile read',
       });
       await assert.rejects(runtime.client.writeProfile({ marker: true }, 0), error =>
         error.code === 'BUILD_BOOK_SAVE_RESULT_UNKNOWN'
-        && /перечитайте профиль/.test(error.message));
+        && /перечитайте профиль/i.test(error.message));
     });
   }
 });
