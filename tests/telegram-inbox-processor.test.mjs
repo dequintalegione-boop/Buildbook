@@ -83,6 +83,25 @@ test('returns failed adapter work to pending for retry', async () => {
   assert.deepEqual(inbox.state.calls, ['processing', 'pending']);
 });
 
+test('sends a permanent command error reply only once', async () => {
+  const inbox = makeInbox(sample);
+  const replies = [];
+  const permanent = new Error('Unsupported command');
+  permanent.permanent = true;
+  permanent.reply = 'Команда не распознана';
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { throw permanent; },
+    async deliverReply(message) { replies.push(message); },
+  });
+
+  await assert.rejects(processor.processOne(), /Unsupported command/);
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].text, 'Команда не распознана');
+  assert.equal(inbox.state.status, 'rejected');
+  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
+});
+
 test('does not call adapter when inbox is empty or claim fails', async () => {
   let called = false;
   const empty = {
