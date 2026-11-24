@@ -125,7 +125,8 @@ function getOperationCheckpoints(profile, ledger) {
  * store used by the application. buildTransaction translates a validated
  * private Telegram update into the app's transaction shape.
  *
- * The operation ledger and transaction are written in one profile revision.
+ * The transaction and per-bot replay checkpoint are written in one profile
+ * revision. Legacy exact-key ledger entries remain readable for migration safety.
  * A caller must not mark the inbox item complete until this function returns.
  */
 export function createProfileFinanceAdapter({ profileStore, buildTransaction } = {}) {
