@@ -280,3 +280,20 @@ test('does not duplicate a transaction when the profile commit succeeded before 
   assert.equal(profile.telegramOperationCheckpoints[0].updateId, 60);
   assert.equal(writes, 1);
 });
+
+
+test('accepts its own persisted bot checkpoint on the next Telegram finance write', async () => {
+  const store = createStore();
+  let builds = 0;
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction({ id: \`checkpoint-tx-\${++builds}\` }),
+  });
+
+  await apply({ update: {}, idempotencyKey: '123:1' });
+  const second = await apply({ update: {}, idempotencyKey: '123:2' });
+
+  assert.equal(second.duplicate, false);
+  assert.equal(store.snapshot().profile.state.tx.length, 2);
+  assert.deepEqual(store.snapshot().profile.telegramOperationCheckpoints, [{ botId: '123', updateId: 2 }]);
+});
