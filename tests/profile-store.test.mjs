@@ -98,3 +98,16 @@ test('creates canonical profile files with owner-only permissions on POSIX', asy
   const info = await stat(file);
   assert.equal(info.mode & 0o077, 0);
 });
+
+
+test('ignores an orphaned temporary file after an interrupted write and preserves the canonical revision', async (t) => {
+  const { file, store } = await fixture(t);
+  await store.write({ marker: 'committed-before-crash' }, 0);
+  const orphan = join(file.slice(0, file.lastIndexOf('/')), '.profile.json.interrupted-write.tmp');
+  await writeFile(orphan, JSON.stringify({ version: 1, revision: 99, profile: { marker: 'uncommitted' } }), 'utf8');
+
+  assert.deepEqual(await store.read(), { revision: 1, profile: { marker: 'committed-before-crash' } });
+  assert.equal(await store.write({ marker: 'next-commit' }, 1), 2);
+  assert.deepEqual(await store.read(), { revision: 2, profile: { marker: 'next-commit' } });
+  assert.match(await readFile(orphan, 'utf8'), /uncommitted/);
+});
