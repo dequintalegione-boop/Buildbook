@@ -3876,7 +3876,8 @@ async function closeTelegramSession(){
  TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Сессия закрыта.';render();
 }
 function telegram(){
- if(S.set.localApiUrl)TELEGRAM_UI.baseUrl=String(S.set.localApiUrl);
+ if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
+ else if(S.set.localApiUrl)TELEGRAM_UI.baseUrl=String(S.set.localApiUrl);
  if(TEST_MODE&&!TELEGRAM_UI.checked){TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Проверка локального хоста отключена в тестовом режиме.'}
  if(!TEST_MODE&&!TELEGRAM_UI.checked&&!TELEGRAM_UI.checking)refreshTelegramStatus();
  const status=TELEGRAM_UI.status,queue=status&&status.queue?status.queue:{},stamp=value=>{if(!value)return'—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString('ru-RU')};
