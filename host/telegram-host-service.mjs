@@ -52,6 +52,15 @@ export function createTelegramHostService({
     || typeof config.instanceLockPath !== 'string') {
     throw new TypeError('Telegram host config is incomplete.');
   }
+
+  // The bot ID is used to namespace durable update keys. Reject a hand-built
+  // config that pairs one bot's token with another bot's ID; otherwise updates
+  // could be recorded under the wrong identity and collide with another bot.
+  const tokenIdentity = /^(\\d+):[A-Za-z0-9_-]+$/.exec(config.botToken);
+  if (!tokenIdentity || tokenIdentity[1] !== config.botId) {
+    throw new TypeError('Telegram bot ID must match the bot token identity.');
+  }
+
   if (config.allowedUserIds.length < 1 || config.allowedUserIds.length > 100) {
     throw new TypeError('Telegram host allowlist must contain 1–100 user IDs.');
   }
