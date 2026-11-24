@@ -56,7 +56,7 @@ export function createTelegramHostService({
   // The bot ID is used to namespace durable update keys. Reject a hand-built
   // config that pairs one bot's token with another bot's ID; otherwise updates
   // could be recorded under the wrong identity and collide with another bot.
-  const tokenIdentity = /^(\\d+):[A-Za-z0-9_-]+$/.exec(config.botToken);
+  const tokenIdentity = /^(\d+):[A-Za-z0-9_-]+$/.exec(config.botToken);
   if (!tokenIdentity || tokenIdentity[1] !== config.botId) {
     throw new TypeError('Telegram bot ID must match the bot token identity.');
   }
