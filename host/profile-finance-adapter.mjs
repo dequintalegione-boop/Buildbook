@@ -47,16 +47,30 @@ function validateProfile(profile) {
     throw error;
   }
 
-  const transactionKeys = new Set();
-  for (const transaction of profile.state.tx) {
-    if (!isRecord(transaction) || transaction.telegramOperationKey === undefined) continue;
-    if (!isValidIdempotencyKey(transaction.telegramOperationKey)
-      || transactionKeys.has(transaction.telegramOperationKey)) {
-      const error = new Error('Canonical profile contains invalid or duplicate Telegram transaction metadata.');
+  if (profile.telegramOperationCheckpoints !== undefined) {
+    const checkpoints = profile.telegramOperationCheckpoints;
+    const bots = new Set();
+    if (!Array.isArray(checkpoints) || checkpoints.length > 1000) {
+      const error = new Error('Canonical profile contains invalid Telegram operation checkpoints.');
       error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
       throw error;
     }
-    transactionKeys.add(transaction.telegramOperationKey);
+    for (const checkpoint of checkpoints) {
+      if (!isRecord(checkpoint)
+        || typeof checkpoint.botId !== 'string'
+        || !/^[1-9]\\d{0,15}$/.test(checkpoint.botId)
+        || !Number.isSafeInteger(Number(checkpoint.botId))
+        || String(Number(checkpoint.botId)) !== checkpoint.botId
+        || !Number.isSafeInteger(checkpoint.updateId)
+        || checkpoint.updateId < 0
+        || checkpoint.updateId >= Number.MAX_SAFE_INTEGER
+        || bots.has(checkpoint.botId)) {
+        const error = new Error('Canonical profile contains invalid Telegram operation checkpoints.');
+        error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
+        throw error;
+      }
+      bots.add(checkpoint.botId);
+    }
   }
 
   if (profile.telegramOperations !== undefined) {
@@ -77,12 +91,6 @@ function validateProfile(profile) {
         error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
         throw error;
       }
-      const transaction = profile.state.tx.find(item => item?.telegramOperationKey === entry.key);
-      if (transaction && transaction.id !== entry.operationId) {
-        const error = new Error('Canonical profile contains conflicting Telegram idempotency metadata.');
-        error.code = 'INVALID_TELEGRAM_OPERATION_LEDGER';
-        throw error;
-      }
       keys.add(entry.key);
       operationIds.add(entry.operationId);
     }
@@ -90,31 +98,20 @@ function validateProfile(profile) {
 }
 
 /**
- * Move legacy ledger keys onto their committed transactions. The transaction
- * history is already retained by Buildbook, so this keeps replay protection
- * without growing a second unbounded array. Orphaned legacy entries are kept.
+ * Compute a monotonic replay boundary per bot. Legacy ledger keys prove that
+ * the corresponding finance updates committed; serial inbox processing means
+ * no earlier finance update can still be waiting behind a later committed one.
  */
-function migrateLegacyLedger(profile) {
-  const ledger = profile.telegramOperations;
-  if (!Array.isArray(ledger) || ledger.length === 0) return ledger || [];
-  const remaining = [];
+function getOperationCheckpoints(profile, ledger) {
+  const checkpoints = new Map(
+    (profile.telegramOperationCheckpoints || []).map(item => [item.botId, item.updateId])
+  );
   for (const entry of ledger) {
-    const matches = profile.state.tx.filter(item => item?.id === entry.operationId);
-    if (matches.length !== 1) {
-      remaining.push(entry);
-      continue;
-    }
-    const transaction = matches[0];
-    if (transaction.telegramOperationKey !== undefined
-      && transaction.telegramOperationKey !== entry.key) {
-      remaining.push(entry);
-      continue;
-    }
-    transaction.telegramOperationKey = entry.key;
+    const [botId, rawUpdateId] = entry.key.split(':');
+    const updateId = Number(rawUpdateId);
+    checkpoints.set(botId, Math.max(checkpoints.get(botId) ?? -1, updateId));
   }
-  if (remaining.length) profile.telegramOperations = remaining;
-  else delete profile.telegramOperations;
-  return remaining;
+  return checkpoints;
 }
 
 /**
@@ -152,13 +149,19 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
 
       const profile = cloneJson(current.profile);
       validateProfile(profile);
-      const ledger = migrateLegacyLedger(profile);
-      const transactionPrior = profile.state.tx.find(
-        item => item?.telegramOperationKey === idempotencyKey
-      );
-      if (transactionPrior) return { operationId: transactionPrior.id, duplicate: true };
+      const ledger = profile.telegramOperations || [];
       const prior = ledger.find(entry => entry.key === idempotencyKey);
       if (prior) return { operationId: prior.operationId, duplicate: true };
+
+      const [botId, rawUpdateId] = idempotencyKey.split(':');
+      const updateId = Number(rawUpdateId);
+      const checkpoints = getOperationCheckpoints(profile, ledger);
+      const checkpoint = checkpoints.get(botId) ?? -1;
+      if (updateId <= checkpoint) {
+        // A replay older than the committed boundary has no need to recreate
+        // its original operation ID; the inbox only needs a stable completion ID.
+        return { operationId: `telegram-replay:${idempotencyKey}`, duplicate: true };
+      }
 
       // Builders must be pure: on a revision conflict they may be called again
       // with a refreshed profile so category/account changes are respected.
@@ -175,17 +178,17 @@ export function createProfileFinanceAdapter({ profileStore, buildTransaction } =
         error.code = 'DUPLICATE_BUILD_BOOK_OPERATION_ID';
         throw error;
       }
-      const committedTransaction = {
-        ...transaction,
-        id: operationId,
-        telegramOperationKey: idempotencyKey,
-      };
-
+      const committedTransaction = { ...transaction, id: operationId };
       profile.state.tx.push(committedTransaction);
-      // New idempotency keys live on the canonical transaction itself. Keep
-      // only unmigratable legacy entries in the compatibility ledger.
-      if (ledger.length) profile.telegramOperations = ledger;
-      else delete profile.telegramOperations;
+
+      // Advance the replay boundary in the same profile revision as the
+      // transaction. New operations no longer append to the legacy key ledger.
+      checkpoints.set(botId, updateId);
+      profile.telegramOperationCheckpoints = [...checkpoints.entries()]
+        .map(([checkpointBotId, checkpointUpdateId]) => ({
+          botId: checkpointBotId,
+          updateId: checkpointUpdateId,
+        }));
       try {
         const revision = await profileStore.write(profile, current.revision);
         return { operationId, revision, duplicate: false };
