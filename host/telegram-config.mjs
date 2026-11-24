@@ -73,7 +73,7 @@ export function readTelegramServiceConfig(env = process.env) {
     offsetPath: resolve(offsetPath),
     instanceLockPath: resolve(instanceLockPath),
     timeoutSeconds: boundedInteger(env, 'BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS', 25, 0, 50),
-    intervalMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_INTERVAL_MS', 1000, 0, 60000),
+    intervalMs: boundedInteger(env, 'BUILDBOOK_TELEGRAM_INTERVAL_MS', 1000, 100, 60000),
     retryBaseMs,
     retryMaxMs,
   });
