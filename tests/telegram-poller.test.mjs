@@ -238,7 +238,7 @@ test('exposes only a validated durable checkpoint to the runtime', async () => {
   const invalid = createTelegramPoller({
     botToken: 'test-secret-token',
     gate: { accept: async () => ({ accepted: true }) },
-    offsetStore: { read: async () => Number.MAX_SAFE_INTEGER, write: async () => {} },
+    offsetStore: { read: async () => Number.MAX_SAFE_INTEGER + 1, write: async () => {} },
     fetchImpl: async () => assert.fail('must not poll'),
     timeoutSeconds: 0,
   });
