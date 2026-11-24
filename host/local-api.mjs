@@ -203,7 +203,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     // Exchange the host-only bootstrap secret for a short-lived HttpOnly
     // browser session. The session secret is never exposed to JavaScript or disk.
     if (request.method === 'POST' && pathname === '/api/session/bootstrap') {
-      if (!origin || !/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+      if (!origin || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 403, { error: 'Для подключения требуется локальный браузерный Origin и JSON.' });
         return;
       }
