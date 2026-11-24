@@ -385,7 +385,7 @@ test('allows safe retry after 20 failed session transition responses', async t =
 
 test('marks 20 ambiguous write outcomes so callers reread instead of blindly retrying', async t => {
   const cases = [
-    ...[400, 408, 429, 500, 502, 503, 504, 599].map(status => ({ label: 'HTTP ' + status, status, body: { error: 'response lost near commit' } })),
+    ...[500, 501, 502, 503, 504, 505, 507, 599].map(status => ({ label: 'HTTP ' + status, status, body: { error: 'response lost near commit' } })),
     ...[null, {}, { revision: 0 }, { revision: -1 }, { revision: 1.5 }, { revision: Number.MAX_SAFE_INTEGER },
       { revision: '1' }, { revision: 2 }, { revision: 1, extra: 'bad' },
       { revision: undefined }, { revision: null }, { revision: [] }].map((body, index) => ({ label: 'malformed success ' + (index + 1), status: 200, body })),
