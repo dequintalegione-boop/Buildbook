@@ -142,6 +142,9 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
             // forever would block every later item in the ordered inbox.
             requireTransition(await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.'), 'rejected');
             permanentFailureHandled = true;
+            // A user-level terminal rejection is not a service failure. Report
+            // it as consumed work so the runtime can continue draining the inbox.
+            return { processed: true, rejected: true, itemId: item.id };
           } else {
             const safeMessage = 'Canonical adapter failed; retry scheduled.';
             // Do not persist arbitrary exception text: adapters may include user data,
