@@ -112,6 +112,22 @@ test('failed durable enqueue does not poison the in-memory dedupe snapshot', asy
   });
 });
 
+test('loads legacy pending inbox records without a reply-delivery marker', async () => {
+  await withStore(async file => {
+    const legacyItem = {
+      id: 'legacy-item', key: '123456:6', botId: '123456', updateId: 6, userId: '1001',
+      update: { update_id: 6, message: { text: 'income' } }, status: 'pending', attempts: 0,
+      receivedAt: new Date().toISOString(), processedAt: null, lastError: null,
+    };
+    await writeFile(file, JSON.stringify({ version: 1, items: [legacyItem] }), 'utf8');
+
+    const inbox = createInboxStore(file);
+    const item = await inbox.nextPending();
+    assert.equal(item.id, 'legacy-item');
+    assert.equal(item.replyDeliveredAt, undefined);
+  });
+});
+
 test('failed processing returns to pending and can be retried', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
@@ -263,11 +279,14 @@ test('durable reply-delivery marker survives retry and restart', async () => {
 
     const restarted = createInboxStore(file);
     const pending = await restarted.nextPending();
-    assert.equal(pending.replyDeliveredAt !== null, true);
+    assert.equal(typeof pending.replyDeliveredAt, 'string');
+    assert.equal(Number.isFinite(Date.parse(pending.replyDeliveredAt)), true);
     await restarted.markProcessing(item.id);
     assert.equal(await restarted.markReplyDelivered(item.id), true);
     await restarted.markPending(item.id, 'retry again');
-    assert.equal((await createInboxStore(file).nextPending()).replyDeliveredAt, pending.replyDeliveredAt);
+    const afterRestart = await createInboxStore(file).nextPending();
+    assert.equal(afterRestart.replyDeliveredAt, pending.replyDeliveredAt);
+    assert.equal(Number.isFinite(Date.parse(afterRestart.replyDeliveredAt)), true);
   });
 });
 
