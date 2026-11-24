@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
-import { timingSafeEqual, createHash } from 'node:crypto';
+import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
 
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
 const SUPPORTED_PROFILE_SCHEMA_VERSION = 5;
 const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const SESSION_COOKIE = 'buildbook_local_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const MAX_SESSIONS = 8;
 
 function send(response, status, payload) {
   const body = JSON.stringify(payload);
@@ -138,6 +141,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     throw new TypeError('Локальный API разрешено привязывать только к loopback-интерфейсу.');
   }
 
+  const sessions = new Map();
   const server = createServer({ maxHeaderSize: 8 * 1024 }, async (request, response) => {
     if (!requestHostAllowed(request)) {
       send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
@@ -151,6 +155,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     if (origin) {
       response.setHeader('access-control-allow-origin', origin);
       response.setHeader('vary', 'Origin');
+      response.setHeader('access-control-allow-credentials', 'true');
     }
     if (request.method === 'OPTIONS') {
       if (!origin) {
@@ -160,6 +165,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       response.writeHead(204, {
         'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
         'access-control-allow-headers': 'Authorization, Content-Type',
+        'access-control-allow-credentials': 'true',
         'access-control-max-age': '600',
         'cache-control': 'no-store',
         'x-content-type-options': 'nosniff',
@@ -175,15 +181,6 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       return;
     }
 
-    const authorization = String(request.headers.authorization || '');
-    const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-    const expected = Buffer.from(accessToken, 'utf8');
-    const supplied = Buffer.from(suppliedToken, 'utf8');
-    const tokenMatches = supplied.length === expected.length && timingSafeEqual(supplied, expected);
-    if (!tokenMatches) {
-      send(response, 401, { error: 'Требуется действительный токен локального API.' });
-      return;
-    }
     let pathname;
     try {
       const requestUrl = new URL(request.url || '/', 'http://localhost');
@@ -194,6 +191,59 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       pathname = requestUrl.pathname;
     } catch {
       send(response, 400, { error: 'Некорректный адрес запроса.' });
+      return;
+    }
+
+    const authorization = String(request.headers.authorization || '');
+    const suppliedToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    const expected = Buffer.from(accessToken, 'utf8');
+    const supplied = Buffer.from(suppliedToken, 'utf8');
+    const tokenMatches = supplied.length === expected.length && timingSafeEqual(supplied, expected);
+
+    // Exchange the host-only bootstrap secret for a short-lived HttpOnly
+    // browser session. The session secret is never exposed to JavaScript or disk.
+    if (request.method === 'POST' && pathname === '/api/session/bootstrap') {
+      if (!origin || !/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 403, { error: 'Для подключения требуется локальный браузерный Origin и JSON.' });
+        return;
+      }
+      if (!tokenMatches) {
+        send(response, 401, { error: 'Неверный ключ первоначального подключения.' });
+        return;
+      }
+      for (const [key, session] of sessions) if (session.expiresAt <= Date.now()) sessions.delete(key);
+      if (sessions.size >= MAX_SESSIONS) {
+        send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
+        return;
+      }
+      const sessionId = randomBytes(32).toString('base64url');
+      sessions.set(sessionId, { expiresAt: Date.now() + SESSION_TTL_MS });
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api');
+      send(response, 200, { ok: true, expiresIn: SESSION_TTL_MS });
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === '/api/session/close') {
+      if (!origin) {
+        send(response, 403, { error: 'Для закрытия сессии требуется локальный браузерный Origin.' });
+        return;
+      }
+      const cookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
+        .find(part => part.startsWith(SESSION_COOKIE + '='));
+      if (cookie) sessions.delete(cookie.slice(SESSION_COOKIE.length + 1));
+      response.setHeader('set-cookie', SESSION_COOKIE + '=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0');
+      send(response, 200, { ok: true });
+      return;
+    }
+
+    const cookie = String(request.headers.cookie || '').split(';').map(part => part.trim())
+      .find(part => part.startsWith(SESSION_COOKIE + '='));
+    const sessionId = cookie ? cookie.slice(SESSION_COOKIE.length + 1) : '';
+    const session = sessions.get(sessionId);
+    const sessionMatches = !!session && session.expiresAt > Date.now();
+    if (session && !sessionMatches) sessions.delete(sessionId);
+    if (!tokenMatches && !sessionMatches) {
+      send(response, 401, { error: 'Требуется действующая сессия локального API.' });
       return;
     }
     if (request.method === 'GET' && pathname === '/api/health') {
