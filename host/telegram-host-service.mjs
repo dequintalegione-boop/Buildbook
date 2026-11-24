@@ -7,8 +7,9 @@ import { createTelegramRuntime } from './telegram-runtime.mjs';
 import { createTelegramService } from './telegram-service.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramStatus } from './telegram-status.mjs';
-import { createProfileFinanceAdapter } from './profile-finance-adapter.mjs';
 import { buildTelegramFinanceTransactionFromUpdate } from './telegram-finance-command.mjs';
+import { createTelegramCommandAdapter } from './telegram-command-adapter.mjs';
+import { createTelegramReplySender } from './telegram-reply.mjs';
 import { isAbsolute, resolve } from 'node:path';
 
 /**
@@ -40,7 +41,7 @@ export function createTelegramHostService({
   }
   const canonicalApplyUpdate = hasInjectedAdapter
     ? applyUpdate
-    : createProfileFinanceAdapter({
+    : createTelegramCommandAdapter({
       profileStore,
       buildTransaction: buildTransaction || buildTelegramFinanceTransactionFromUpdate,
     });
@@ -81,7 +82,11 @@ export function createTelegramHostService({
     fetchImpl,
     timeoutSeconds: config.timeoutSeconds,
   });
-  const processor = createTelegramInboxProcessor({ inbox, applyUpdate: canonicalApplyUpdate });
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    applyUpdate: canonicalApplyUpdate,
+    deliverReply: createTelegramReplySender({ botToken: config.botToken, fetchImpl }),
+  });
   const runtime = createTelegramRuntime({ inbox, poller, processor });
 
   const service = createTelegramService({

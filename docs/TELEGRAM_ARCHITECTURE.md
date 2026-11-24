@@ -3,7 +3,7 @@
 ## Components
 
 1. **Buildbook UI** — configuration and monitoring only. It must not contain the bot token or implement Telegram polling.
-2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status. The host composition accepts either an injected canonical domain adapter or a profile store plus the validated finance builder. `host/buildbook-local-host.mjs` composes the local API and Telegram service with the same profile-store instance and exclusive locks; `host/run-buildbook-local-host.mjs` is the combined entrypoint. The authenticated local API exposes a sanitized Telegram status endpoint. OS-level installation/autostart remains separate work.
+2. **Local host service** — background process with startup/recovery support. Owns the bot token, Telegram polling, allowlist enforcement, durable inbox and processing status. The host composition accepts either an injected canonical domain adapter or a profile store plus the validated command adapter. `host/buildbook-local-host.mjs` composes the local API and Telegram service with the same profile-store instance and exclusive locks; `host/run-buildbook-local-host.mjs` is the combined entrypoint. The authenticated local API exposes a sanitized Telegram status endpoint. Windows autostart is a per-user scheduled task; a full Windows service installer remains separate work.
 3. **Telegram adapter** — converts Telegram updates and callback actions into validated domain commands.
 4. **Buildbook storage adapter** — the only component allowed to persist financial operations. It must target the same canonical data store used by the app.
 5. **Host adapter boundary** — separates local process lifecycle and transport from the domain/inbox logic, so a remote host can be substituted later.
@@ -23,6 +23,8 @@
 - On restart, resume pending items and skip items already committed.
 - Verify the sender's numeric Telegram user ID against the allowlist before parsing or acting on the message. Unauthorized updates are ignored and are not written into the financial domain.
 - The processor treats persisted inbox JSON as untrusted and reconstructs a minimal private-text envelope before invoking the canonical adapter; extra fields in a tampered record are never forwarded. Numeric bot/user IDs and the idempotency key must also be canonical decimal forms, preventing leading-zero identity aliases.
+- After a command succeeds, the host may call `sendMessage` for that same allowlisted private chat. The reply is attempted before the inbox item is marked complete. A failed reply leaves the item pending and retries the idempotent command; it must not advance as completed. Unauthorized senders still receive no reply. Reply failures are reported with a fixed error and must not log the bot token.
+- `/доход` and `/расход` (and the English aliases) write one income or expense. `/статистика` and `/статистика YYYY-MM` only read the same canonical profile and do not append a transaction. `/help` is read-only. Plain text is discarded without a reply. Month totals follow the UI summary: kinds `i` and `e` only, excluding deleted records, loans, transfers and investments.
 - Keep a minimal technical record for rejected/accepted update processing; avoid retaining unnecessary message text or personal data.
 
 ## Token and configuration

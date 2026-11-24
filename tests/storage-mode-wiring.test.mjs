@@ -51,7 +51,7 @@ test('closing the session is blocked while canonical profile is active', () => {
 });
 
 test('service worker precaches the canonical runtime dependency chain and rotates its cache', () => {
-  assert.match(serviceWorker, /const C='buildbook-48'/);
+  assert.match(serviceWorker, /const C='buildbook-49'/);
   assert.match(serviceWorker, /\.\/client\/canonical-profile-runtime\.mjs/);
   assert.match(serviceWorker, /\.\/host\/profile-repository-adapter\.mjs/);
   assert.match(serviceWorker, /keys\.filter\(k=>k!==C\)/);

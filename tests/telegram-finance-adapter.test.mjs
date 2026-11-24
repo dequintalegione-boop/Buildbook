@@ -33,6 +33,9 @@ test('parser accepts supported income and expense commands', () => {
     kind: 'e', amount: 450, desc: 'Lunch',
   });
   assert.equal(parseTelegramFinanceCommand('обычный текст'), null);
+  assert.deepEqual(parseTelegramFinanceCommand('/доход@BuildbookBot 10 Сборка'), {
+    kind: 'i', amount: 10, desc: 'Сборка',
+  });
 });
 
 test('parser rejects malformed amounts and empty descriptions', () => {
@@ -42,9 +45,10 @@ test('parser rejects malformed amounts and empty descriptions', () => {
 });
 
 test('transaction builder uses Buildbook transaction fields and host-local date', () => {
+  const now = new Date(2026, 10, 23, 12, 0, 0);
   const transaction = buildTelegramFinanceTransactionFromUpdate({
     message: { text: '/расход 99,90 Обед' },
-  }, { now: new Date(2026, 10, 23, 12, 0, 0) });
+  }, { now });
   assert.deepEqual(transaction, {
     kind: 'e',
     date: '2026-11-23',
@@ -54,6 +58,10 @@ test('transaction builder uses Buildbook transaction fields and host-local date'
     grp: 'Общие расходы',
     acc: 'a1',
     note: 'Добавлено через Telegram',
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    deletedAt: null,
+    schemaVersion: 5,
   });
 });
 

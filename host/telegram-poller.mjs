@@ -1,46 +1,10 @@
+import { readBoundedTelegramJson } from './telegram-response.mjs';
+
 /**
  * Telegram long-poll receiver. It advances the Telegram offset only after the
  * update gate has durably accepted every allowlisted update in the batch.
  * Supply a secret bot token from host-only configuration; never from the UI.
  */
-const MAX_TELEGRAM_RESPONSE_BYTES = 1024 * 1024;
-
-async function readTelegramJson(response) {
-  const declaredLength = Number(response.headers?.get?.('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_TELEGRAM_RESPONSE_BYTES) {
-    await response.body?.cancel?.().catch(() => {});
-    throw new Error('Telegram response exceeds the allowed size.');
-  }
-  if (!response.body?.getReader) {
-    // Do not fall back to response.text(): it buffers an unbounded body before
-    // the size check and defeats the response limit on non-standard fetches.
-    throw new Error('Telegram response does not expose a bounded readable body.');
-  }
-
-  const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_TELEGRAM_RESPONSE_BYTES) {
-        await reader.cancel().catch(() => {});
-        throw new Error('Telegram response exceeds the allowed size.');
-      }
-      chunks.push(Buffer.from(value));
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  try {
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, total));
-    return JSON.parse(text);
-  } catch {
-    throw new Error('Telegram returned invalid UTF-8 JSON.');
-  }
-}
 
 export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = globalThis.fetch, timeoutSeconds = 25 } = {}) {
   if (typeof botToken !== 'string' || !botToken.trim()) throw new TypeError('Telegram bot token is required.');
@@ -74,7 +38,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
 
       const response = await fetchImpl(url, { method: 'GET', signal });
       if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
-      const payload = await readTelegramJson(response);
+      const payload = await readBoundedTelegramJson(response);
       if (!payload?.ok || !Array.isArray(payload.result)) throw new Error('Telegram returned an invalid getUpdates response.');
       if (payload.result.length > 1000) throw new Error('Telegram returned too many updates in one batch.');
 

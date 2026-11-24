@@ -46,7 +46,7 @@ function validateInboxCommand(item) {
   };
 }
 
-export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
+export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply } = {}) {
   if (!inbox || typeof inbox.nextPending !== 'function'
     || typeof inbox.markProcessing !== 'function'
     || typeof inbox.markPending !== 'function'
@@ -55,8 +55,25 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
     throw new TypeError('A compatible durable Telegram inbox is required.');
   }
   if (typeof applyUpdate !== 'function') throw new TypeError('A canonical domain update adapter is required.');
+  if (deliverReply !== undefined && typeof deliverReply !== 'function') {
+    throw new TypeError('deliverReply must be a function when supplied.');
+  }
 
   let active = false;
+
+  async function sendReply(item, text) {
+    if (!text || typeof deliverReply !== 'function') return;
+    if (typeof text !== 'string' || !text.trim() || text.length > 3500) {
+      const error = new Error('Telegram reply was rejected before sending.');
+      error.code = 'INVALID_TELEGRAM_REPLY';
+      throw error;
+    }
+    await deliverReply({
+      chatId: item.userId,
+      text,
+      replyToMessageId: item.validatedUpdate?.message?.message_id,
+    });
+  }
 
   async function processOne() {
     if (active) throw new Error('Telegram inbox processing is already in progress.');
@@ -90,14 +107,26 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate } = {}) {
           error.code = 'MISSING_CANONICAL_OPERATION_ID';
           throw error;
         }
+        // Reply before completion. A crash after a successful reply retries the
+        // same idempotent command and may send the reply once more; a failed
+        // reply must not acknowledge the inbox item.
+        await sendReply(item, typeof result?.reply === 'string' ? result.reply : '');
         const completed = await inbox.markCompleted(item.id, normalizedOperationId);
         if (completed === false) {
           throw new Error('Telegram inbox item could not be marked completed; retry requires an idempotent domain adapter.');
         }
-        return { processed: true, itemId: item.id, operationId };
+        return { processed: true, itemId: item.id, operationId: normalizedOperationId };
       } catch (error) {
         if (error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
           if (error?.permanent === true) {
+            if (typeof error.reply === 'string' && error.reply.trim()) {
+              try {
+                await sendReply(item, error.reply);
+              } catch (replyError) {
+                await inbox.markPending(item.id, 'Canonical adapter failed; retry scheduled.');
+                throw replyError;
+              }
+            }
             // Unsupported or malformed user commands are terminal; retrying them
             // forever would block every later item in the ordered inbox.
             await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.');

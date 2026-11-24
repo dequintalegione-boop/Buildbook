@@ -5,11 +5,32 @@ const COMMANDS = new Map([
   ['/расход', 'e'],
   ['/expense', 'e'],
 ]);
+const STATS_COMMANDS = new Set(['/статистика', '/stats', '/месяц']);
+const HELP_COMMANDS = new Set(['/help', '/start', '/справка', '/старт']);
+
+export const TELEGRAM_HELP_TEXT = [
+  'Команды Buildbook:',
+  '/доход 1250 Описание',
+  '/расход 450 Описание',
+  '/статистика — доходы и расходы за текущий месяц',
+  '/статистика 2026-11 — за выбранный месяц',
+  '/help — эта справка',
+].join('\n');
 
 function commandError(message, code = 'INVALID_TELEGRAM_FINANCE_COMMAND') {
   const error = new TypeError(message);
   error.code = code;
+  error.reply = message;
   return error;
+}
+
+function splitCommand(text) {
+  if (typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('/')) return null;
+  const match = /^\/([^\s@]{1,64})(?:@[A-Za-z0-9_]{1,64})?(?:\s+([\s\S]*))?$/u.exec(trimmed);
+  if (!match) return null;
+  return { name: '/' + match[1].toLowerCase(), rest: String(match[2] || '').trim() };
 }
 
 function parseAmount(raw) {
@@ -21,21 +42,40 @@ function parseAmount(raw) {
   return cents / 100;
 }
 
+/**
+ * Classify a private message. Non-commands return null and must be ignored
+ * without a reply. Unknown slash commands and bad finance syntax throw a
+ * permanent error whose reply is safe to send to the allowlisted user.
+ */
+export function classifyTelegramCommand(text) {
+  const split = splitCommand(text);
+  if (!split) return null;
+  if (HELP_COMMANDS.has(split.name)) return Object.freeze({ type: 'help' });
+  if (STATS_COMMANDS.has(split.name)) {
+    if (!split.rest) return Object.freeze({ type: 'stats', month: null });
+    if (!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(split.rest)) {
+      throw commandError('Месяц указывайте как ГГГГ-ММ, например /статистика 2026-11.');
+    }
+    const year = Number(split.rest.slice(0, 4));
+    if (year < 2000 || year > 2100) throw commandError('Месяц указывайте как ГГГГ-ММ, например /статистика 2026-11.');
+    return Object.freeze({ type: 'stats', month: split.rest });
+  }
+  if (COMMANDS.has(split.name)) return Object.freeze({ type: 'finance' });
+  throw commandError('Неизвестная команда. Отправьте /help, чтобы увидеть список.');
+}
+
 /** Parse explicit private-chat commands; unrelated text returns null. */
 export function parseTelegramFinanceCommand(text) {
-  if (typeof text !== 'string') return null;
-  const trimmed = text.trim();
-  if (!trimmed.startsWith('/')) return null;
-  const match = /^(\/[^\s@]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
-  if (!match) return null;
-  const kind = COMMANDS.get(match[1].toLowerCase());
+  const split = splitCommand(text);
+  if (!split) return null;
+  const kind = COMMANDS.get(split.name);
   if (!kind) return null;
-  const payload = String(match[2] || '').trim();
-  const split = /^([^\s]+)\s+([\s\S]+)$/.exec(payload);
-  if (!split) throw commandError('Формат: /доход 1250 Описание или /расход 450 Описание.');
-  const amount = parseAmount(split[1]);
+  const payload = split.rest;
+  const parts = /^([^\s]+)\s+([\s\S]+)$/.exec(payload);
+  if (!parts) throw commandError('Формат: /доход 1250 Описание или /расход 450 Описание.');
+  const amount = parseAmount(parts[1]);
   if (amount === null) throw commandError('Сумма должна быть положительным числом, максимум 2 знака после запятой.');
-  const desc = split[2].trim();
+  const desc = parts[2].trim();
   if (!desc || desc.length > 300) throw commandError('Описание должно содержать от 1 до 300 символов.');
   return Object.freeze({ kind, amount, desc });
 }
@@ -95,6 +135,7 @@ export function buildTelegramFinanceTransaction(command, { now = new Date(), pro
   };
   const accountId = state ? resolveAccount(state) : 'a1';
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  const iso = now.toISOString();
   return {
     kind: command.kind,
     date,
@@ -104,6 +145,10 @@ export function buildTelegramFinanceTransaction(command, { now = new Date(), pro
     grp: category.grp,
     acc: accountId,
     note: 'Добавлено через Telegram',
+    createdAt: iso,
+    updatedAt: iso,
+    deletedAt: null,
+    schemaVersion: 5,
   };
 }
 /** Build the finance transaction directly from the sanitized Telegram envelope. */
