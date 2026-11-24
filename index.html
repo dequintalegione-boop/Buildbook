@@ -1730,8 +1730,7 @@ function calendarDay(date){
  // Keep the detail panel available even if a stale render path omits it.
  const main=document.querySelector('#m');
  if(main&&!main.querySelector('.calendar-day-details')){
-  const shell=main.querySelector('.calendar-shell');
-  if(shell)shell.insertAdjacentHTML('afterend',calendarDayPanel(date));
+  main.insertAdjacentHTML('beforeend',calendarDayPanel(date));
  }
 }
 function calendarDayPanel(date){
