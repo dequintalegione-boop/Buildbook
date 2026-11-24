@@ -13,9 +13,14 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
   let active = false;
   let recovered = false;
 
-  async function drainInbox() {
+  function throwIfAborted(signal) {
+    if (signal?.aborted) throw signal.reason || new Error('Telegram runtime was aborted.');
+  }
+
+  async function drainInbox(signal) {
     let processed = 0;
     while (true) {
+      throwIfAborted(signal);
       const result = await processor.processOne();
       if (!result.processed) break;
       processed += 1;
@@ -27,14 +32,16 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
     if (active) throw new Error('Telegram runtime cycle is already in progress.');
     active = true;
     try {
+      throwIfAborted(options.signal);
       if (!recovered) {
         await inbox.recoverInterrupted();
+        throwIfAborted(options.signal);
         recovered = true;
       }
 
       // Drain durable work before network I/O: a Telegram outage must not block
       // updates already accepted into the local inbox.
-      let processed = await drainInbox();
+      let processed = await drainInbox(options.signal);
 
       // Free acknowledged terminal rows before receiving more updates. This
       // prevents a full inbox from blocking the very poll cycle that would
@@ -47,8 +54,10 @@ export function createTelegramRuntime({ inbox, poller, processor } = {}) {
         }
       }
 
+      throwIfAborted(options.signal);
       const polling = await poller.pollOnce(options);
-      processed += await drainInbox();
+      throwIfAborted(options.signal);
+      processed += await drainInbox(options.signal);
 
       // pollOnce returns only after the offset file has been durably committed.
       // Compact newly terminal rows using that confirmed checkpoint as well.
