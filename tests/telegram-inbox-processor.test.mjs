@@ -332,7 +332,9 @@ test('retries a failed Telegram reply without duplicating the committed finance 
   let replyAttempts = 0;
   const processor = createTelegramInboxProcessor({
     inbox,
-    applyUpdate,
+    async applyUpdate(input) {
+      return { ...(await applyUpdate(input)), reply: 'Доход записан' };
+    },
     async deliverReply() {
       replyAttempts++;
       if (replyAttempts === 1) throw new Error('Telegram transport unavailable');
