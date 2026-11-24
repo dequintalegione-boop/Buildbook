@@ -25,6 +25,26 @@ test('stop before start is a no-op and does not block later startup', async () =
   await lifecycle.stop('cleanup');
 });
 
+test('signal during synchronous startup triggers service shutdown', async () => {
+  const processRef = new EventEmitter();
+  let stops = 0;
+  const host = { service: {
+    start() {
+      processRef.emit('SIGTERM');
+      return new Promise(() => {});
+    },
+    async stop() { stops += 1; },
+  } };
+  const lifecycle = installTelegramHostLifecycle({ host, processRef });
+
+  lifecycle.start();
+  await lifecycle.stop('assert-shutdown');
+  assert.equal(stops, 1);
+  assert.equal(lifecycle.running, false);
+  assert.equal(processRef.listenerCount('SIGINT'), 0);
+  assert.equal(processRef.listenerCount('SIGTERM'), 0);
+});
+
 test('lifecycle registers signals before starting and starts only once', () => {
   const { processRef, host, counts } = fixture();
   const lifecycle = installTelegramHostLifecycle({ host, processRef });
