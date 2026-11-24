@@ -213,3 +213,42 @@ test('keeps legacy ledger entries and advances the replay boundary for new write
     { operationId: 'telegram-replay:123:40', duplicate: true },
   );
 });
+
+test('keeps replay checkpoints independent for each bot identity', async () => {
+  const store = createStore();
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async ({ id } = {}) => transaction({ id }),
+  });
+
+  await apply({ update: {}, idempotencyKey: '123:50' });
+  await apply({ update: {}, idempotencyKey: '456:3' });
+  const snapshot = store.snapshot();
+
+  assert.deepEqual(snapshot.profile.telegramOperationCheckpoints, [
+    { botId: '123', updateId: 50 },
+    { botId: '456', updateId: 3 },
+  ]);
+  assert.deepEqual(
+    await apply({ update: {}, idempotencyKey: '456:2' }),
+    { operationId: 'telegram-replay:456:2', duplicate: true },
+  );
+  assert.equal(store.snapshot().profile.state.tx.length, 2);
+});
+
+test('rejects malformed persisted replay checkpoints before writing', async () => {
+  const store = createStore({
+    state: { tx: [] },
+    telegramOperationCheckpoints: [{ botId: '00123', updateId: 8 }],
+  });
+  const apply = createProfileFinanceAdapter({
+    profileStore: store,
+    buildTransaction: async () => transaction(),
+  });
+
+  await assert.rejects(
+    apply({ update: {}, idempotencyKey: '123:9' }),
+    error => error.code === 'INVALID_TELEGRAM_OPERATION_LEDGER',
+  );
+  assert.equal(store.snapshot().revision, 0);
+});
