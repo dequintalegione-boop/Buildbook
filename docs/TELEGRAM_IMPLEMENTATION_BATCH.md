@@ -18,16 +18,16 @@ This checklist tracks the next implementation batch for `feature/telegram-local-
 12. Keep adapter failures generic in durable inbox state and redact sensitive details from logs.
 13. Connect the adapter to the host composition without introducing a second finance ledger.
 14. Add a status endpoint that exposes only bounded, sanitized service state.
-15. Add local UI client support for status and setup, without embedding the bot token in the app bundle.
+15. Add local UI client support for status and setup, without embedding the bot token in the app bundle. **Implemented:** the client supports authenticated status reads and the Telegram tab displays connection, queue, and sanitized service state.
 16. Define safe first-run token provisioning and protected local secret storage.
-17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling. Design contract: [TELEGRAM_PROFILE_MIGRATION.md](./TELEGRAM_PROFILE_MIGRATION.md). The authenticated host import endpoint is implemented; browser export/backup UI, preview/confirmation, read-back verification, and storage-mode switching remain.
+17. Add an explicit migration/import path from browser IndexedDB to the shared canonical profile, with backup and conflict handling. Design contract: [TELEGRAM_PROFILE_MIGRATION.md](./TELEGRAM_PROFILE_MIGRATION.md). **Implemented in the browser UI:** transfer-envelope validation, backup warning, empty-target check, preview/confirmation, authenticated import, read-back checksum verification, and explicit storage-mode switch. Remaining work is to exercise the full migration and recovery path.
 18. Keep browser-only and standalone modes functional when the local host is not configured.
 19. Add documented Windows launch/stop and recovery instructions; defer OS autostart until the lifecycle is verified.
 20. Perform a code review of the full data path, then run the existing and new tests only after the user authorizes testing.
 
 ## Blocking architecture decision
 
-The current browser app stores its profile in IndexedDB, while the Telegram host uses a separate file-backed profile store. The host must not write financial operations to a second ledger. The canonical finance adapter is implemented against the host profile store. The remaining blocker is ensuring the browser UI is switched to that same canonical storage boundary through the deliberate, recoverable migration path before enabling Telegram writes.
+The current browser app stores its profile in IndexedDB, while the Telegram host uses a separate file-backed profile store. The host must not write financial operations to a second ledger. The canonical finance adapter is implemented against the host profile store. The remaining release gate is to run and review the full migration/recovery path on a real local host and verify the browser and Telegram writer observe the same profile revision. Do not enable live financial writes until that end-to-end check passes.
 
 ## Current status
 
@@ -43,9 +43,9 @@ Implemented in code:
 - The UI-side profile repository adapter preserves host-owned profile metadata during saves and checks the expected revision first, preventing routine UI saves from silently dropping Telegram replay checkpoints or legacy idempotency records.
 
 Still blocked / incomplete:
-- The combined host shares one profile store between API and Telegram, but the UI still starts with browser IndexedDB. The repository adapter is not yet wired into the app startup path; do not treat the UI and host as one live ledger until that switch/migration is implemented and exercised.
+- The combined host shares one profile store between API and Telegram. The browser can now import into the host, verify the read-back checksum, and explicitly select canonical storage; normal canonical startup uses the host-backed repository and refuses a silent IndexedDB fallback. The remaining blocker is end-to-end verification of migration, reconnect, conflict, and recovery behavior before enabling live financial writes.
 - Category/group and account selection now resolve against the canonical profile, including hidden-category filtering and account IDs. User-configurable default choices and explicit account selection in command syntax remain.
-- UI setup, safe token provisioning, browser export/backup UI, import preview/confirmation, post-import verification, storage-mode switching, and service installation/autostart remain. The browser export-envelope utility at `client/profile-export.js` is loaded and exposed in Settings as **Export for local host**; it downloads the transfer envelope but does not import it into the host. The authenticated import endpoint is implemented but not yet wired to UI. Status is available from the authenticated local API but not yet displayed in the app.
+- Safe first-run token provisioning/protected secret storage and service installation/autostart remain. The UI includes local-host connection, service/queue status, profile import with preview and confirmation, read-back verification, and an explicit canonical-storage switch. The export-envelope utility is available in Settings as **Export for local host**; it creates a transfer file, while the separate ordinary backup remains available.
 - The host/API/Telegram unit suite is now green in GitHub Actions: 181/181 tests passed on 2026-11-24. Browser checks still report eight existing application regressions across both `index.html` and the standalone build; these are tracked separately from the Telegram host unit suite.
 
 ### Current command format
