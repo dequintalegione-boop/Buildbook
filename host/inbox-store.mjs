@@ -57,7 +57,8 @@ export function createInboxStore(filePath) {
       || !Number.isSafeInteger(item.updateId) || item.updateId < 0 || item.updateId >= Number.MAX_SAFE_INTEGER
       || item.key !== botId + ':' + String(item.updateId)
       || typeof userId !== 'string' || !/^\d{1,16}$/.test(userId)
-      || String(Number(userId)) !== userId || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0
+      || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0
+      || String(Number(userId)) !== userId
       || !['pending', 'processing', 'completed', 'rejected'].includes(item.status)
       || !Number.isSafeInteger(item.attempts) || item.attempts < 0
       || typeof item.receivedAt !== 'string' || !Number.isFinite(Date.parse(item.receivedAt))
