@@ -6,7 +6,7 @@ import { readBoundedTelegramJson } from './telegram-response.mjs';
  * Supply a secret bot token from host-only configuration; never from the UI.
  */
 
-export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = globalThis.fetch, timeoutSeconds = 25 } = {}) {
+export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = globalThis.fetch, timeoutSeconds = 25, requestTimeoutMs = Math.max(15_000, (timeoutSeconds + 10) * 1000) } = {}) {
   if (typeof botToken !== 'string' || !botToken.trim()) throw new TypeError('Telegram bot token is required.');
   if (!gate || typeof gate.accept !== 'function') throw new TypeError('A Telegram update gate is required.');
   if (!offsetStore || typeof offsetStore.read !== 'function' || typeof offsetStore.write !== 'function') {
@@ -15,6 +15,9 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
   if (typeof fetchImpl !== 'function') throw new TypeError('A fetch implementation is required.');
   if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 0 || timeoutSeconds > 50) {
     throw new TypeError('Telegram long-poll timeout must be between 0 and 50 seconds.');
+  }
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > 120_000) {
+    throw new TypeError('Telegram request timeout must be an integer between 1 and 120000 milliseconds.');
   }
 
   let running = false;
@@ -41,9 +44,34 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
       url.searchParams.set('allowed_updates', JSON.stringify(['message']));
       if (offset !== null) url.searchParams.set('offset', String(offset));
 
-      const response = await fetchImpl(url, { method: 'GET', signal });
-      if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
-      const payload = await readBoundedTelegramJson(response);
+      const controller = new AbortController();
+      let timedOut = false;
+      const abortFromCaller = () => controller.abort(signal.reason || new Error('Telegram polling was aborted.'));
+      if (signal?.aborted) abortFromCaller();
+      else signal?.addEventListener('abort', abortFromCaller, { once: true });
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort(new Error('Telegram request timed out.'));
+      }, requestTimeoutMs);
+
+      let response;
+      let payload;
+      try {
+        response = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+        if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
+        payload = await readBoundedTelegramJson(response);
+      } catch (error) {
+        if (timedOut) {
+          const timeoutError = new Error('Telegram getUpdates request timed out.');
+          timeoutError.code = 'TELEGRAM_POLL_TIMEOUT';
+          throw timeoutError;
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener('abort', abortFromCaller);
+      }
+
       if (!payload?.ok || !Array.isArray(payload.result)) throw new Error('Telegram returned an invalid getUpdates response.');
       if (payload.result.length > 1000) throw new Error('Telegram returned too many updates in one batch.');
 
