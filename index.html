@@ -448,7 +448,10 @@ function markStorageConflict(revision){
  if(remoteStorageRevision<=storageRevision)return;
  if(!storageConflict){
   storageConflict=true;clearTimeout(tm);
-  toast('Профиль изменён в другой вкладке. Сохранение здесь остановлено.');
+  if(STORAGE_MODE==='canonical'){
+   APP_FATAL_ERROR=new Error('Канонический профиль изменён другим клиентом. Запись и дальнейшее редактирование остановлены, чтобы не потерять изменения. Скачайте резервную копию текущего состояния, затем перезагрузите приложение и загрузите актуальный профиль.');
+  }
+  toast('Профиль изменён в другом клиенте. Сохранение остановлено.');
   if(APP_READY)render();
  }
 }
@@ -962,7 +965,7 @@ function undoJournalEntry(index){
  return {ok:true,restored:entry.changes.length};
 }
 const save=()=>{
- if(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR)return;
+ if(APP_FATAL_ERROR)return;
  if(!Number.isSafeInteger(+S.schemaVersion)||+S.schemaVersion<DATA_SCHEMA_VERSION)S.schemaVersion=DATA_SCHEMA_VERSION;
  let cur=JSON.stringify(S);
  if(cur!=last&&!save.skip){
