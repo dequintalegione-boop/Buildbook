@@ -60,7 +60,7 @@ export function createTelegramHostService({
     && (typeof config.defaultAccountId !== 'string'
       || !config.defaultAccountId.trim()
       || config.defaultAccountId.length > 200
-      || /[\\u0000-\\u001f\\u007f]/.test(config.defaultAccountId))) {
+      || /[\u0000-\u001f\u007f]/.test(config.defaultAccountId))) {
     throw new TypeError('Telegram default account ID is invalid.');
   }
 
