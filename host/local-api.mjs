@@ -179,13 +179,19 @@ function requestHostAllowed(request) {
 
 function originAllowed(request) {
   const origin = request.headers.origin;
+  // Requests without Origin are retained for non-browser clients. Browser
+  // requests must match the exact local API origin, including its port.
   if (!origin) return true;
   try {
-    const parsed = new URL(origin);
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
-      && !parsed.username && !parsed.password
-      && parsed.pathname === '/' && !parsed.search && !parsed.hash
-      && ALLOWED_HOSTS.has(parsed.hostname.toLowerCase());
+    const parsedOrigin = new URL(origin);
+    const rawHost = String(request.headers.host || '');
+    const requestUrl = new URL('http://' + rawHost);
+    return parsedOrigin.protocol === 'http:'
+      && !parsedOrigin.username && !parsedOrigin.password
+      && parsedOrigin.pathname === '/' && !parsedOrigin.search && !parsedOrigin.hash
+      && ALLOWED_HOSTS.has(parsedOrigin.hostname.toLowerCase())
+      && requestUrl.pathname === '/'
+      && parsedOrigin.host.toLowerCase() === requestUrl.host.toLowerCase();
   } catch {
     return false;
   }
