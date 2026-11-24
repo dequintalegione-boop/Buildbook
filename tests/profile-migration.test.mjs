@@ -95,3 +95,57 @@ test('keeps the source untouched if the target revision changes before import', 
   assert.deepEqual(sourceProfile, { state: { tx: [] }, logs: [], photos: {} });
   data.client.importProfile = originalImport;
 });
+
+
+test('rejects 20 malformed migration inputs and target states before unsafe import', async t => {
+  const validSource = { state: { tx: [] }, logs: [], photos: {} };
+  const validEnvelope = payload => ({
+    format: 'buildbook-profile-export',
+    version: 1,
+    sourceSchemaVersion: 5,
+    exportedAt: '2026-11-24T00:00:00.000Z',
+    payload,
+    sha256: 'a'.repeat(64),
+  });
+  const cases = [
+    ['missing client', { client: null }],
+    ['missing profile reader', { client: { importProfile: async () => 1 } }],
+    ['missing profile importer', { client: { readProfile: async () => ({ revision: 0, profile: null }) } }],
+    ['missing envelope factory', { createEnvelope: null }],
+    ['null source', { sourceProfile: null }],
+    ['array source', { sourceProfile: [] }],
+    ['missing source state', { sourceProfile: { logs: [], photos: {} } }],
+    ['array source state', { sourceProfile: { state: [], logs: [], photos: {} } }],
+    ['missing source logs', { sourceProfile: { state: {}, photos: {} } }],
+    ['object source logs', { sourceProfile: { state: {}, logs: {}, photos: {} } }],
+    ['missing source photos', { sourceProfile: { state: {}, logs: [] } }],
+    ['array source photos', { sourceProfile: { state: {}, logs: [], photos: [] } }],
+    ['negative target revision', { target: { revision: -1, profile: null } }],
+    ['fractional target revision', { target: { revision: 0.5, profile: null } }],
+    ['missing target revision', { target: { profile: null } }],
+    ['array target profile', { target: { revision: 0, profile: [] } }],
+    ['target profile already populated', { target: { revision: 2, profile: { state: {} } } }],
+    ['null envelope', { envelope: null }],
+    ['array envelope payload', { envelope: { payload: [] } }],
+    ['payload differs from source snapshot', { envelope: { payload: { state: {}, logs: [], photos: { altered: true } } } }],
+  ];
+
+  for (const [name, options] of cases) {
+    await t.test(name, async () => {
+      const data = fixture(validSource);
+      let importCalls = 0;
+      data.client.importProfile = async () => { importCalls += 1; return 1; };
+      if (options.target) data.client.readProfile = async () => options.target;
+      if (options.client !== undefined) data.client = options.client;
+      if (options.createEnvelope !== undefined) data.createEnvelope = options.createEnvelope;
+      if (options.sourceProfile !== undefined) data.sourceProfile = options.sourceProfile;
+      if (options.envelope !== undefined) data.createEnvelope = async payload => ({
+        ...validEnvelope(payload),
+        ...options.envelope,
+      });
+
+      await assert.rejects(migrateProfileToLocalApi(data));
+      assert.equal(importCalls, 0, 'unsafe input must not reach the import call');
+    });
+  }
+});
