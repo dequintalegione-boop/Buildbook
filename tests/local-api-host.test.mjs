@@ -10,7 +10,6 @@ const token = 'local-api-host-test-token-0123456789abcdef';
 
 async function fixture(t, extra = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
   const host = createLocalApiHost({
     env: {
       BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
@@ -20,6 +19,7 @@ async function fixture(t, extra = {}) {
     },
   });
   t.after(() => host.stop());
+  t.after(() => rm(dir, { recursive: true, force: true }));
   return host;
 }
 
@@ -31,7 +31,6 @@ test('releases the profile lock when API bind fails and permits retry', async (t
   });
   const port = blocker.address().port;
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-bind-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
   const host = createLocalApiHost({
     env: {
       BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
@@ -40,6 +39,7 @@ test('releases the profile lock when API bind fails and permits retry', async (t
     },
   });
   t.after(() => host.stop());
+  t.after(() => rm(dir, { recursive: true, force: true }));
   await assert.rejects(host.start(), error => error.code === 'EADDRINUSE');
   await new Promise(resolve => blocker.close(resolve));
   const address = await host.start();
@@ -48,7 +48,6 @@ test('releases the profile lock when API bind fails and permits retry', async (t
 
 test('exclusive profile lock prevents a second API host from sharing the canonical file', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-host-lock-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
   const env = {
     BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
     BUILDBOOK_LOCAL_API_TOKEN: token,
@@ -58,6 +57,7 @@ test('exclusive profile lock prevents a second API host from sharing the canonic
   const second = createLocalApiHost({ env });
   t.after(() => first.stop());
   t.after(() => second.stop());
+  t.after(() => rm(dir, { recursive: true, force: true }));
   await first.start();
   await assert.rejects(second.start(), error => error.code === 'BUILDBOOK_INSTANCE_LOCKED');
   await first.stop();
