@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, lstat, open, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, lstat, open } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
