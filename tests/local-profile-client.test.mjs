@@ -309,3 +309,58 @@ test('coalesces 20 concurrent connect and close bursts into one session transiti
     });
   }
 });
+
+
+test('allows safe retry after 20 failed session transition responses', async t => {
+  const variants = [
+    ['bootstrap', 400], ['bootstrap', 401], ['bootstrap', 403], ['bootstrap', 408], ['bootstrap', 429],
+    ['bootstrap', 500], ['bootstrap', 502], ['bootstrap', 503], ['bootstrap', 504], ['bootstrap', 599],
+    ['close', 400], ['close', 401], ['close', 403], ['close', 408], ['close', 429],
+    ['close', 500], ['close', 502], ['close', 503], ['close', 504], ['close', 599],
+  ];
+  for (const [operation, status] of variants) {
+    await t.test(operation + ' HTTP ' + status, async () => {
+      let failed = false;
+      let bootstrapCalls = 0;
+      let closeCalls = 0;
+      const client = createLocalProfileClient({
+        accessToken: token,
+        fetchImpl: fakeFetch(async url => {
+          if (url.endsWith('/api/session/bootstrap')) {
+            bootstrapCalls += 1;
+            if (operation === 'bootstrap' && !failed) {
+              failed = true;
+              return { status, body: { error: 'temporary failure' } };
+            }
+            return { status: 200, body: { ok: true, expiresIn: 12 * 60 * 60 * 1000 } };
+          }
+          if (url.endsWith('/api/session/close')) {
+            closeCalls += 1;
+            if (operation === 'close' && !failed) {
+              failed = true;
+              return { status, body: { error: 'temporary failure' } };
+            }
+            return { status: 200, body: { ok: true } };
+          }
+          throw new Error('unexpected request');
+        }),
+      });
+
+      if (operation === 'close') await client.connectSession();
+      await assert.rejects(
+        operation === 'bootstrap' ? client.connectSession() : client.closeSession(),
+        error => error.status === status,
+      );
+      if (operation === 'bootstrap') {
+        assert.equal(client.connected, false);
+        assert.equal(await client.connectSession(), true);
+        assert.equal(bootstrapCalls, 2);
+      } else {
+        assert.equal(client.connected, true, 'failed close must preserve local connected state');
+        assert.equal(await client.closeSession(), true);
+        assert.equal(closeCalls, 2);
+        assert.equal(client.connected, false);
+      }
+    });
+  }
+});
