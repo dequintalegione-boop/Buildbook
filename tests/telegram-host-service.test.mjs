@@ -56,7 +56,21 @@ test('host factory rejects overlapping storage and lock paths', () => {
     assert.throws(() => createTelegramHostService({
       config: cfg,
       async applyUpdate() { return { operationId: 'op-1' }; },
-    }), /must be distinct/);
+    }), /must not overlap/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('host factory rejects nested inbox and lock paths even when config is hand-built', () => {
+  const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
+  try {
+    const cfg = config(root);
+    cfg.inboxPath = join(cfg.instanceLockPath, 'inbox.json');
+    assert.throws(() => createTelegramHostService({
+      config: cfg,
+      async applyUpdate() { return { operationId: 'op-1' }; },
+    }), /must not overlap/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
