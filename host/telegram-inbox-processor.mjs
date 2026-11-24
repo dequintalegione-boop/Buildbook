@@ -11,13 +11,14 @@ function validateInboxCommand(item) {
   const botId = String(item?.botId ?? '');
   const key = String(item?.key ?? '');
   if (!/^\d{1,16}$/.test(userId)
+    || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0
     || String(Number(userId)) !== userId
     || !/^\d{1,16}$/.test(botId)
     || Number(botId) <= 0 || !Number.isSafeInteger(Number(botId))
     || String(Number(botId)) !== botId
     || !/^\d{1,16}:\d+$/.test(key)
     || key !== botId + ':' + String(item?.updateId)
-    || !Number.isSafeInteger(item?.updateId) || item.updateId < 0
+    || !Number.isSafeInteger(item?.updateId) || item.updateId < 0 || item.updateId >= Number.MAX_SAFE_INTEGER
     || update?.update_id !== item.updateId
     || !message
     || !Number.isSafeInteger(message.message_id)
