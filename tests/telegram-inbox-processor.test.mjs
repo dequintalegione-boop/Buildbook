@@ -275,3 +275,22 @@ test('does not silently accept a failed retry transition', async () => {
   await assert.rejects(processor.processOne(), error => error.code === 'TELEGRAM_INBOX_TRANSITION_FAILED');
   assert.equal(inbox.state.status, 'processing');
 });
+
+test('terminal silent command rejection is acknowledged without sending a Telegram reply', async () => {
+  const inbox = makeInbox(sample);
+  let replyCalls = 0;
+  const ignored = new Error('Telegram message is not a command.');
+  ignored.code = 'IGNORED_TELEGRAM_TEXT';
+  ignored.permanent = true;
+  ignored.reply = '';
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { throw ignored; },
+    async deliverReply() { replyCalls += 1; },
+  });
+
+  await assert.rejects(processor.processOne(), error => error.code === 'IGNORED_TELEGRAM_TEXT');
+  assert.equal(replyCalls, 0);
+  assert.equal(inbox.state.status, 'rejected');
+  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
+});
