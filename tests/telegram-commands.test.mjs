@@ -189,3 +189,18 @@ test('processor delivers the reply before completion and retries when delivery f
   assert.deepEqual(state.calls, ['processing', 'reply:1001', 'pending', 'processing', 'reply:1001', 'completed']);
   assert.equal(state.operationId, 'stats:123456:44');
 });
+
+test('ordinary text is rejected silently without a help reply', async () => {
+  const store = makeStore(profile);
+  const apply = createTelegramCommandAdapter({ profileStore: store });
+  await assert.rejects(
+    apply({ update: { message: { text: 'привет' } }, idempotencyKey: '123456:plain' }),
+    error => {
+      assert.equal(error.code, 'IGNORED_TELEGRAM_TEXT');
+      assert.equal(error.permanent, true);
+      assert.equal(error.reply, '');
+      return true;
+    },
+  );
+  assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length);
+});
