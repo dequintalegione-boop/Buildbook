@@ -2,6 +2,20 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+$nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+if (-not $nodeCommand) {
+  throw 'Node.js 22 LTS или новее не найден. Установите Node.js 22 LTS и убедитесь, что команда node доступна в PATH.'
+}
+
+$nodeVersion = & $nodeCommand.Source -p "process.versions.node"
+$nodeExitCode = $LASTEXITCODE
+if ($nodeExitCode -ne 0 -or $nodeVersion -notmatch '^v?(\d+)\.') {
+  throw 'Не удалось определить версию Node.js. Проверьте установку Node.js и PATH.'
+}
+if ([int]$Matches[1] -lt 22) {
+  throw "Для локального хоста требуется Node.js 22 LTS или новее. Обнаружена версия $nodeVersion."
+}
+
 $envFile = Join-Path $root '.env'
 if (-not (Test-Path $envFile)) {
   Copy-Item (Join-Path $root '.env.example') $envFile
