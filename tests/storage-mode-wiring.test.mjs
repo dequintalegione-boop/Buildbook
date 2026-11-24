@@ -80,3 +80,27 @@ test('expired canonical sessions can be reconnected without accepting stale in-m
   assert.match(html, /несохранённые изменения этой вкладки не будут перенесены/);
   assert.match(html, /if\(STARTUP_STAGE==='ready'&&!confirm\(/);
 });
+
+
+test('canonical save recovery exposes 20 explicit safety contracts', async t => {
+  await t.test("unknown outcome is classified explicitly", () => assert.match(html, /const unknown=error\.code==='BUILD_BOOK_SAVE_RESULT_UNKNOWN'/));
+  await t.test("unknown outcome warns against blind retry", () => assert.match(html, /Не повторяйте сохранение вслепую/));
+  await t.test("unknown outcome offers a fresh profile read", () => assert.match(html, /загрузите актуальный профиль/));
+  await t.test("unknown outcome preserves backup action", () => assert.match(html, /Скачайте резервную копию текущего состояния/));
+  await t.test("canonical failure remains fatal", () => assert.match(html, /APP_FATAL_ERROR=new Error/));
+  await t.test("fatal canonical state blocks save entry", () => assert.match(html, /if\(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR\)return/));
+  await t.test("canonical errors do not silently fall back", () => assert.match(html, /Автоматического перехода на другое хранилище не будет/));
+  await t.test("backup action is wired to export", () => assert.match(html, /data-a="expzip"/));
+  await t.test("reconnect action remains available", () => assert.match(html, /data-a="tgconnect"/));
+  await t.test("fresh profile reload is gated", () => assert.match(html, /canonicalReconnectReady\?'<button class="btn p" data-a="canonical-reload"/));
+  await t.test("reload warns about lost unsaved edits", () => assert.match(html, /несохранённые изменения этой вкладки не будут перенесены/));
+  await t.test("reload requires backup confirmation", () => assert.match(html, /Перед перезагрузкой скачайте резервную копию текущего состояния/));
+  await t.test("revision conflict remains a separate path", () => assert.match(html, /error\.code==='BUILD_BOOK_STORAGE_CONFLICT'/));
+  await t.test("conflict updates remote revision", () => assert.match(html, /markStorageConflict\(error\.currentRevision\)/));
+  await t.test("conflict clears pending debounce", () => assert.match(html, /storageConflict=true;clearTimeout\(tm\)/));
+  await t.test("conflict blocks queued writes", () => assert.match(html, /if\(storageConflict\|\|\(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR\)\)return false/));
+  await t.test("fatal screen states that in-memory data remains", () => assert.match(html, /Данные в памяти не удаляются/));
+  await t.test("unknown result has its own user-facing copy", () => assert.match(html, /Результат сохранения неизвестен/));
+  await t.test("storage switch remains explicit", () => assert.match(html, /data-a="storage-indexeddb"/));
+  await t.test("canonical storage keeps host recovery guidance", () => assert.match(html, /проверьте локальный хост/));
+});
