@@ -216,8 +216,8 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
 .transaction-filters input[type=month]{width:150px;min-width:135px}
 .transaction-filters input:not([type=month]){width:min(220px,18vw);min-width:150px}
 .transaction-filters .money-totals{margin-left:auto}
-.transaction-history{flex:1 1 0;min-width:0;min-height:150px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
-.transaction-history>.tw{height:100%;overflow:auto;border-radius:11px}
+.transaction-history{flex:1 1 0;min-width:0;min-height:150px;overflow:auto;overscroll-behavior:contain}
+.transaction-history>.tw{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;height:100%;overflow:auto;border-radius:11px}
 .transaction-history table{display:table;width:100%;min-width:max(100%,900px);table-layout:fixed}
 .transaction-history th,.transaction-history td{padding:clamp(5px,.72vh,9px) clamp(8px,.7vw,13px)}
 .transaction-history td:nth-child(3){white-space:normal;min-width:260px;max-width:55vw;line-height:1.35}
@@ -1724,8 +1724,15 @@ const calendarTransactionType=t=>({
 function calendarDay(date){
  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date||''));
  if(!match)return;
+ V.tab='calendar';
  V.calendar={year:Number(match[1]),month:Number(match[2])-1,selectedDate:date};
  render();
+ // Keep the detail panel available even if a stale render path omits it.
+ const main=document.querySelector('#m');
+ if(main&&!main.querySelector('.calendar-day-details')){
+  const shell=main.querySelector('.calendar-shell');
+  if(shell)shell.insertAdjacentHTML('afterend',calendarDayPanel(date));
+ }
 }
 function calendarDayPanel(date){
  const entries=calendarEntries(date),taskEntries=calendarTaskEntries(date),dueTasks=taskEntries.filter(entry=>entry.kind==='due').map(entry=>entry.task),completedTasks=taskEntries.filter(entry=>entry.kind==='completed').map(entry=>entry.task),incoming=entries.reduce((n,x)=>n+(x.delta>0?x.delta:0),0),outgoing=entries.reduce((n,x)=>n+(x.delta<0?-x.delta:0),0),net=incoming-outgoing;
