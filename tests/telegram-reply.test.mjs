@@ -52,9 +52,23 @@ test('reply sender accepts canonical numeric chat IDs and sends the expected pay
     botToken: '123456:secret',
     fetchImpl: async (url, options) => {
       request = { url: String(url), options, body: JSON.parse(options.body) };
+      const bytes = new TextEncoder().encode(JSON.stringify({ ok: true, result: { message_id: 42 } }));
+      let read = false;
       return {
         ok: true,
-        async json() { return { ok: true, result: { message_id: 42 } }; },
+        headers: { get() { return null; } },
+        body: {
+          getReader() {
+            return {
+              async read() {
+                if (read) return { done: true };
+                read = true;
+                return { done: false, value: bytes };
+              },
+              releaseLock() {},
+            };
+          },
+        },
       };
     },
   });
