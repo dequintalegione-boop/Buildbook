@@ -132,6 +132,26 @@ test('rejects a streamed body that crosses the byte limit even without content-l
   await assert.rejects(poller.pollOnce(), /exceeds the allowed size/);
 });
 
+test('rejects malformed UTF-8 even when replacement decoding could produce JSON', async () => {
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 4, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]));
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /invalid UTF-8 JSON/);
+});
+
 test('does not checkpoint when Telegram returns malformed JSON', async () => {
   let checkpointed = false;
   const poller = createTelegramPoller({
