@@ -29,7 +29,7 @@ function splitCommand(text) {
   if (typeof text !== 'string') return null;
   const trimmed = text.trim();
   if (!trimmed.startsWith('/')) return null;
-  const match = /^\/([^\s@]{1,64})(?:@[A-Za-z0-9_]{1,64})?(?:\s+([\s\S]*))?$/u.exec(trimmed);
+  const match = /^\/([^\s@]{1,64})(?:\s+([\s\S]*))?$/u.exec(trimmed);
   if (!match) return null;
   return { name: '/' + match[1].toLowerCase(), rest: String(match[2] || '').trim() };
 }
