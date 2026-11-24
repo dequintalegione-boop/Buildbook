@@ -27,6 +27,12 @@ function makeInbox(item) {
       state.calls.push('rejected');
       return true;
     },
+    async markReplyDelivered(id) {
+      if (id !== state.item.id || state.status !== 'processing') return false;
+      state.item.replyDeliveredAt = new Date().toISOString();
+      state.calls.push('reply-delivered');
+      return true;
+    },
     async markCompleted(id, operationId) {
       if (id !== state.item.id) return false;
       state.status = 'completed';
@@ -100,7 +106,7 @@ test('sends a permanent command error reply only once', async () => {
   assert.equal(replies.length, 1);
   assert.equal(replies[0].text, 'Команда не распознана');
   assert.equal(inbox.state.status, 'rejected');
-  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
+  assert.deepEqual(inbox.state.calls, ['processing', 'reply-delivered', 'rejected']);
 });
 
 test('does not call adapter when inbox is empty or claim fails', async () => {
@@ -197,7 +203,7 @@ test('malformed inbox items are quarantined rather than retried', async () => {
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { assert.fail('adapter must not run'); } });
   await assert.rejects(processor.processOne(), /private-text command validation/);
   assert.equal(inbox.state.status, 'rejected');
-  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
+  assert.deepEqual(inbox.state.calls, ['processing', 'reply-delivered', 'rejected']);
 });
 
 
@@ -294,7 +300,7 @@ test('terminal silent command rejection is acknowledged without sending a Telegr
   assert.deepEqual(result, { processed: true, rejected: true, itemId: 'inbox-1' });
   assert.equal(replyCalls, 0);
   assert.equal(inbox.state.status, 'rejected');
-  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
+  assert.deepEqual(inbox.state.calls, ['processing', 'reply-delivered', 'rejected']);
 });
 
 
@@ -351,4 +357,28 @@ test('retries a failed Telegram reply without duplicating the committed finance 
   assert.equal(profileStore.profile.state.tx.length, 1);
   assert.equal(buildCalls, 1);
   assert.equal(replyAttempts, 2);
+});
+
+
+test('does not resend a reply after delivery was durably recorded but completion failed', async () => {
+  const inbox = makeInbox(sample);
+  let replyCalls = 0;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { return { operationId: 'operation-reply-once', reply: 'Записано' }; },
+    async deliverReply() { replyCalls++; },
+  });
+  const markCompleted = inbox.markCompleted.bind(inbox);
+  let failOnce = true;
+  inbox.markCompleted = async (...args) => {
+    if (failOnce) { failOnce = false; return false; }
+    return markCompleted(...args);
+  };
+
+  await assert.rejects(processor.processOne(), /could not be marked completed/);
+  assert.equal(inbox.state.item.replyDeliveredAt !== undefined, true);
+  assert.equal(inbox.state.status, 'pending');
+  await processor.processOne();
+  assert.equal(replyCalls, 1);
+  assert.equal(inbox.state.status, 'completed');
 });
