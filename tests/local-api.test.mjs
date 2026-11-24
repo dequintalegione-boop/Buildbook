@@ -651,7 +651,7 @@ test('expires HttpOnly sessions and rotates an existing browser session on recon
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
-  const origin = 'http://127.0.0.1:43127';
+  const origin = base;
   const bootstrap = (cookie = '') => fetch(base + '/api/session/bootstrap', {
     method: 'POST',
     headers: {
