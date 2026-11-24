@@ -23,7 +23,7 @@ function config(root) {
 test('host factory refuses to start without canonical domain adapter', () => {
   const root = mkdtempSync(join(tmpdir(), 'buildbook-host-'));
   try {
-    assert.throws(() => createTelegramHostService({ config: config(root) }), /canonical Buildbook finance adapter/);
+    assert.throws(() => createTelegramHostService({ config: config(root) }), /Provide exactly one of applyUpdate or profileStore/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
