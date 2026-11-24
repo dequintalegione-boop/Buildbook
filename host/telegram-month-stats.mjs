@@ -66,9 +66,13 @@ export function formatTelegramMonthSummary(profile, month) {
     count += 1;
   }
 
+  const netCents = incomeCents - expenseCents;
+  if (!Number.isSafeInteger(netCents)) {
+    throw new RangeError('Monthly net total exceeds safe integer cents.');
+  }
   const income = incomeCents / 100;
   const expense = expenseCents / 100;
-  const net = (incomeCents - expenseCents) / 100;
+  const net = netCents / 100;
   const title = MONTHS[monthNumber - 1] + ' ' + year;
   return [
     title.charAt(0).toUpperCase() + title.slice(1),
