@@ -25,7 +25,7 @@ test('rejects missing secrets, malformed allowlists, and unsafe paths', () => {
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: '1001, nope' }), /numeric IDs/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INBOX_PATH: 'data/inbox.json' }), /absolute/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_OFFSET_PATH: valid.BUILDBOOK_TELEGRAM_INBOX_PATH }), /overlap/);
-  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: valid.BUILDBOOK_TELEGRAM_OFFSET_PATH }), /different/);
+  assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: valid.BUILDBOOK_TELEGRAM_OFFSET_PATH }), /overlap/);
   assert.throws(() => readTelegramServiceConfig({ ...valid, BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: 'relative.lock' }), /absolute/);
 });
 
