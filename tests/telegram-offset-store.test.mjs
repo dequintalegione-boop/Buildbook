@@ -42,6 +42,18 @@ test('refuses a symlink as the Telegram offset file', async (t) => {
   await assert.rejects(createTelegramOffsetStore(file).read(), /regular file|special file/i);
 });
 
+test('treats only a missing offset path as an empty checkpoint', async (t) => {
+  const { directory } = await fixture(t);
+  const missing = createTelegramOffsetStore(join(directory, 'not-created', 'offset.json'));
+  assert.equal(await missing.read(), null);
+
+  const directoryPath = join(directory, 'offset-directory');
+  const directoryStore = createTelegramOffsetStore(directoryPath);
+  const { mkdir } = await import('node:fs/promises');
+  await mkdir(directoryPath);
+  await assert.rejects(directoryStore.read(), /regular file|special file/i);
+});
+
 test('refuses corrupt offset checkpoints without resetting to null', async (t) => {
   const { file } = await fixture(t);
   await writeFile(file, '{"version":1,"offset":-1}', 'utf8');
