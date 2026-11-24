@@ -612,6 +612,7 @@ test('rejects malformed Host ports and non-origin Origin values', async (t) => {
     assert.equal(response.status, 403, host);
   }
   for (const origin of [
+    'http://localhost:1',
     'http://localhost/path',
     'http://localhost/?x=1',
     'http://localhost/#fragment',
