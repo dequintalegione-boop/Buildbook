@@ -448,7 +448,20 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         }
         const importedProfile = { state: payload.state, logs: payload.logs, photos: payload.photos };
         const revision = await profileStore.write(importedProfile, body.expectedRevision);
-        send(response, 200, { revision, imported: true });
+        const verified = await profileStore.read();
+        const expectedReadback = createHash('sha256').update(JSON.stringify(importedProfile), 'utf8').digest('hex');
+        const actualReadback = verified.profile && typeof verified.profile === 'object'
+          ? createHash('sha256').update(JSON.stringify(verified.profile), 'utf8').digest('hex')
+          : '';
+        if (verified.revision !== revision || actualReadback !== expectedReadback) {
+          send(response, 500, {
+            error: 'Импорт записан, но контрольное чтение не подтвердило целостность профиля. Не повторяйте импорт; проверьте профиль и создайте резервную копию.',
+            code: 'BUILD_BOOK_IMPORT_READBACK_FAILED',
+            revision,
+          });
+          return;
+        }
+        send(response, 200, { revision, imported: true, verified: true });
       } catch (error) {
         if (error.code === 'BUILD_BOOK_STORAGE_CONFLICT') {
           send(response, 409, {
