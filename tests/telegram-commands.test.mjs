@@ -170,6 +170,7 @@ test('processor delivers the reply before completion and retries when delivery f
     async markPending(_id, message) { state.status = 'pending'; state.error = message; state.calls.push('pending'); return true; },
     async markCompleted(_id, operationId) { state.status = 'completed'; state.operationId = operationId; state.calls.push('completed'); return true; },
     async markRejected() { state.status = 'rejected'; state.calls.push('rejected'); return true; },
+    async markReplyDelivered() { state.replyDeliveredAt = new Date().toISOString(); state.calls.push('reply-delivered'); return true; },
   };
   let deliveries = 0;
   const processor = createTelegramInboxProcessor({
@@ -186,7 +187,7 @@ test('processor delivers the reply before completion and retries when delivery f
   assert.equal(state.error.includes('super-secret-token'), false);
   const done = await processor.processOne();
   assert.equal(done.processed, true);
-  assert.deepEqual(state.calls, ['processing', 'reply:1001', 'pending', 'processing', 'reply:1001', 'completed']);
+  assert.deepEqual(state.calls, ['processing', 'reply:1001', 'pending', 'processing', 'reply:1001', 'reply-delivered', 'completed']);
   assert.equal(state.operationId, 'stats:123456:44');
 });
 
