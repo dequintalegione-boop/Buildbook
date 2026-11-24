@@ -251,3 +251,30 @@ test('compacts only terminal inbox records below the durable Telegram checkpoint
     assert.equal((await reopened.stats()).completed, 1);
   });
 });
+
+
+test('restart recovery preserves the original idempotency key and records a new attempt', async () => {
+  await withStore(async file => {
+    const inbox = createInboxStore(file);
+    const { item } = await inbox.enqueue({
+      botId: '123456',
+      updateId: 18,
+      userId: '1001',
+      update: { update_id: 18, message: { text: 'income 100' } },
+    });
+    assert.equal(await inbox.markProcessing(item.id), true);
+
+    const restarted = createInboxStore(file);
+    assert.equal(await restarted.recoverInterrupted(), 1);
+    const recovered = await restarted.nextPending();
+    assert.equal(recovered.key, '123456:18');
+    assert.equal(recovered.attempts, 1);
+    assert.equal(await restarted.markProcessing(recovered.id), true);
+
+    const afterRetry = createInboxStore(file);
+    const persisted = await afterRetry.nextPending();
+    assert.equal(persisted.key, '123456:18');
+    assert.equal(persisted.attempts, 2);
+    assert.equal(persisted.update.message.text, 'income 100');
+  });
+});
