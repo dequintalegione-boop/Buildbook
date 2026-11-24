@@ -94,8 +94,8 @@ test('profile adapter commits a transaction and its idempotency key together', a
       cat: 'Другое', grp: 'Заработок', acc: 'a1',
     }),
   });
-  const first = await applyUpdate({ update: {}, idempotencyKey: '12345:7' });
-  const duplicate = await applyUpdate({ update: {}, idempotencyKey: '12345:7' });
+  const first = await applyUpdate({ update: { update_id: 7, message: { text: 'test' } }, idempotencyKey: '12345:7' });
+  const duplicate = await applyUpdate({ update: { update_id: 7, message: { text: 'test' } }, idempotencyKey: '12345:7' });
   const snapshot = store.snapshot();
   assert.equal(first.duplicate, false);
   assert.equal(duplicate.duplicate, true);
@@ -137,7 +137,7 @@ test('revision retry detects a concurrently committed idempotency key', async ()
       cat: 'Другое', grp: 'Заработок', acc: 'a1',
     }),
   });
-  const result = await applyUpdate({ update: {}, idempotencyKey: '12345:9' });
+  const result = await applyUpdate({ update: { update_id: 9, message: { text: 'test' } }, idempotencyKey: '12345:9' });
   assert.deepEqual(result, { operationId: 'already-committed', duplicate: true });
   assert.equal(writes, 1);
   assert.equal(profile.state.tx.length, 1);
@@ -159,7 +159,7 @@ test('profile adapter refuses stale revision without writing', async () => {
       cat: 'Еда', grp: 'Общие расходы', acc: 'a1',
     }),
   });
-  await assert.rejects(() => applyUpdate({ update: {}, idempotencyKey: '12345:8' }), {
+  await assert.rejects(() => applyUpdate({ update: { update_id: 8, message: { text: 'test' } }, idempotencyKey: '12345:8' }), {
     code: 'BUILD_BOOK_STORAGE_CONFLICT',
   });
   assert.equal(store.snapshot().profile.state.tx.length, 0);
