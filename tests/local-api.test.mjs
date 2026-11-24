@@ -611,6 +611,16 @@ test('rejects malformed Host ports and non-origin Origin values', async (t) => {
     const response = await requestWithHost(base, host);
     assert.equal(response.status, 403, host);
   }
+  const mismatchedPort = new URL(base);
+  mismatchedPort.port = String(Number(mismatchedPort.port) === 1 ? 2 : 1);
+  const sameHostWrongPort = await fetch(base + '/api/health', {
+    headers: {
+      origin: mismatchedPort.origin,
+      authorization: 'Bearer test-local-api-token-0123456789abcdef',
+    },
+  });
+  assert.equal(sameHostWrongPort.status, 403);
+
   for (const origin of [
     'http://localhost:1',
     'http://localhost/path',
