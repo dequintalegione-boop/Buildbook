@@ -113,7 +113,7 @@ test('help does not write, plain text has no reply, and bad syntax does', async 
   assert.equal(help.reply, TELEGRAM_HELP_TEXT);
   await assert.rejects(
     apply({ update: { update_id: 12, message: { text: 'просто текст' } }, idempotencyKey: '123456:12' }),
-    error => error.permanent === true && error.reply === undefined,
+    error => error.permanent === true && error.reply === '',
   );
   await assert.rejects(
     apply({ update: { update_id: 13, message: { text: '/доход' } }, idempotencyKey: '123456:13' }),
