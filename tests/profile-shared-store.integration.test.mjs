@@ -38,6 +38,7 @@ test('browser repository and Telegram finance adapter share one canonical profil
       accessToken: TOKEN,
       fetchImpl,
     });
+    await client.connectSession();
     const repository = createProfileRepositoryAdapter(client);
     const financeAdapter = createProfileFinanceAdapter({
       profileStore: store,
@@ -71,7 +72,7 @@ test('browser repository and Telegram finance adapter share one canonical profil
     );
 
     const telegramResult = await financeAdapter({
-      update: { message: { text: '/доход 250 Оплата через Telegram' } },
+      update: { update_id: 88, message: { text: '/доход 250 Оплата через Telegram' } },
       idempotencyKey: '12345:88',
     });
 
@@ -83,8 +84,8 @@ test('browser repository and Telegram finance adapter share one canonical profil
       canonical.profile.state.tx.map(item => item.id),
       ['ui-transaction', telegramResult.operationId],
     );
-    assert.deepEqual(canonical.profile.telegramOperations, [
-      { key: '12345:88', operationId: telegramResult.operationId },
+    assert.deepEqual(canonical.profile.telegramOperationCheckpoints, [
+      { botId: '12345', updateId: 88 },
     ]);
 
     // A tab holding revision 2 must not overwrite the Telegram commit at revision 3.
