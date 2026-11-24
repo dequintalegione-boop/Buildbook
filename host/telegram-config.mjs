@@ -59,8 +59,14 @@ export function readTelegramServiceConfig(env = process.env) {
   const retryMaxMs = boundedInteger(env, 'BUILDBOOK_TELEGRAM_RETRY_MAX_MS', 60000, 100, 3600000);
   if (retryMaxMs < retryBaseMs) throw new RangeError('BUILDBOOK_TELEGRAM_RETRY_MAX_MS must be at least the retry base.');
 
+  const defaultAccountId = String(env.BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID ?? '').trim();
+  if (defaultAccountId.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(defaultAccountId)) {
+    throw new TypeError('BUILDBOOK_TELEGRAM_DEFAULT_ACCOUNT_ID must be a valid account ID.');
+  }
+
   return Object.freeze({
     botToken,
+    defaultAccountId: defaultAccountId || null,
     botId: tokenMatch[1],
     allowedUserIds: Object.freeze(allowedUserIds),
     inboxPath: resolve(inboxPath),
