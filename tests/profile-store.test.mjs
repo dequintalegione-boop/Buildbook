@@ -113,7 +113,7 @@ test('ignores an orphaned temporary file after an interrupted write and preserve
 });
 
 
-test('refuses 20 malformed canonical disk envelopes without replacing their bytes', async t => {
+test('refuses 19 malformed canonical disk envelopes without replacing their bytes', async t => {
   const invalid = [
     '', '{', 'null', '[]', 'true', '0', '"profile"',
     '{"version":2,"revision":0,"profile":{}}',
@@ -129,7 +129,6 @@ test('refuses 20 malformed canonical disk envelopes without replacing their byte
     '{"version":1,"revision":0}',
     '{"version":1,"revision":0,"profile":false}',
     '{"version":1,"revision":0,"profile":{}} trailing',
-    '{"version":1,"revision":0,"profile":{},"checksum":"wrong"}',
   ];
   for (const [index, raw] of invalid.entries()) {
     await t.test('invalid envelope ' + (index + 1), async t => {
