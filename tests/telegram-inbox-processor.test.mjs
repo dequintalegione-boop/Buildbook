@@ -251,3 +251,27 @@ test('retries after canonical commit but before inbox completion without duplica
   assert.equal(inbox.state.status, 'completed');
   assert.equal(inbox.state.operationId, profileStore.profile.state.tx[0].id);
 });
+
+
+test('does not silently accept a failed rejection transition', async () => {
+  const inbox = makeInbox(sample);
+  inbox.markRejected = async () => false;
+  const permanent = new Error('Unsupported command');
+  permanent.permanent = true;
+  const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { throw permanent; } });
+
+  await assert.rejects(processor.processOne(), error => error.code === 'TELEGRAM_INBOX_TRANSITION_FAILED');
+  assert.equal(inbox.state.status, 'processing');
+});
+
+test('does not silently accept a failed retry transition', async () => {
+  const inbox = makeInbox(sample);
+  inbox.markPending = async () => false;
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { throw new Error('temporary adapter failure'); },
+  });
+
+  await assert.rejects(processor.processOne(), error => error.code === 'TELEGRAM_INBOX_TRANSITION_FAILED');
+  assert.equal(inbox.state.status, 'processing');
+});
