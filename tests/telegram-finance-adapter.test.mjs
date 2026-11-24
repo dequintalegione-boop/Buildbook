@@ -99,9 +99,10 @@ test('profile adapter commits a transaction and its idempotency key together', a
   const snapshot = store.snapshot();
   assert.equal(first.duplicate, false);
   assert.equal(duplicate.duplicate, true);
-  assert.equal(duplicate.operationId, first.operationId);
+  assert.equal(duplicate.operationId, 'telegram-replay:12345:7');
   assert.equal(snapshot.profile.state.tx.length, 1);
-  assert.equal(snapshot.profile.telegramOperations.length, 1);
+  assert.deepEqual(snapshot.profile.telegramOperationCheckpoints, [{ botId: '12345', updateId: 7 }]);
+  assert.equal(snapshot.profile.telegramOperations, undefined);
 });
 
 
