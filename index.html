@@ -4391,7 +4391,7 @@ document.addEventListener('change',e=>{
    const details='Схема: '+verified.sourceSchemaVersion+'\nРазмер данных: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\n'+formatSummary(sourceCounts);
    if(!confirm('Целевой профиль пуст. Будет создана его первая ревизия.\n\n'+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить импорт?'))return;
    const envelope={format:verified.format,version:verified.version,sourceSchemaVersion:verified.sourceSchemaVersion,exportedAt:verified.exportedAt,payload:verified.payload,sha256:verified.sha256};
-   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope})});
+   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope}),timeoutMs:120_000});
    if(!imported||imported.imported!==true||imported.revision!==target.revision+1)throw new Error('Хост не подтвердил ожидаемый результат импорта.');
    const readback=await localTelegramRequest('/api/profile');
    if(!readback||readback.revision!==imported.revision||!isPlainRecord(readback.profile))throw new Error('Импорт записан, но повторное чтение профиля не подтвердило ревизию. Не переключайте приложение на хост до проверки.');
