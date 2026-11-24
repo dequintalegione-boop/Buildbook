@@ -1,5 +1,8 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
+import { readFile, lstat, realpath } from 'node:fs/promises';
+import { resolve, relative, isAbsolute, dirname, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
 
 const MAX_BODY_BYTES = 34 * 1024 * 1024;
@@ -8,6 +11,67 @@ const ALLOWED_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const SESSION_COOKIE = 'buildbook_local_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_SESSIONS = 8;
+
+const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const STATIC_ASSETS = new Map([
+  ['/', ['index.html', 'text/html; charset=utf-8']],
+  ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/repository.js', ['repository.js', 'text/javascript; charset=utf-8']],
+  ['/client/profile-export.js', ['client/profile-export.js', 'text/javascript; charset=utf-8']],
+  ['/client/profile-import.js', ['client/profile-import.js', 'text/javascript; charset=utf-8']],
+  ['/vendor/xlsx.full.min.js', ['vendor/xlsx.full.min.js', 'text/javascript; charset=utf-8']],
+  ['/manifest.webmanifest', ['manifest.webmanifest', 'application/manifest+json; charset=utf-8']],
+  ['/icon.svg', ['icon.svg', 'image/svg+xml']],
+  ['/sw.js', ['sw.js', 'text/javascript; charset=utf-8']],
+]);
+const STATIC_CSP = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
+async function serveStaticAsset(response, pathname, method, staticRoot) {
+  const asset = STATIC_ASSETS.get(pathname);
+  if (!asset) return false;
+  const [relativePath, contentType] = asset;
+  const root = resolve(staticRoot);
+  const absolutePath = resolve(root, relativePath);
+  const fromRoot = relative(root, absolutePath);
+  if (!fromRoot || fromRoot.startsWith('..') || isAbsolute(fromRoot)) {
+    response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    response.end();
+    return true;
+  }
+  try {
+    const [rootReal, fileReal, details] = await Promise.all([
+      realpath(root),
+      realpath(absolutePath),
+      lstat(absolutePath),
+    ]);
+    const realRelative = relative(rootReal, fileReal);
+    if (details.isSymbolicLink() || !details.isFile() || !realRelative
+      || realRelative.startsWith('..') || isAbsolute(realRelative) || details.size > 12 * 1024 * 1024) {
+      response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      response.end();
+      return true;
+    }
+    const body = method === 'HEAD' ? null : await readFile(fileReal);
+    response.writeHead(200, {
+      'content-type': contentType,
+      'content-length': details.size,
+      'cache-control': pathname === '/sw.js' || pathname === '/' || pathname === '/index.html' ? 'no-cache' : 'no-store',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'no-referrer',
+      'cross-origin-resource-policy': 'same-origin',
+      'cross-origin-opener-policy': 'same-origin',
+      'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+      'content-security-policy': STATIC_CSP,
+    });
+    if (body) response.end(body);
+    else response.end();
+  } catch {
+    response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    response.end();
+  }
+  return true;
+}
 
 function send(response, status, payload) {
   const body = JSON.stringify(payload);
@@ -129,7 +193,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0 } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null } = {}) {
   if (typeof accessToken !== 'string' || Buffer.byteLength(accessToken, 'utf8') < 32
     || Buffer.byteLength(accessToken, 'utf8') > 4096) {
     throw new TypeError('Для локального API требуется секретный токен длиной от 32 до 4096 байт.');
@@ -189,6 +253,25 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       pathname = requestUrl.pathname;
+      // The app host serves a fixed allowlist only; API routes remain session-protected.
+      if (staticRoot && !pathname.startsWith('/api/')) {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          response.writeHead(405, { allow: 'GET, HEAD', 'cache-control': 'no-store' });
+          response.end();
+          return;
+        }
+        const decodedPath = decodeURIComponent(pathname);
+        if (decodedPath !== pathname || pathname.includes('\\\\') || pathname.includes('\0')
+          || pathname.split('/').some(segment => segment.startsWith('.') || segment === '..')) {
+          response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+          response.end();
+          return;
+        }
+        if (await serveStaticAsset(response, pathname, request.method, staticRoot)) return;
+        response.writeHead(404, { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        response.end();
+        return;
+      }
     } catch {
       send(response, 400, { error: 'Некорректный адрес запроса.' });
       return;
