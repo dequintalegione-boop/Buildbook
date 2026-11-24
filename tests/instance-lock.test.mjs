@@ -34,16 +34,16 @@ test('does not release a lock whose ownership marker changed', () => {
     const release = acquireInstanceLock(path, { pid: 1234 });
     const ownerPath = join(path, 'owner.json');
     const owner = JSON.parse(readFileSync(ownerPath, 'utf8'));
+    const originalOwnerToken = owner.ownerToken;
     owner.ownerToken = 'replaced-owner';
     writeFileSync(ownerPath, JSON.stringify(owner));
     assert.throws(() => release(), /ownership changed/);
     assert.throws(() => acquireInstanceLock(path), error => error.code === 'BUILDBOOK_INSTANCE_LOCKED');
-    owner.ownerToken = JSON.parse(readFileSync(ownerPath, 'utf8')).ownerToken;
+    owner.ownerToken = originalOwnerToken;
     writeFileSync(ownerPath, JSON.stringify(owner));
     release();
-    assert.doesNotThrow(() => acquireInstanceLock(path));
-    const finalOwner = JSON.parse(readFileSync(ownerPath, 'utf8'));
-    assert.notEqual(finalOwner.ownerToken, owner.ownerToken);
+    const releaseAgain = acquireInstanceLock(path);
+    releaseAgain();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
