@@ -54,7 +54,7 @@ export function createInboxStore(filePath) {
       || typeof botId !== 'string' || !/^\d{1,16}$/.test(botId)
       || !Number.isSafeInteger(Number(botId)) || Number(botId) <= 0
       || String(Number(botId)) !== botId
-      || !Number.isSafeInteger(item.updateId) || item.updateId < 0
+      || !Number.isSafeInteger(item.updateId) || item.updateId < 0 || item.updateId >= Number.MAX_SAFE_INTEGER
       || item.key !== botId + ':' + String(item.updateId)
       || typeof userId !== 'string' || !/^\d{1,16}$/.test(userId)
       || String(Number(userId)) !== userId || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0
@@ -204,7 +204,8 @@ export function createInboxStore(filePath) {
       if (!/^\d{1,16}$/.test(rawBotId) || !Number.isSafeInteger(Number(rawBotId))
         || Number(rawBotId) <= 0 || String(Number(rawBotId)) !== rawBotId
         || !/^\d+$/.test(rawUpdateId)
-        || !Number.isSafeInteger(numericUpdateId) || numericUpdateId < 0) {
+        || !Number.isSafeInteger(numericUpdateId) || numericUpdateId < 0
+        || numericUpdateId >= Number.MAX_SAFE_INTEGER) {
         throw new TypeError('botId and a safe numeric Telegram updateId are required.');
       }
       if (!/^\d{1,16}$/.test(String(userId ?? '')) || !Number.isSafeInteger(Number(userId)) || Number(userId) <= 0) {
