@@ -77,6 +77,9 @@ export function parseTelegramFinanceCommand(text) {
   if (amount === null) throw commandError('Сумма должна быть положительным числом, максимум 2 знака после запятой.');
   const desc = parts[2].trim();
   if (!desc || desc.length > 300) throw commandError('Описание должно содержать от 1 до 300 символов.');
+  if (/[\\u0000-\\u001f\\u007f]/u.test(desc)) {
+    throw commandError('Описание не должно содержать управляющие символы или переносы строк.');
+  }
   return Object.freeze({ kind, amount, desc });
 }
 
