@@ -75,7 +75,8 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
       if (!sanitizedUpdate) {
         return { accepted: false, reason: 'unsupported_update' };
       }
-      if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0) {
+      if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0
+        || update.update_id >= Number.MAX_SAFE_INTEGER) {
         throw new TypeError('A valid Telegram update_id is required.');
       }
 
