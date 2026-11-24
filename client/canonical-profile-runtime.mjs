@@ -111,12 +111,27 @@ export function createCanonicalProfileRuntime({
         || expectedRevision === Number.MAX_SAFE_INTEGER) {
         throw new TypeError('Для сохранения нужна корректная ревизия профиля.');
       }
-      const result = await request('/api/profile', {
-        method: 'PUT',
-        body: { expectedRevision, profile },
-      });
+      let result;
+      try {
+        result = await request('/api/profile', {
+          method: 'PUT',
+          body: { expectedRevision, profile },
+        });
+      } catch (cause) {
+        if (cause?.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT'
+          || cause?.code === 'BUILD_BOOK_LOCAL_API_UNAVAILABLE'
+          || (Number.isInteger(cause?.status) && cause.status >= 500)) {
+          const error = new Error('Результат сохранения неизвестен: перечитайте профиль перед повторной попыткой.');
+          error.code = 'BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+          error.cause = cause;
+          throw error;
+        }
+        throw cause;
+      }
       if (!result || result.revision !== expectedRevision + 1) {
-        throw new Error('Локальный API вернул некорректную ревизию после сохранения.');
+        const error = new Error('Результат сохранения неизвестен: сервер не подтвердил новую ревизию. Перечитайте профиль перед повторной попыткой.');
+        error.code = 'BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+        throw error;
       }
       return result.revision;
     },
