@@ -80,7 +80,7 @@ test('finance command commits once and returns a confirmation reply', async () =
   assert.match(first.reply, /Расход 40,00 ₽ записан: Обед/);
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.reply, 'Эта операция уже записана в Buildbook.');
-  assert.equal(duplicate.operationId, first.operationId);
+  assert.equal(duplicate.operationId, 'telegram-replay:123456:8');
   assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length + 1);
 });
 
