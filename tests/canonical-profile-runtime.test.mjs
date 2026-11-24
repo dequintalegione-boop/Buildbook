@@ -88,3 +88,22 @@ test('canonical runtime validates timeout and profile writes', async () => {
   await assert.rejects(runtime.client.writeProfile([], 0), TypeError);
   await assert.rejects(runtime.client.writeProfile({}, -1), TypeError);
 });
+
+test('canonical runtime keeps its timeout active until the response body is read', async () => {
+  const runtime = createCanonicalProfileRuntime({
+    requestTimeoutMs: 10,
+    fetchImpl: async (_url, options) => ({
+      ok: true,
+      status: 200,
+      json() {
+        return new Promise((resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+        });
+      },
+    }),
+  });
+  await assert.rejects(
+    runtime.client.readProfile(),
+    error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT',
+  );
+});
