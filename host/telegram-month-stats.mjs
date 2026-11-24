@@ -55,7 +55,10 @@ export function formatTelegramMonthSummary(profile, month) {
     if (typeof item.amount !== 'number' || !Number.isFinite(item.amount) || item.amount <= 0) continue;
     const amount = item.amount;
     const cents = Math.round(amount * 100);
-    if (!Number.isSafeInteger(cents) || cents <= 0) continue;
+    if (!Number.isSafeInteger(cents)) {
+      throw new RangeError('Monthly transaction amount exceeds safe integer cents.');
+    }
+    if (cents <= 0) continue;
     if (item.kind === 'i') {
       if (!Number.isSafeInteger(incomeCents + cents)) throw new RangeError('Monthly income exceeds safe integer cents.');
       incomeCents += cents;
