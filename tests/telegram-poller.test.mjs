@@ -76,7 +76,7 @@ test('rejects invalid configuration and malformed Telegram responses', async () 
     botToken: 'secret',
     gate: { accept: async () => ({ accepted: true }) },
     offsetStore: { read: async () => null, write: async () => {} },
-    fetchImpl: async () => ({ ok: true, async json() { return { ok: false }; } }),
+    fetchImpl: async () => ({ ok: true, headers: { get: () => null }, body: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"ok":false,"result":[]}')); controller.close(); } }) }),
     timeoutSeconds: 0,
   });
   await assert.rejects(bad.pollOnce(), /invalid getUpdates response/);
@@ -170,6 +170,6 @@ test('does not checkpoint when Telegram returns malformed JSON', async () => {
     }),
     timeoutSeconds: 0,
   });
-  await assert.rejects(poller.pollOnce(), /invalid JSON/);
+  await assert.rejects(poller.pollOnce(), /invalid UTF-8 JSON/);
   assert.equal(checkpointed, false);
 });
