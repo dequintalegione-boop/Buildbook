@@ -52,9 +52,8 @@ export function createProfileStore(filePath) {
     if (pathInfo.isSymbolicLink() || !pathInfo.isFile()) {
       throw new Error('Файл профиля должен быть обычным файлом, не ссылкой или специальным объектом.');
     }
-    try {
-      const handle = await open(target, 'r');
-      let text;
+    const handle = await open(target, 'r');
+    let text;
       try {
         const openedInfo = await handle.stat();
         // Compare the opened object to the path checked above. This closes the
@@ -73,10 +72,7 @@ export function createProfileStore(filePath) {
         || parsed.revision < 0 || !parsed.profile || typeof parsed.profile !== 'object' || Array.isArray(parsed.profile)) {
         throw new Error('Файл профиля Buildbook имеет неизвестный или повреждённый формат.');
       }
-      return parsed;
-    } catch (error) {
-      throw error;
-    }
+    return parsed;
   }
 
   async function writeDisk(value) {
