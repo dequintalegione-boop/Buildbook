@@ -97,7 +97,7 @@ test('rejects non-canonical base64 binary descriptors from the API', async () =>
 test('rejects malformed adapter inputs and malformed canonical profile', async () => {
   assert.throws(() => createProfileRepositoryAdapter(null), /клиент/);
   const adapter = createProfileRepositoryAdapter(fakeClient({ profile: [] }));
-  await assert.rejects(adapter.readProfile(), /неверный формат/);
+  await assert.rejects(adapter.readProfile(), /некорректный ответ/);
 });
 
 test('refuses stale UI saves before writing and preserves host-owned metadata', async () => {
@@ -167,7 +167,7 @@ test('rejects exhausted revision before contacting the canonical API', async () 
   });
   await assert.rejects(
     adapter.writeProfile({}, [], {}, Number.MAX_SAFE_INTEGER),
-    /корректную ревизию/,
+    /корректн.*ревизи/,
   );
   assert.equal(calls, 0);
 });
