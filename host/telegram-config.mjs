@@ -43,7 +43,8 @@ export function readTelegramServiceConfig(env = process.env) {
   if (!isAbsolute(inboxPath) || !isAbsolute(offsetPath) || !isAbsolute(instanceLockPath)) {
     throw new TypeError('Telegram inbox, offset and instance-lock paths must be absolute.');
   }
-  const normalizedPaths = [resolve(inboxPath), resolve(offsetPath), resolve(instanceLockPath)].map(path => path.toLowerCase());
+  const normalizedPaths = [resolve(inboxPath), resolve(offsetPath), resolve(instanceLockPath)]
+    .map(path => process.platform === 'win32' ? path.toLowerCase() : path);
   const pathsOverlap = (left, right) => {
     const rel = relative(left, right);
     return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel));
