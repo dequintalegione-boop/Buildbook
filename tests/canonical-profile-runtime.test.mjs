@@ -107,3 +107,23 @@ test('canonical runtime keeps its timeout active until the response body is read
     error => error.code === 'BUILD_BOOK_LOCAL_API_TIMEOUT',
   );
 });
+
+
+test('classifies 20 uncertain save responses and requires a fresh profile read', async t => {
+  const cases = [
+    ...[500, 501, 502, 503, 504, 505, 507, 599].map(status => ({ label: 'server error ' + status, status, payload: { error: 'commit response interrupted' } })),
+    ...[null, {}, { revision: 0 }, { revision: -1 }, { revision: 1.5 }, { revision: Number.MAX_SAFE_INTEGER },
+      { revision: '1' }, { revision: 2 }, { revision: 1, extra: true },
+      { revision: undefined }, { revision: null }, { revision: [] }].map((payload, index) => ({ label: 'invalid success ' + (index + 1), status: 200, payload })),
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.label, async () => {
+      const runtime = createCanonicalProfileRuntime({
+        fetchImpl: async () => jsonResponse(scenario.payload, scenario.status),
+      });
+      await assert.rejects(runtime.client.writeProfile({ marker: true }, 0), error =>
+        error.code === 'BUILD_BOOK_SAVE_RESULT_UNKNOWN'
+        && /перечитайте профиль/.test(error.message));
+    });
+  }
+});
