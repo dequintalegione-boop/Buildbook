@@ -25,7 +25,7 @@ test('canonical startup verifies the session and refuses an empty profile withou
 });
 
 test('canonical mode is selected only after verified import and explicit user confirmation', () => {
-  const importAt = html.indexOf('const actual=await verifyProfileExport');
+  const importAt = html.indexOf('const actual=await window.BuildbookProfileExport.createEnvelope');
   const switchAt = html.indexOf("localStorage.setItem(STORAGE_MODE_KEY,'canonical')");
   assert.ok(importAt >= 0 && switchAt > importAt);
   const beforeSwitch = html.slice(importAt, switchAt);
