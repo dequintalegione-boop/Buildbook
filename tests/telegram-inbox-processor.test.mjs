@@ -203,7 +203,7 @@ test('malformed inbox items are quarantined rather than retried', async () => {
   const processor = createTelegramInboxProcessor({ inbox, async applyUpdate() { assert.fail('adapter must not run'); } });
   await assert.rejects(processor.processOne(), /private-text command validation/);
   assert.equal(inbox.state.status, 'rejected');
-  assert.deepEqual(inbox.state.calls, ['processing', 'reply-delivered', 'rejected']);
+  assert.deepEqual(inbox.state.calls, ['processing', 'rejected']);
 });
 
 
