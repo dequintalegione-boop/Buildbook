@@ -18,6 +18,18 @@ test('requires an absolute durable inbox path', () => {
   assert.throws(() => createInboxStore('relative/inbox.json'), /path must be absolute/i);
 });
 
+test('treats only a missing inbox path as an empty queue', async () => {
+  await withStore(async file => {
+    const missing = createInboxStore(join(file, '..', 'not-created', 'inbox.json'));
+    assert.equal((await missing.stats()).total, 0);
+
+    const directoryPath = file + '.directory';
+    await mkdir(directoryPath);
+    const directoryInbox = createInboxStore(directoryPath);
+    await assert.rejects(directoryInbox.stats(), /regular file|special file/i);
+  });
+});
+
 test('rejects malformed or duplicate-key durable inbox records on load', async () => {
   await withStore(async file => {
     await writeFile(file, JSON.stringify({ version: 1, items: [null] }), 'utf8');
