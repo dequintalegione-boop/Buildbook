@@ -345,3 +345,45 @@ test('rejects 20 malformed canonical target read responses before import', async
     });
   }
 });
+
+
+test('rejects 20 malformed ISO export timestamps before import', async t => {
+  const invalidDates = [
+    '2026-11-24',
+    '2026-11-24 00:00:00Z',
+    'November 24, 2026',
+    '2026/11/24T00:00:00Z',
+    '2026-11-24T00:00:00',
+    '2026-11-24T00:00Z',
+    '2026-11-24T00:00:00.1234Z',
+    '2026-11-24T00:00:00z',
+    '2026-02-29T00:00:00Z',
+    '2026-02-30T00:00:00Z',
+    '2026-13-01T00:00:00Z',
+    '2026-00-01T00:00:00Z',
+    '2026-11-00T00:00:00Z',
+    '2026-11-24T24:00:00Z',
+    '2026-11-24T00:60:00Z',
+    '2026-11-24T00:00:60Z',
+    '2026-11-24T00:00:00+14:01',
+    '2026-11-24T00:00:00-15:00',
+    '2026-11-24T00:00:00+01:60',
+    '2026-11-24T00:00:00+1:00',
+  ];
+
+  for (const exportedAt of invalidDates) {
+    await t.test(exportedAt, async () => {
+      const data = fixture({ state: {}, logs: [], photos: {} });
+      let importCalls = 0;
+      data.client.importProfile = async () => { importCalls += 1; return 1; };
+      const makeEnvelope = data.createEnvelope;
+      data.createEnvelope = async payload => {
+        const envelope = await makeEnvelope(payload);
+        envelope.exportedAt = exportedAt;
+        return envelope;
+      };
+      await assert.rejects(migrateProfileToLocalApi(data), /некорректный конверт/);
+      assert.equal(importCalls, 0);
+    });
+  }
+});
