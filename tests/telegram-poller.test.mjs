@@ -60,6 +60,24 @@ test('does not advance offset when durable enqueue fails', async () => {
   assert.equal(f.offset, 7);
 });
 
+test('aborted polling stops processing and does not checkpoint the batch', async () => {
+  const controller = new AbortController();
+  const seen = [];
+  const f = fixture({
+    offset: 40,
+    updates: [{ update_id: 40 }, { update_id: 41 }],
+    accept: async update => {
+      seen.push(update.update_id);
+      controller.abort(new Error('shutdown requested'));
+      return { accepted: true };
+    },
+  });
+
+  await assert.rejects(f.poller.pollOnce({ signal: controller.signal }), /shutdown requested/);
+  assert.deepEqual(seen, [40]);
+  assert.equal(f.offset, 40);
+});
+
 test('replays durably accepted updates when offset checkpoint persistence fails', async () => {
   let savedOffset = 7;
   let failFirstWrite = true;
