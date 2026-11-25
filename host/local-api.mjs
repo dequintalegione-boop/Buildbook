@@ -211,7 +211,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, controlTelegram, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -369,6 +369,30 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     }
     if (request.method === 'GET' && pathname === '/api/health') {
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/control') {
+      if (typeof controlTelegram !== 'function') {
+        send(response, 503, { error: 'Управление Telegram недоступно: сервис не настроен на стороне локального хоста.' });
+        return;
+      }
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || !['start', 'stop'].includes(body.action)) {
+          send(response, 400, { error: 'Укажите action: start или stop.' });
+          return;
+        }
+        const status = await controlTelegram(body.action);
+        send(response, 200, { ok: true, status });
+      } catch (error) {
+        send(response, 409, { error: error?.publicMessage || 'Не удалось изменить состояние сервиса Telegram.' });
+      }
       return;
     }
     if (request.method === 'GET' && pathname === '/api/telegram/status') {
