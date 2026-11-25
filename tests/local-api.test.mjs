@@ -880,3 +880,32 @@ test('allows exactly one winner in 20 concurrent empty-profile import races', as
     });
   }
 });
+
+
+test('Telegram status is allowlisted and never serializes host secrets or raw errors', async t => {
+  const secret = '123456:never-return-this-token';
+  const { base, request } = await fixture(t, async () => ({}), {
+    getTelegramStatus: () => ({
+      enabled: true,
+      running: true,
+      botToken: secret,
+      apiKey: secret,
+      unexpected: secret,
+      lastError: { message: secret, stack: secret, at: '2026-11-25T00:00:00.000Z' },
+      queue: { total: 3, pending: 2, processing: 1, completed: 0, rejected: 0, privateText: secret },
+    }),
+  });
+  const response = await request(base + '/api/telegram/status');
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes(secret), false);
+  assert.equal(body.includes('botToken'), false);
+  assert.equal(body.includes('apiKey'), false);
+  assert.equal(body.includes('unexpected'), false);
+  assert.equal(body.includes('privateText'), false);
+  assert.deepEqual(JSON.parse(body).lastError, {
+    code: 'TELEGRAM_SERVICE_ERROR',
+    message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
+    at: '2026-11-25T00:00:00.000Z',
+  });
+});
