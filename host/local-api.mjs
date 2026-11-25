@@ -363,7 +363,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     // same-origin possession is sufficient to establish its browser session.
     // This removes manual .env key copying without opening cross-origin access.
     if (request.method === 'POST' && pathname === '/api/session/bootstrap-local') {
-      if (!staticRoot || !origin || !/^application\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+      if (!staticRoot || !origin || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 403, { error: 'Автоподключение доступно только из интерфейса, который раздаёт локальный хост.' });
         return;
       }
