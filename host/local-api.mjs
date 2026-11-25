@@ -521,7 +521,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
-      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/.test(contentType)) {
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
         send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
         request.resume();
         return;
