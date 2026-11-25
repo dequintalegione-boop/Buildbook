@@ -155,7 +155,7 @@ test('allows same-origin PWA bootstrap only when the local host serves the UI', 
   assert.equal(paired.status, 200);
   assert.deepEqual(await paired.json(), { ok: true, expiresIn: 12 * 60 * 60 * 1000, method: 'same-origin' });
   const cookie = paired.headers.get('set-cookie');
-  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\\/api; Max-Age=43200$/);
+  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\/api; Max-Age=43200$/);
   assert.equal((await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } })).status, 200);
 
   const wrongOrigin = await fetch(base + '/api/session/bootstrap-local', {
