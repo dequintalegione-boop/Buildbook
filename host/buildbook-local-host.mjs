@@ -55,14 +55,20 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
-    getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
-    startTelegram: () => {
+    getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: telegramEnabled, configured: true } : { enabled: false, configured: false, running: false },
+    startTelegram: async () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      await updateTelegramEnvFile({ envFile: resolve(appRoot, '.env'), values: { BUILDBOOK_TELEGRAM_ENABLED: 'true' } });
+      env.BUILDBOOK_TELEGRAM_ENABLED = 'true';
+      telegramEnabled = true;
       const loop = telegram.service.start();
       loop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
     },
-    stopTelegram: () => {
+    stopTelegram: async () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      await updateTelegramEnvFile({ envFile: resolve(appRoot, '.env'), values: { BUILDBOOK_TELEGRAM_ENABLED: 'false' } });
+      env.BUILDBOOK_TELEGRAM_ENABLED = 'false';
+      telegramEnabled = false;
       return telegram.service.stop();
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
