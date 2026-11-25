@@ -395,7 +395,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         };
         send(response, 200, { ok: true, status });
       } catch (error) {
-        send(response, 409, { error: error?.publicMessage || 'Не удалось изменить состояние сервиса Telegram.' });
+        send(response, 409, { error: 'Не удалось изменить состояние сервиса Telegram.' });
       }
       return;
     }
