@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { isIP } from 'node:net';
 import { readFile, lstat, realpath } from 'node:fs/promises';
 import { resolve, relative, isAbsolute, dirname } from 'node:path';
@@ -13,6 +15,37 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_SESSIONS = 8;
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const execFileAsync = promisify(execFile);
+const LOCAL_ACTION_SCRIPTS = Object.freeze({
+  'telegram-setup': 'setup-buildbook-telegram.bat',
+  'telegram-manage': 'manage-buildbook-telegram.bat',
+  'telegram-state': 'set-buildbook-telegram-state.bat',
+  'host-autostart-install': 'install-buildbook-autostart.bat',
+  'host-autostart-uninstall': 'uninstall-buildbook-autostart.bat',
+});
+
+async function launchWindowsLocalAction(action) {
+  const script = LOCAL_ACTION_SCRIPTS[action];
+  if (!script) {
+    const error = new Error('Неизвестное локальное действие.');
+    error.code = 'LOCAL_ACTION_NOT_ALLOWED';
+    throw error;
+  }
+  if (process.platform !== 'win32') {
+    const error = new Error('Запуск локальных BAT-файлов доступен только в Windows. Скачайте скрипт и запустите его вручную.');
+    error.code = 'LOCAL_ACTION_UNSUPPORTED';
+    throw error;
+  }
+  // The command is assembled exclusively from a fixed allowlist. No request
+  // data is passed to cmd.exe, and the child opens in a separate console.
+  await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'start "" "scripts\\' + script + '"'], {
+    cwd: APP_ROOT,
+    windowsHide: true,
+    timeout: 5000,
+    windowsVerbatimArguments: false,
+  });
+  return { ok: true };
+}
 const STATIC_ASSETS = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
@@ -217,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -227,6 +260,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
+  }
+  if (launchLocalAction !== null && typeof launchLocalAction !== 'function') {
+    throw new TypeError('launchLocalAction должен быть функцией или null.');
   }
   if (!['127.0.0.1', '::1', 'localhost'].includes(host) || (isIP(host) === 0 && host !== 'localhost')) {
     throw new TypeError('Локальный API разрешено привязывать только к loopback-интерфейсу.');
@@ -371,6 +407,27 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     // API credential. All other routes require the HttpOnly browser session.
     if (!sessionMatches) {
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
+      return;
+    }
+    const localActionMatch = pathname.match(/^\\/api\\/local-actions\\/([a-z0-9-]+)$/);
+    if (request.method === 'POST' && localActionMatch) {
+      const action = localActionMatch[1];
+      if (!Object.hasOwn(LOCAL_ACTION_SCRIPTS, action)) {
+        send(response, 404, { error: 'Локальное действие не найдено.' });
+        return;
+      }
+      try {
+        await (launchLocalAction || launchWindowsLocalAction)(action);
+        send(response, 202, { ok: true, action, message: 'Локальный помощник открыт в отдельном окне.' });
+      } catch (error) {
+        const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
+        send(response, unsupported ? 501 : 500, {
+          error: unsupported
+            ? 'Эта команда доступна только в Windows. Скачайте BAT-файл и запустите его вручную.'
+            : 'Не удалось открыть локальный помощник. Проверьте наличие BAT-файла в папке scripts.',
+          code: unsupported ? 'LOCAL_ACTION_UNSUPPORTED' : 'LOCAL_ACTION_FAILED',
+        });
+      }
       return;
     }
     if (request.method === 'GET' && pathname === '/api/health') {
