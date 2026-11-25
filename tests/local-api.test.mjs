@@ -134,6 +134,48 @@ test('bootstrap bearer cannot authorize profile or status requests after exchang
   assert.equal((await fetch(base + '/api/telegram/status', { headers })).status, 401);
 });
 
+test('allows same-origin PWA bootstrap only when the local host serves the UI', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-pwa-bootstrap-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(join(dir, 'index.html'), '<!doctype html><title>Buildbook</title>');
+  const api = createLocalApiServer({
+    profileStore: createProfileStore(join(dir, 'profile.json')),
+    accessToken: 'test-local-api-token-0123456789abcdef',
+    staticRoot: dir,
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = 'http://127.0.0.1:' + address.port;
+
+  const paired = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: base, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(paired.status, 200);
+  assert.deepEqual(await paired.json(), { ok: true, expiresIn: 12 * 60 * 60 * 1000, method: 'same-origin' });
+  const cookie = paired.headers.get('set-cookie');
+  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\\/api; Max-Age=43200$/);
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } })).status, 200);
+
+  const wrongOrigin = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: 'http://localhost:9999', 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(wrongOrigin.status, 403);
+});
+
+test('does not allow local PWA bootstrap when the API does not serve the UI', async t => {
+  const { base } = await fixture(t);
+  const response = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: base, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 403);
+});
+
 test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t) => {
   const { base } = await fixture(t);
   const bootstrap = await fetch(base + '/api/session/bootstrap', {
