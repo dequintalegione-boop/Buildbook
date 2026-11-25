@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    if: github.actor != 'github-actions[bot]'
     name: Refresh standalone HTML
     runs-on: ubuntu-latest
     steps:

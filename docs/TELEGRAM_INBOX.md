@@ -1,0 +1,69 @@
+# Durable Telegram inbox
+
+The inbox implementation is `host/inbox-store.mjs`; sender filtering is handled by `host/telegram-update-gate.mjs`. `host/telegram-poller.mjs` receives updates with Telegram long polling, and `host/telegram-offset-store.mjs` persists the polling checkpoint. `host/telegram-inbox-processor.mjs` hands queued updates to the canonical domain adapter.
+
+## Current behavior
+
+- Persists received updates to a local JSON file using write-to-temp then rename.
+- The gate checks the numeric sender ID against the configured allowlist before enqueuing. Unauthorized users are not persisted.
+- Only private text messages are accepted; the private chat ID must equal the allowlisted sender ID. Group chats, callback queries, inline queries, edited messages, media-only messages and oversized text are rejected.
+- The gate persists a minimal envelope containing the update/message IDs, sender/chat IDs, private-chat type and text. It does not copy arbitrary Telegram fields, entities or attachment metadata into the inbox.
+- Telegram IDs are checked for safe integer representation before being normalized; text is limited to 4096 characters.
+- The poller advances the Telegram offset only after all allowlisted updates in the returned batch have been durably enqueued. If enqueue fails partway through, it leaves the checkpoint unchanged so Telegram can redeliver; inbox idempotency prevents duplicate queue entries.
+- The processor validates the queued envelope again before calling the domain adapter: update IDs must match, sender/chat IDs must match the queued user, chat type must be private, and text must be non-empty and at most 4096 characters. A malformed or tampered inbox item is not passed to the domain adapter; it is quarantined as `rejected` rather than retried indefinitely.
+- The processor marks an item complete only after the domain adapter confirms a committed operation or a replay protected by the durable checkpoint, and returns failures to `pending`. It passes the stable inbox key as `idempotencyKey`; the adapter must commit the finance write and replay checkpoint atomically. The inbox cannot itself guarantee exactly-once financial writes.
+- When the adapter returns a `reply` string, the processor delivers it to the already validated private chat before completion. Delivery failure returns the item to `pending` and does not store the reply text or the transport exception. Read-only commands such as help and month statistics complete with a synthetic operation id (`help:` / `stats:` plus the idempotency key) and must not write the financial profile. A permanent user-command error can carry its own safe `reply`; if that reply is delivered, the item is rejected and is not retried.
+- Reply delivery is **best-effort at-least-once**, not exactly-once: the host durably records successful delivery before completing the inbox item, but a process crash after Telegram accepts `sendMessage` and before that record is persisted can cause a duplicate reply on recovery. Telegram's send API does not provide an idempotency key; financial writes remain protected separately by the canonical profile checkpoint.
+- Deduplicates by bot identity and Telegram update ID.
+- The runtime compacts terminal inbox rows below the durable Telegram checkpoint both before polling (to free capacity before receiving more work) and after processing newly accepted updates. Pending/processing rows are retained. The canonical profile adapter stores a monotonic per-bot replay checkpoint in the same profile revision as each finance transaction; this prevents duplicate writes after inbox compaction. Updates must be processed serially in Telegram update-ID order for the checkpoint to be safe.
+- Tracks pending, processing, completed and rejected states, attempts, timestamps, a bounded error message and the adapter's operation/completion ID.
+- Invalid/tampered inbox envelopes are quarantined as `rejected` and their raw payload is purged; they are not retried. Adapter/storage failures remain `pending` for retry.
+- Recovers interrupted processing to pending after a host restart.
+- Exposes counts for the future Telegram status screen.
+- Does not itself write financial records. The processor completes an item only after the canonical Buildbook adapter has committed it or confirmed it as an already-processed replay.
+
+## Important boundaries
+
+- The service must run as a single writer for this JSON store. `host/instance-lock.mjs` now provides an exclusive directory lock, and `host/telegram-host-service.mjs` wires it into lifecycle startup. A lock collision fails closed. Stale locks are not automatically reclaimed; an operator must verify the owning process has exited before removing one.
+- The JSON file must live in a user-private application data directory, not in the repository, web root or synchronized cloud folder.
+- The temporary-file rename protects against partial file writes, but this is not a transactional database and does not provide multi-file atomic commits.
+- This layer alone cannot guarantee capture while the host is offline longer than Telegram's update retention window.
+- The file-backed inbox is intentionally separate from the canonical financial data. It may contain pending commands, but completed financial records must be written to the same canonical store used by Buildbook.
+
+## Tests
+
+Run the inbox and Telegram tests with Node.js 22:
+
+```sh
+node --test tests/inbox-store.test.mjs tests/telegram-update-gate.test.mjs tests/telegram-poller.test.mjs tests/telegram-inbox-processor.test.mjs
+```
+
+The gate tests cover allowlist filtering, private-chat enforcement, payload minimization, media/group rejection and malformed update IDs. Processor tests cover defense-in-depth validation of queued payloads as well as idempotency and retry behavior. Poller tests cover durable checkpoint behavior.
+
+## Runtime coordinator
+
+`host/telegram-runtime.mjs` coordinates one service cycle: recover interrupted inbox entries once, process already-queued entries, poll Telegram, then process newly accepted entries. Draining the inbox before network I/O means a Telegram outage does not block work already received and durably saved. It deliberately does not own timers or process startup; the host lifecycle must schedule cycles, provide cancellation, and enforce a single service process. If polling or domain processing fails, the cycle rejects so the host can apply retry/backoff policy. Finance writes go through the canonical profile adapter on the same store as the local API. Read-only help and month-statistics commands do not write that store. A user-facing Telegram reply is sent only after the command succeeds, and only for an allowlisted private chat.
+
+Run the complete Node.js unit-test set (including the Telegram gate, poller, processor, runtime, service, config and storage tests) with:
+
+```sh
+node --test tests/*.test.mjs
+```
+
+The service lifecycle tests also verify that stop cancels an interval wait promptly, the service can restart after stopping, and repeated start calls share one loop. The CI host-test job runs this same command.
+
+## Host configuration
+
+`host/telegram-config.mjs` reads the host-only environment settings and validates them before a service is constructed. `host/telegram-host-service.mjs` composes inbox, gate, poller, processor, runtime and lifecycle. It refuses construction without an injected canonical domain adapter; it does not create financial records itself. Required variables:
+
+- `BUILDBOOK_TELEGRAM_BOT_TOKEN` — bot token; keep it only in the host environment/secret store.
+- `BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS` — comma-separated numeric Telegram user IDs.
+- `BUILDBOOK_TELEGRAM_INBOX_PATH`, `BUILDBOOK_TELEGRAM_OFFSET_PATH` and `BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH` — distinct absolute paths in the user's private application-data directory.
+
+Optional polling/retry variables are `BUILDBOOK_TELEGRAM_TIMEOUT_SECONDS`, `BUILDBOOK_TELEGRAM_INTERVAL_MS`, `BUILDBOOK_TELEGRAM_RETRY_BASE_MS` and `BUILDBOOK_TELEGRAM_RETRY_MAX_MS`. The config parser rejects invalid ranges and does not log the token. The combined local host starts this lifecycle when `BUILDBOOK_TELEGRAM_ENABLED=true` and a canonical profile store is available. Windows autostart is a per-user Task Scheduler job (`scripts/install-buildbook-autostart.ps1`); a separate Windows service installer is still not implemented. The in-memory status snapshot exposes running state, last successful cycle, queue counts, processed count and a redacted last error without exposing the bot token. `GET /api/telegram/status` serves that snapshot to an authenticated browser session.
+
+Run its tests with:
+
+```sh
+node --test tests/telegram-config.test.mjs
+```

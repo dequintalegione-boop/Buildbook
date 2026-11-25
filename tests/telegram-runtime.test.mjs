@@ -1,0 +1,178 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createTelegramRuntime } from '../host/telegram-runtime.mjs';
+
+test('recovers once, drains existing items, polls, then drains new items sequentially', async () => {
+  const calls = [];
+  let pending = 2;
+  const inbox = {
+    async recoverInterrupted() { calls.push('recover'); },
+    async stats() { return { pending }; },
+  };
+  const poller = { async pollOnce() { calls.push('poll'); pending += 1; return { received: 1, accepted: 1 }; } };
+  const processor = {
+    async processOne() {
+      calls.push('process');
+      if (!pending) return { processed: false, reason: 'empty' };
+      pending -= 1;
+      return { processed: true };
+    },
+  };
+  const runtime = createTelegramRuntime({ inbox, poller, processor });
+  const first = await runtime.runOnce();
+  assert.equal(first.processed, 3);
+  assert.deepEqual(calls, ['recover', 'process', 'process', 'process', 'poll', 'process', 'process']);
+  calls.length = 0;
+  await runtime.runOnce();
+  assert.deepEqual(calls, ['process', 'poll', 'process', 'process']);
+});
+
+test('drains already accepted updates even when Telegram polling fails', async () => {
+  const calls = [];
+  let pending = 1;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return { pending }; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); throw new Error('Telegram unavailable'); } },
+    processor: {
+      async processOne() {
+        calls.push('process');
+        if (!pending) return { processed: false };
+        pending -= 1;
+        return { processed: true };
+      },
+    },
+  });
+
+  await assert.rejects(runtime.runOnce(), /Telegram unavailable/);
+  assert.deepEqual(calls, ['process', 'process', 'poll']);
+});
+
+test('aborted runtime stops draining queued work and skips polling', async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let pending = 3;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return { pending }; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); return {}; } },
+    processor: {
+      async processOne() {
+        calls.push('process');
+        pending -= 1;
+        controller.abort(new Error('shutdown'));
+        return { processed: true };
+      },
+    },
+  });
+
+  await assert.rejects(runtime.runOnce({ signal: controller.signal }), /shutdown/);
+  assert.deepEqual(calls, ['process']);
+  assert.equal(pending, 2);
+});
+
+test('does not poll again while a cycle is active', async () => {
+  let release;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const inbox = { async recoverInterrupted() {}, async stats() { return {}; } };
+  const runtime = createTelegramRuntime({
+    inbox,
+    poller: { async pollOnce() { await waiting; return {}; } },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+  const first = runtime.runOnce();
+  await assert.rejects(runtime.runOnce(), /already in progress/);
+  release();
+  await first;
+});
+
+test('requires all runtime components', () => {
+  assert.throws(() => createTelegramRuntime({}), /durable Telegram inbox/);
+});
+
+test('compacts terminal inbox entries only after polling returns a durable checkpoint', async () => {
+  const calls = [];
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged(offset) { calls.push(['compact', offset]); },
+    },
+    poller: {
+      async pollOnce() {
+        calls.push(['poll']);
+        return { received: 0, accepted: 0, nextOffset: 27 };
+      },
+    },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await runtime.runOnce();
+  assert.deepEqual(calls, [['poll'], ['compact', 27]]);
+});
+
+test('does not compact inbox records when polling fails before checkpoint confirmation', async () => {
+  let compacted = false;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged() { compacted = true; },
+    },
+    poller: { async pollOnce() { throw new Error('checkpoint write failed'); } },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await assert.rejects(runtime.runOnce(), /checkpoint write failed/);
+  assert.equal(compacted, false);
+});
+
+test('compacts using the saved checkpoint before requesting another Telegram batch', async () => {
+  const calls = [];
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+      async compactAcknowledged(offset) { calls.push(['compact', offset]); },
+    },
+    poller: {
+      async readCheckpoint() { calls.push(['checkpoint']); return 41; },
+      async pollOnce() { calls.push(['poll']); return { received: 0, accepted: 0, nextOffset: 41 }; },
+    },
+    processor: { async processOne() { return { processed: false }; } },
+  });
+
+  await runtime.runOnce();
+  assert.deepEqual(calls, [
+    ['checkpoint'], ['compact', 41], ['poll'], ['compact', 41],
+  ]);
+});
+
+test('continues draining after a terminally rejected inbox item', async () => {
+  const calls = [];
+  let next = 0;
+  const runtime = createTelegramRuntime({
+    inbox: {
+      async recoverInterrupted() {},
+      async stats() { return {}; },
+    },
+    poller: { async pollOnce() { calls.push('poll'); return {}; } },
+    processor: {
+      async processOne() {
+        next += 1;
+        calls.push('process:' + next);
+        if (next === 1) return { processed: true, rejected: true, itemId: 'bad-item' };
+        if (next === 2) return { processed: true, itemId: 'good-item' };
+        return { processed: false, reason: 'empty' };
+      },
+    },
+  });
+
+  const result = await runtime.runOnce();
+  assert.equal(result.processed, 2);
+  assert.deepEqual(calls, ['process:1', 'process:2', 'process:3', 'poll', 'process:4']);
+});

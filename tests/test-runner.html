@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Buildbook — тесты</title>
 <style>
-:root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:640px;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
+:root{font:15px/1.5 system-ui,sans-serif;color:#182124;background:#f2f5f5}body{max-width:1000px;margin:24px auto;padding:0 16px}.card{background:white;border:1px solid #d6dfdf;border-radius:12px;padding:18px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.muted{color:#637275}.pass{color:#087c42}.fail{color:#bd3434}li{padding:5px 0;border-bottom:1px solid #edf0f0}.badge{padding:2px 9px;border-radius:20px;background:#e8eeee}iframe{width:100%;height:100%;border:1px solid #cbd5d5;border-radius:10px;background:white}button{font:inherit;padding:8px 14px;border:1px solid #0c766d;border-radius:8px;background:#0c766d;color:white;cursor:pointer}#app-wrap{display:block;position:fixed;left:-2000px;top:0;width:1440px;height:1000px;visibility:hidden;pointer-events:none}code{background:#edf0f0;padding:2px 5px;border-radius:4px}
 </style></head><body>
 <h1>Buildbook — автоматические браузерные тесты</h1>
 <p class="muted">Проверяется выбранная версия приложения в отдельной базе IndexedDB <code>buildbook-test</code>. Обычные данные Buildbook не затрагиваются.</p>
@@ -319,7 +319,7 @@ await test('Категории можно добавлять в новую гр�
 api.action('nav','set');prompts=['Тестовая группа'];api.action('cgroupadd','e');assert(state().categories.e['Тестовая группа'],'Группа не создана');prompts=['Тестовая категория'];api.action('ccadd',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));assert(state().categories.e['Тестовая группа'].includes('Тестовая категория'),'Категория не добавлена');
 });
 await test('Категории можно переименовывать и скрывать/показывать',()=>{
-prompts=['Переименованная категория'];api.action('ccedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Тестовая категория'])));assert(state().categories.e['Тестовая группа'].includes('Переименованная категория'),'Категория не переименована');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не скрыта');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(!state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не восстановлена');
+api.action('ccedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Тестовая категория'])));const editCategoryForm=form();assert(editCategoryForm&&editCategoryForm.elements.name,'Не открылось окно переименования категории');setv(editCategoryForm,'name','Переименованная категория');submit(editCategoryForm);assert(state().categories.e['Тестовая группа'].includes('Переименованная категория'),'Категория не переименована');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не скрыта');api.action('cchide',encodeURIComponent(JSON.stringify(['e','Тестовая группа','Переименованная категория'])));assert(!state().hiddenCategories.e.includes('Тестовая группа::Переименованная категория'),'Категория не восстановлена');
 });
 await test('Группы можно переименовывать и пустые группы удалять',()=>{
 prompts=['Новая тестовая группа'];api.action('cgroupedit',encodeURIComponent(JSON.stringify(['e','Тестовая группа'])));assert(state().categories.e['Новая тестовая группа'],'Группа не переименована');const key=encodeURIComponent(JSON.stringify(['e','Новая тестовая группа','Переименованная категория']));api.action('ccdel',key);assert(!state().categories.e['Новая тестовая группа'].includes('Переименованная категория'),'Категория не удалена');api.action('cgroupdel',encodeURIComponent(JSON.stringify(['e','Новая тестовая группа'])));assert(!state().categories.e['Новая тестовая группа'],'Пустая группа не удалена');
@@ -442,7 +442,7 @@ assert(txt.includes('Сборки по статусам')&&txt.includes('Соб�
 assert(txt.includes('Баланс по кассам')&&txt.includes('Наличные'),'Не показаны остатки касс');
 assert(txt.includes('Оборачиваемость')&&txt.includes('2 дн.')&&txt.includes('7,5 дн.'),'Средние сроки оборачиваемости рассчитаны неверно');
 assert(txt.includes('Долго не проданные сборки')&&txt.includes('Тестовая сборка'),'Не показан давно не проданный ПК');
-assert(txt.includes('Последние действия')&&txt.includes('Изменение данных'),'Дашборд не показывает последние действия из журнала');
+const latestLog=api.getLogs()[0];assert(txt.includes('Последние действия')&&latestLog&&txt.includes(latestLog.l),'Дашборд не показывает последнее действие из журнала: '+(latestLog&&latestLog.l));
 });
 await test('Топ сборок отсортирован по убыванию маржи',()=>{
 const widget=[...w.document.querySelectorAll('#m .qd')].find(x=>x.textContent.includes('Топ сборок по марже'));
@@ -1315,6 +1315,12 @@ await test('XLSX round-trip сохраняет долги, инвестиции 
  assert(api.getState().tx.some(x=>x.investmentId===investment.id&&x.investmentRole==='contribution'),'Потеряна связь вложения с операцией');
 });
 
+await test('Вкладка Telegram показывает безопасное подключение локального хоста',()=>{
+api.setState(fixture());api.action('nav','telegram');
+assert(w.document.querySelector('#m button[data-a="tgconnect"]'),'Не показана кнопка подключения локального хоста');
+assert(!w.document.querySelector('#m input[name="botToken"]'),'Токен Telegram-бота не должен запрашиваться в браузере');
+assert(w.document.querySelector('#m').textContent.includes('Telegram по умолчанию отключён')||w.document.querySelector('#m').textContent.includes('Безопасный режим'),'Не показано предупреждение о безопасном режиме Telegram');
+});
 await test('Сводка заменяет старое название вкладки «Обзор»',()=>{
 api.action('nav','home');
 const tab=[...w.document.querySelectorAll('nav button')].find(x=>x.dataset.id==='home');
@@ -1421,9 +1427,10 @@ d.tx=[
 {id:'calendar-detail-one',kind:'i',date,amount:12000,acc:'cash',desc:'Продажа видеокарты',cat:'Комплектующие'},
 {id:'calendar-detail-two',kind:'e',date,amount:2000,acc:'cash',desc:'Закупка SSD',cat:'Сборка ПК'}
 ];
-api.setState(d);api.action('nav','calendar');api.action('calday',date);
+api.setState(d);api.action('nav','calendar');api.action('calnow');
+const dayButton=w.document.querySelector('[data-calendar-date="'+date+'"]');assert(dayButton&&!dayButton.disabled,'Не найдена активная ячейка календаря для '+date);dayButton.click();
 const panel=w.document.querySelector('.calendar-day-details'),normalize=value=>String(value||'').replace(/\s+/g,' ');
-assert(panel&&panel.textContent.includes('Действия за '+date),'Не открылся блок действий выбранного дня');
+assert(panel&&panel.textContent.includes('Действия за '+date.split('-').reverse().join('.')),'Не открылся блок действий выбранного дня с локальной датой: '+JSON.stringify(api.calendarDiagnostics()));
 assert(panel.textContent.includes('Расход')&&!panel.textContent.includes('Выбыло'),'Подпись «Выбыло» не заменена на «Расход».');
 assert(panel.textContent.includes('Продажа видеокарты')&&panel.textContent.includes('Закупка SSD'),'В блоке не показаны все сделки за день');
 assert(normalize(panel.textContent).includes('+12 000')&&normalize(panel.textContent).includes('2 000'),'В деталях неверно показаны суммы операций');
@@ -1507,8 +1514,9 @@ api.setState(fixture());api.action('nav','set');
 const select=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.parse(decodeURIComponent(x.dataset.catGroup))[1]==='Транспорт');
 assert(select,'Для группы категорий не создан выпадающий список');
 assert([...select.options].some(x=>x.value==='Бензин'),'Существующие категории не попали в список');
-prompts.push('Бензин для теста');api.action('cceditpick',select.dataset.catGroup);
-assert(state().categories.e['Транспорт'].includes('Бензин для теста'),'Переименование выбранной категории не сохранилось: '+JSON.stringify(state().categories.e['Транспорт'])+'; prompts='+JSON.stringify(prompts));
+api.action('cceditpick',select.dataset.catGroup);
+const renameForm=form();assert(renameForm&&renameForm.elements.name,'Не открылось окно переименования категории');setv(renameForm,'name','Бензин для теста');submit(renameForm);
+assert(state().categories.e['Транспорт'].includes('Бензин для теста'),'Переименование выбранной категории не сохранилось: '+JSON.stringify(state().categories.e['Транспорт']));
 assert(!state().categories.e['Транспорт'].includes('Бензин'),'Старое название категории осталось после переименования');
 const current=[...w.document.querySelectorAll('[data-cat-group]')].find(x=>JSON.parse(decodeURIComponent(x.dataset.catGroup))[1]==='Транспорт');
 current.value='Бензин для теста';api.action('cchidepick',current.dataset.catGroup);
@@ -1592,7 +1600,7 @@ for(const [period,label,amount] of cases){
 data.set.per=period;api.setState(data);api.action('nav','home');
 const earned=[...w.document.querySelectorAll('#m .kp')].find(card=>card.textContent.includes('Заработок'));
 assert(earned&&earned.textContent.includes(label),'Для периода '+period+' неверная подпись заработка');
-assert(earned.textContent.replace(/\\s/g,'').includes(String(amount).replace(/\\s/g,'')),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
+assert(earned.textContent.replace(/\s/g,'').includes(String(amount).replace(/\s/g,'')),'Для периода '+period+' ожидалось '+amount+' ₽, получено: '+(earned&&earned.textContent));
 }
 });
 
@@ -1615,11 +1623,11 @@ await test('Сводка рассчитывает чистую прибыль п
 });
 await test('Расход сверх остатка кассы блокируется',()=>{
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
-const f=form(),beforeAlerts=alerts.length;
+const f=form();
 setv(f,'kind','e');setv(f,'date','2026-04-04');setv(f,'amount','1200');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Расход сверх остатка');setv(f,'acc','cash');submit(f);
 assert(!state().tx.some(tx=>tx.desc==='Расход сверх остатка'),'Расход с отрицательным итоговым балансом был сохранён');
 assert(api.balance('cash')===1000,'Баланс изменился после отклонённого расхода');
-assert(alerts.length>beforeAlerts&&alerts[alerts.length-1].includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств: '+alerts.slice(beforeAlerts).join(' | '));
+assert(f.querySelector('[data-modal-error]')?.textContent.includes('Недостаточно средств'),'Пользователю не показано предупреждение о недостатке средств в форме.');
 });
 
 await test('Перевод не может списать больше доступного остатка',()=>{
@@ -1649,10 +1657,10 @@ await test('Редактирование расхода также провер�
 api.setState(fixture());api.action('nav','tx');api.action('tadd','e');
 let f=form();setv(f,'kind','e');setv(f,'date','2026-04-08');setv(f,'amount','800');setv(f,'qty','1');setv(f,'cat','Бензин');setv(f,'desc','Редактируемый расход');setv(f,'acc','cash');submit(f);
 const tx=state().tx.find(item=>item.desc==='Редактируемый расход');assert(tx,'Тестовый расход не создан');
-api.action('te',tx.id);f=form();const beforeAlerts=alerts.length;setv(f,'amount','1200');submit(f);
+api.action('te',tx.id);f=form();setv(f,'amount','1200');submit(f);
 assert(state().tx.find(item=>item.id===tx.id).amount===800,'Редактирование позволило уйти балансу в минус');
 assert(api.balance('cash')===200,'Баланс изменился после отклонённого редактирования');
-assert(alerts.length>beforeAlerts,'Не показано предупреждение при редактировании: '+alerts.slice(beforeAlerts).join(' | '));
+assert(f.querySelector('[data-modal-error]')?.textContent.includes('Недостаточно средств'),'Не показано предупреждение при редактировании в форме.');
 });
 
 await test('Удаление дохода не может сделать баланс отрицательным',()=>{
@@ -2120,7 +2128,7 @@ await test('История транзакций заполняет свобод�
  const body=w.document.body,main=w.document.querySelector('main'),page=w.document.querySelector('.transaction-page'),history=w.document.querySelector('.transaction-history'),table=history&&history.querySelector('.tw');
  assert(body.classList.contains('transaction-screen')&&w.document.documentElement.classList.contains('transaction-screen'),'Не включён режим экранной компоновки транзакций');
  assert(page&&history&&table,'Не найдена отдельная область истории транзакций');
- assert(w.getComputedStyle(w.document.documentElement).overflowY==='hidden','Корневой контейнер продолжает прокручиваться по вертикали');
+ assert(w.getComputedStyle(w.document.documentElement).overflowY==='hidden','Корневой контейнер продолжает прокручиваться по вертикали: '+JSON.stringify(api.layoutDiagnostics()));
  assert(history.getBoundingClientRect().height>=150,'Истории не выделена свободная высота окна');
  assert(Math.abs(main.getBoundingClientRect().height-w.innerHeight)<=2,'Основная область не ограничена высотой окна');
  assert(w.getComputedStyle(history).flexGrow==='1','История не растягивается на оставшуюся высоту');

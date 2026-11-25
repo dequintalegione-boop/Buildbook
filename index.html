@@ -216,9 +216,9 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
 .transaction-filters input[type=month]{width:150px;min-width:135px}
 .transaction-filters input:not([type=month]){width:min(220px,18vw);min-width:150px}
 .transaction-filters .money-totals{margin-left:auto}
-.transaction-history{flex:1 1 0;min-width:0;min-height:150px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
-.transaction-history>.tw{height:100%;overflow:auto;border-radius:11px}
-.transaction-history table{width:100%;min-width:900px;table-layout:auto}
+.transaction-history{flex:1 1 0;min-width:0;min-height:150px;overflow:auto;overscroll-behavior:contain}
+.transaction-history>.tw{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;height:100%;overflow:auto;border-radius:11px}
+.transaction-history table{display:table;width:100%;min-width:max(100%,900px);table-layout:fixed}
 .transaction-history th,.transaction-history td{padding:clamp(5px,.72vh,9px) clamp(8px,.7vw,13px)}
 .transaction-history td:nth-child(3){white-space:normal;min-width:260px;max-width:55vw;line-height:1.35}
 .transaction-history td:nth-child(3) small{font-size:11px}
@@ -278,11 +278,24 @@ body.transaction-screen #m{flex:1 1 0;min-height:0;display:flex;flex-direction:c
  .hd h1{font-size:23px}
  .ac2{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Final desktop layout safeguards for wide screens and transaction history. */
+.modal-error{margin:0 0 12px;padding:9px 11px;border:1px solid var(--bad);border-radius:8px;background:color-mix(in srgb,var(--bad) 9%,var(--s));color:var(--bad);font-size:13px;line-height:1.4}
+main{width:auto;max-width:none;min-width:0;box-sizing:border-box}
+main{width:100%;max-width:none;min-width:0;box-sizing:border-box}
+#nav-other-folder{width:100%;max-width:100%;min-width:0;box-sizing:border-box;flex:0 1 auto;overflow-x:hidden}
+#nav-other-folder *{box-sizing:border-box;max-width:100%}
+html.transaction-screen,body.transaction-screen{overflow-x:hidden;overflow-y:hidden}
+@media(max-width:760px){
+ html.transaction-screen,body.transaction-screen{height:auto;overflow-x:hidden;overflow-y:auto!important}
+}
 </style></head><body>
-<nav><button type="button" data-a="navcollapse" class="nav-toggle" title="Свернуть или развернуть меню" data-short="☰">Свернуть меню</button><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home" data-short="С" title="Сводка">Сводка</button><button data-a="nav" data-id="dash" data-short="Д" title="Дашборд">Дашборд</button><button data-a="nav" data-id="planning" data-short="Пл" title="Планирование">Планирование</button><button data-a="nav" data-id="calendar" data-short="К" title="Календарь">Календарь</button><button data-a="nav" data-id="stock" data-short="С" title="Склад">Склад</button><button data-a="nav" data-id="builds" data-short="Сб" title="Сборки">Сборки</button><button data-a="nav" data-id="tx" data-short="₽" title="Транзакции">Транзакции</button><button data-a="nav" data-id="assets" data-short="ДИ" title="Долги и инвестиции">Долги и инвестиции</button><button data-a="nav" data-id="reports" data-short="О" title="Отчёты">Отчёты</button><button data-a="nav" data-id="tasks" data-short="З" title="Задачи">Задачи</button><button data-a="nav" data-id="trash" data-short="К" title="Корзина">Корзина</button><button data-a="nav" data-id="log" data-short="Ж" title="Журнал">Журнал</button><button data-a="nav" data-id="set" data-short="Н" title="Настройки">Настройки</button><div id="nav-other-folder" class="nav-other-folder" data-nav-other-drop hidden><button type="button" data-a="other-toggle" data-short="•••" title="Дополнительные вкладки" aria-expanded="false">Прочее <span aria-hidden="true">▾</span></button><div id="nav-other-list" class="nav-other-list" aria-label="Дополнительные вкладки"></div><div class="nav-other-drop-label">Перетащите сюда ненужные вкладки</div></div></nav>
+<nav><button type="button" data-a="navcollapse" class="nav-toggle" title="Свернуть или развернуть меню" data-short="☰">Свернуть меню</button><div class="lg">Build<span>book</span></div><button data-a="nav" data-id="home" data-short="С" title="Сводка">Сводка</button><button data-a="nav" data-id="dash" data-short="Д" title="Дашборд">Дашборд</button><button data-a="nav" data-id="planning" data-short="Пл" title="Планирование">Планирование</button><button data-a="nav" data-id="calendar" data-short="К" title="Календарь">Календарь</button><button data-a="nav" data-id="stock" data-short="С" title="Склад">Склад</button><button data-a="nav" data-id="builds" data-short="Сб" title="Сборки">Сборки</button><button data-a="nav" data-id="tx" data-short="₽" title="Транзакции">Транзакции</button><button data-a="nav" data-id="assets" data-short="ДИ" title="Долги и инвестиции">Долги и инвестиции</button><button data-a="nav" data-id="reports" data-short="О" title="Отчёты">Отчёты</button><button data-a="nav" data-id="tasks" data-short="З" title="Задачи">Задачи</button><button data-a="nav" data-id="trash" data-short="К" title="Корзина">Корзина</button><button data-a="nav" data-id="log" data-short="Ж" title="Журнал">Журнал</button><button data-a="nav" data-id="telegram" data-short="TG" title="Telegram">Telegram</button><button data-a="nav" data-id="set" data-short="Н" title="Настройки">Настройки</button><div id="nav-other-folder" class="nav-other-folder" data-nav-other-drop hidden><button type="button" data-a="other-toggle" data-short="•••" title="Дополнительные вкладки" aria-expanded="false">Прочее <span aria-hidden="true">▾</span></button><div id="nav-other-list" class="nav-other-list" aria-label="Дополнительные вкладки"></div><div class="nav-other-drop-label">Перетащите сюда ненужные вкладки</div></div></nav>
 <main id="m"></main>
 <script src="./vendor/xlsx.full.min.js"></script>
 <script src="./repository.js"></script>
+<script src="./client/profile-export.js"></script>
+<script src="./client/profile-import.js"></script>
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const R=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0)+' ₽',D=s=>s?s.split('-').reverse().join('.'):'',localDateISO=(date=new Date())=>[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-'),today=()=>localDateISO();
@@ -418,20 +431,28 @@ const defaultState=()=>({
  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false,otherTabs:[],hotkeys:DEFAULT_HOTKEYS.map(item=>({...item}))}
 });
 let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,txMenuOpen:false,hotkeyCaptureId:'',calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
+let TELEGRAM_UI={baseUrl:normalizeLocalTelegramBase(location.origin)||'http://127.0.0.1:43127',checked:false,checking:false,busy:false,connected:false,status:null,error:''};
+let canonicalReconnectReady=false;
 const DATA_SCHEMA_VERSION=5;
 let STARTUP_STAGE='script-ready';
 const TEST_MODE=new URLSearchParams(location.search).get('test')==='1',DB_NAME=TEST_MODE?'buildbook-test':'buildbook';
-const repository=window.BuildbookRepository.create(DB_NAME);
+const STORAGE_MODE_KEY='buildbook.storage-mode';
+let STORAGE_MODE='indexeddb';
+try{if(!TEST_MODE&&location.protocol==='http:'&&localStorage.getItem(STORAGE_MODE_KEY)==='canonical')STORAGE_MODE='canonical'}catch(_){}
+let repository=window.BuildbookRepository.create(DB_NAME),canonicalRuntime=null;
 let LOG=[],last='',PH={},tm,storageWrite=Promise.resolve(),storageDirty=false,storageErrorShown='',storageRevision=0,storageConflict=false,remoteStorageRevision=0;
 let storageChannel=null,APP_LOCKED=false,LEGACY_LOCKED_PROFILE=null,LEGACY_UNLOCK_RESOLVE=null,LEGACY_UNLOCK_MESSAGE='';
-try{if(typeof BroadcastChannel==='function')storageChannel=new BroadcastChannel('buildbook-profile:'+DB_NAME)}
+try{if(STORAGE_MODE==='indexeddb'&&typeof BroadcastChannel==='function')storageChannel=new BroadcastChannel('buildbook-profile:'+DB_NAME)}
 catch(error){console.warn('Buildbook: уведомления между вкладками недоступны; проверка ревизии IndexedDB продолжит защищать данные.',error)}
 function markStorageConflict(revision){
  if(Number.isSafeInteger(revision)&&revision>=0)remoteStorageRevision=Math.max(remoteStorageRevision,revision);
  if(remoteStorageRevision<=storageRevision)return;
  if(!storageConflict){
   storageConflict=true;clearTimeout(tm);
-  toast('Профиль изменён в другой вкладке. Сохранение здесь остановлено.');
+  if(STORAGE_MODE==='canonical'){
+   APP_FATAL_ERROR=new Error('Канонический профиль изменён другим клиентом. Запись и дальнейшее редактирование остановлены, чтобы не потерять изменения. Скачайте резервную копию текущего состояния, затем перезагрузите приложение и загрузите актуальный профиль.');
+  }
+  toast('Профиль изменён в другом клиенте. Сохранение остановлено.');
   if(APP_READY)render();
  }
 }
@@ -735,7 +756,7 @@ function persistCurrent(){
  const state=JSON.parse(JSON.stringify(S)),logs=JSON.parse(JSON.stringify(LOG)),photos=JSON.parse(JSON.stringify(PH));
  const stateText=JSON.stringify(state),logsText=JSON.stringify(logs),photosText=JSON.stringify(photos);
  const run=async()=>{
-  if(storageConflict)return false;
+  if(storageConflict||(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR))return false;
   const photoBlobs=await photosAsBinary(photos);
   try{
    storageRevision=await repository.writeProfile(state,logs,photoBlobs,storageRevision);
@@ -751,6 +772,12 @@ function persistCurrent(){
  return storageWrite;
 }
 function reportStorageError(error){
+ if(STORAGE_MODE==='canonical'&&error&&error.code!=='BUILD_BOOK_STORAGE_CONFLICT'){
+  const unknown=error.code==='BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+  APP_FATAL_ERROR=new Error(unknown?'Результат сохранения неизвестен: сервер мог принять запись, но подтверждение не получено. Не повторяйте сохранение вслепую. Скачайте резервную копию текущего состояния, восстановите соединение и загрузите актуальный профиль.':'Не удалось надёжно сохранить канонический профиль: '+(error.message||'локальный сервис недоступен')+'. Работа остановлена, чтобы не создавать несохранённые изменения. Скачайте резервную копию текущего состояния и проверьте локальный хост.');
+  render();
+  return;
+ }
  if(error&&error.code==='BUILD_BOOK_STORAGE_CONFLICT'){
   markStorageConflict(error.currentRevision);
   return;
@@ -765,6 +792,7 @@ function reportStorageError(error){
 }
 function flushSave(){
  clearTimeout(tm);
+ if(STORAGE_MODE==='canonical'&&APP_FATAL_ERROR)return Promise.resolve(false);
  if(!storageDirty)return storageWrite;
  return persistCurrent();
 }
@@ -939,6 +967,7 @@ function undoJournalEntry(index){
  return {ok:true,restored:entry.changes.length};
 }
 const save=()=>{
+ if(APP_FATAL_ERROR)return;
  if(!Number.isSafeInteger(+S.schemaVersion)||+S.schemaVersion<DATA_SCHEMA_VERSION)S.schemaVersion=DATA_SCHEMA_VERSION;
  let cur=JSON.stringify(S);
  if(cur!=last&&!save.skip){
@@ -1016,7 +1045,12 @@ const categoryGroup=(kind,name)=>Object.keys(kind=='e'?EXP:INC).find(g=>(kind=='
 const fld=(k,l,t='text',v='',x='')=>`<label>${l}${t=='select'?`<select name="${k}">${x}</select>`:t=='area'?`<textarea name="${k}">${esc(v)}</textarea>`:`<input name="${k}" type="${t}" value="${esc(v)}" ${x}>`}</label>`,fd=f=>Object.fromEntries(new FormData(f));
 const head=(t,a='')=>`<div class="hd"><h1>${t}</h1><div>${a}</div></div>`,kpi=(l,v,c='')=>`<div class="kp"><span>${l}</span><b class="${c}">${v}</b></div>`,table=(h,r,em)=>r.length?`<div class="tw"><table><thead><tr>${h.map((x,i)=>`<th data-sort-col="${i}" aria-sort="none" class="${/^(Цена|Сумма|Всего|В наличии|Себестоимость|Заработок|Маржа|Доходы|Расходы|Итог|По сборкам)/.test(x)?'r':''}">${x} <span class="sort-mark" aria-hidden="true">↕</span></th>`).join('')}</tr></thead><tbody>${r.join('')}</tbody></table></div>`:`<p class="em">${em}</p>`;
 const btns=(p,id)=>`<td class="r"><button class="btn ic" data-a="${p}e" data-id="${id}" title="Изменить">✎</button> <button class="btn ic" data-a="${p}d" data-id="${id}" title="Удалить">✕</button></td>`;
-function modal(title,body,ok,wide,lab){const m=document.createElement('div');m.className='ov';m.innerHTML=`<form class="md${wide?' w':''}"><h3>${title}</h3>${body}<div class="ac"><button type="button" class="btn g" data-x>Отмена</button><button class="btn p">${lab||'Сохранить'}</button></div></form>`;document.body.append(m);const f=m.firstChild;m.onclick=e=>{if(e.target==m||e.target.dataset.x!=null)m.remove()};f.onsubmit=e=>{e.preventDefault();if(ok(f)!==false)m.remove()};const i=f.querySelector('input,select');i&&i.focus();return f}
+function modal(title,body,ok,wide,lab){const m=document.createElement('div');m.className='ov';m.innerHTML=`<form class="md${wide?' w':''}"><h3>${title}</h3><p class="modal-error" data-modal-error role="alert" hidden></p>${body}<div class="ac"><button type="button" class="btn g" data-x>Отмена</button><button class="btn p">${lab||'Сохранить'}</button></div></form>`;document.body.append(m);const f=m.firstChild;m.onclick=e=>{if(e.target==m||e.target.dataset.x!=null)m.remove()};f.onsubmit=e=>{e.preventDefault();if(ok(f)!==false)m.remove()};const i=f.querySelector('input,select');i&&i.focus();return f}
+function showModalError(form,message){
+ const target=form&&form.querySelector('[data-modal-error]');
+ if(!target){window.alert(message);return false}
+ target.hidden=false;target.textContent=String(message||'Проверьте введённые данные.');return false;
+}
 /* склад */
 function pform(id){const o=id&&S.batches.find(b=>b.id==id);modal(o?'Партия':'Закупка',`<div class="g2">${fld('type','Тип','select','',opt(T,o&&o.type))}${fld('date','Дата','date',o?o.date:today())}</div>${fld('desc','Описание (модель)','text',o?o.desc:'','required')}<div class="g2">${fld('price','Цена за штуку, ₽','number',o?o.price:'','required min=0 step=any')}${fld('qty','Количество','number',o?o.qty:1,'required min=1')}</div><div class="g2">${fld('supplier','Поставщик','text',o?o.supplier:'')}${fld('link','Ссылка на объявление','url',o?o.link:'')}</div>${fld('note','Комментарий','area',o?o.note:'')}${o?'':`<div class="g2">${fld('acc','Из какой кассы','select','',accOpt())}<label class="ck"><input type="checkbox" name="nx"> Не создавать расход</label></div>`}`,f=>{const d=fd(f),p=+d.price,q=+d.qty;
 if(o){const minQty=writtenOff(o)+usedGood(o)+problemMarked(o);if(q<minQty){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка ('+minQty+' шт.).');return false}const t=o.txId&&S.tx.find(t=>t.id==o.txId),next=t&&{...t,date:d.date,amount:p*q,cat:d.type,qty:q,desc:'Закупка: '+d.desc};if(next){const check=checkTransactionBalance(next,t);if(!check.ok){alert(check.error);return false}}Object.assign(o,{type:d.type,date:d.date,desc:d.desc,price:p,qty:q,supplier:d.supplier,link:d.link,note:d.note});if(t)Object.assign(t,next)}
@@ -1179,7 +1213,7 @@ for(const l of ls){const key=l.batchId+'|'+(l.problem?'problem':'normal');sum[ke
 const was=o&&o.status==ST[3],storedCost=x.cost,existingSale=x.txId&&S.tx.find(t=>t.id===x.txId);
 if(d.status===ST[3]){
  const candidate=existingSale?{...existingSale,kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:(d.stx&&(+d.price||0)?{kind:'i',date:d.sold||today(),amount:+d.price||0,acc:d.acc}:null);
- if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok){alert(cashCheck.error);return false}}
+ if(candidate){const cashCheck=checkTransactionBalance(candidate,existingSale||null);if(!cashCheck.ok)return showModalError(form,cashCheck.error);}
 }
 Object.assign(x,{name:d.name,status:d.status,builder:d.builder,buyer:d.buyer,date:d.date,sold:d.sold,planned:+d.planned||0,price:+d.price||0,note:d.note,lines:ls});const sold=x.status==ST[3];
 if(sold){if(!x.sold)x.sold=today();x.cost=was&&storedCost!=null&&Number.isFinite(Number(storedCost))?Number(storedCost):live(x)}else x.cost=null;
@@ -1290,7 +1324,7 @@ if(kitMode){
 }else if(linkedKit){alert('Состав комплектной покупки нельзя преобразовать в обычную операцию.');return false}
 if(d.cat==='Проебы'&&!kitMode&&!String(d.note||'').trim()){alert('Для категории «Проебы» напишите комментарий');return false}
 const cashCheck=checkTransactionBalance({...o,kind:d.kind,date:d.date,amount,acc:d.acc},o||null);
-if(!cashCheck.ok){alert(cashCheck.error);return false}
+if(!cashCheck.ok)return showModalError(form,cashCheck.error);
 if(stockType){
  if(!desc||!Number.isFinite(amount)||amount<=0||!Number.isInteger(qty)||qty<1||!accountExists){alert('Для закупки укажите описание, положительную сумму, целое количество и кассу.');return false}
  if(linkedBatch&&qty<writtenOff(linkedBatch)+usedGood(linkedBatch)+problemMarked(linkedBatch)){alert('Нельзя уменьшить количество ниже занятого, проблемного и списанного остатка.');return false}
@@ -1704,8 +1738,9 @@ const calendarTransactionType=t=>({
  investment_in:'Пополнение инвестиции',investment_out:'Вывод из инвестиции'
 }[t.kind]||'Операция');
 function calendarDay(date){
- if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))||(!calendarEntries(date).length&&!calendarTaskEntries(date).length))return;
- V.calendar=Object.assign({},V.calendar||{}, {selectedDate:date});
+ const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date||''));
+ if(!match)return;
+ V.calendar={year:Number(match[1]),month:Number(match[2])-1,selectedDate:date};
  render();
 }
 function calendarDayPanel(date){
@@ -2527,7 +2562,7 @@ function tasks(){
     '<button class="btn ic g" data-a="ke" data-id="'+esc(t.id)+'" title="Изменить">✎</button>'+
     '<button class="btn ic g" data-a="kd" data-id="'+esc(t.id)+'" title="Удалить">✕</button></div>';
   }).join('');
-  return '<section class="qd task-priority task-priority-'+i+'" data-q="'+i+'"><div class="hd" style="margin:0 0 8px"><b>'+n+'</b>'+
+  return '<section class="qd task-priority task-priority-'+i+'" style="--task-priority:'+['#d65353','#d39a27','#4389d5','#839397','#9071ca'][i]+'" data-q="'+i+'"><div class="hd" style="margin:0 0 8px"><b>'+n+'</b>'+
    '<button class="btn ic" data-a="kadd" data-id="'+i+'" title="Добавить задачу">+</button></div>'+
    (items||'<small>Пусто. Перетащите сюда задачу или нажмите +</small>')+'</section>';
  };
@@ -3148,7 +3183,9 @@ const CSV_FIELDS={
 };
 function guessCsvKind(headers){
  const h=headers.map(csvHeaderNorm);
- if(h.some(x=>['paymentsjson','платежиjson','principal','суммадолга','debtid','иддолга'].includes(x)))return'debts';
+ const transactionSheet=(h.includes('amount')||h.includes('сумма'))&&(h.includes('дата')||h.includes('date'))&&(h.includes('тип')||h.includes('типоперации')||h.includes('kind'));
+ if(transactionSheet)return'tx';
+ if(h.some(x=>['paymentsjson','платежиjson','principal','суммадолга'].includes(x)))return'debts';
  if(h.some(x=>['eventsjson','движенияjson','currentvalue','текущаяоценка','investmentid','идинвестиции'].includes(x)))return'investments';
  if(h.some(x=>['сумма','amount'].includes(x))||h.includes('типоперации'))return'tx';
  if(h.includes('названиекассы')||h.includes('начальныйостаток')||h.includes('начальныйбаланс')||h.includes('openingbalance'))return'accounts';
@@ -3405,6 +3442,18 @@ function downloadBackup(filename,markDate){
  }catch(error){
   alert('Не удалось создать резервную копию: '+(error&&error.message||'ошибка'));
   return false;
+ }
+}
+async function downloadHostProfileExport(){
+ try{
+  if(!window.BuildbookProfileExport||typeof window.BuildbookProfileExport.serialize!=='function')throw new Error('Модуль экспорта не загружен.');
+  const profile={state:JSON.parse(JSON.stringify(S)),logs:JSON.parse(JSON.stringify(LOG)),photos:JSON.parse(JSON.stringify(PH))};
+  const text=await window.BuildbookProfileExport.serialize(profile);
+  const blob=new Blob([text],{type:'application/json;charset=utf-8'});
+  triggerFileDownload(blob,'buildbook-host-import-'+today()+'.json');
+  toast('Файл для переноса профиля подготовлен. Исходные данные не изменены.');
+ }catch(error){
+  alert('Не удалось подготовить файл для локального хоста: '+(error&&error.message||'ошибка'));
  }
 }
 function mergeBackupData(data){
@@ -3695,6 +3744,43 @@ function applyXlsxSelections(plans,choices){
   result.errors.forEach(e=>{if(total.errors.length<50)total.errors.push({sheet:choice.name,row:e.row,reason:e.reason})});
   total.sheets.push({name:choice.name,kind:choice.kind,added:result.added,skipped:result.skipped});
  });
+ // The debt sheet is the authoritative source for payment-to-operation IDs.
+ // Restore the linked cash-flow record if an older/custom workbook omitted
+ // that transaction row, and repair metadata when the row was imported.
+ (S.debts||[]).forEach(debt=>{
+  const originId=String(debt.originTxId||'');
+  if(originId){
+   let origin=S.tx.find(tx=>tx.id===originId)||S.tx.find(tx=>tx.debtId===debt.id&&tx.debtRole==='origin');
+   if(origin){origin.debtId=debt.id;origin.debtRole='origin';debt.originTxId=origin.id}
+  }
+  (Array.isArray(debt.payments)?debt.payments:[]).forEach(payment=>{
+   const paymentId=String(payment.id||''),txId=String(payment.txId||'');
+   let transaction=S.tx.find(tx=>(txId&&tx.id===txId)||(paymentId&&tx.debtId===debt.id&&tx.debtPaymentId===paymentId));
+   if(!transaction&&paymentId){
+    const accountId=payment.accountId||debt.accountId||(S.accounts[0]&&S.accounts[0].id)||'';
+    transaction={id:txId||uid(),kind:debt.direction==='given'?'loan_repayment_in':'loan_repayment_out',date:payment.date,amount:Number(payment.amount),desc:(debt.direction==='given'?'Возврат долга от ':'Погашение долга: ')+debt.person,cat:'Долги',grp:'Долги',qty:1,acc:accountId,note:String(payment.note||''),debtId:debt.id,debtPaymentId:paymentId,debtRole:'payment'};
+    S.tx.push(transaction);total.added++;
+   }else if(transaction){
+    transaction.debtId=debt.id;transaction.debtPaymentId=paymentId;transaction.debtRole='payment';
+   }
+   if(transaction)payment.txId=transaction.id;
+  });
+ });
+ (S.investments||[]).forEach(investment=>{
+  (Array.isArray(investment.events)?investment.events:[]).forEach(event=>{
+   const eventId=String(event.id||''),txId=String(event.txId||'');
+   let transaction=S.tx.find(tx=>(txId&&tx.id===txId)||(eventId&&tx.investmentId===investment.id&&tx.investmentEventId===eventId));
+   if(!transaction&&eventId){
+    const accountId=event.accountId||investment.accountId||(S.accounts[0]&&S.accounts[0].id)||'';
+    const withdrawal=event.type==='withdrawal';
+    transaction={id:txId||uid(),kind:withdrawal?'investment_in':'investment_out',date:event.date,amount:Number(event.amount),desc:(withdrawal?'Вывод из инвестиции: ':'Вложение в инвестицию: ')+investment.name,cat:'Инвестиции',grp:'Инвестиции',qty:1,acc:accountId,note:String(event.note||''),investmentId:investment.id,investmentEventId:eventId,investmentRole:event.type};
+    S.tx.push(transaction);total.added++;
+   }else if(transaction){
+    transaction.investmentId=investment.id;transaction.investmentEventId=eventId;transaction.investmentRole=event.type;
+   }
+   if(transaction)event.txId=transaction.id;
+  });
+ });
  return total;
 }
 function importXlsxBuffer(buffer){
@@ -3738,7 +3824,107 @@ function xlsxImportWizard(buffer){
 function dataStorageWarning(){
  return '<section style="padding:14px 16px;border-left:4px solid var(--w);background:color-mix(in srgb,var(--w) 8%,var(--s));border-radius:8px"><b>Внимание: данные не шифруются</b><p class="mu">Buildbook хранит сведения локально в IndexedDB браузера без шифрования. Резервные копии JSON/ZIP и выгрузки CSV/XLSX также не зашифрованы. Доступ к профилю браузера или устройству может открыть сохранённые данные. Не используйте приложение на общедоступных устройствах и регулярно сохраняйте резервные копии.</p></section>';
 }
-function sets(){const demoSection='<section><b>Демо-данные за полгода</b><p class="mu">Создаёт отдельные тестовые кассы и реалистичную историю за шесть календарных месяцев: закупки и остатки, сборки и продажи, финансовые операции, долги, инвестиции, планы, задачи, чек-листы, корзину и журнал. Ваши существующие записи и балансы не заменяются. При очистке связанные с вашими реальными записями элементы сохраняются.</p><button class="btn p" data-a="demoload">Загрузить демо-данные за 6 месяцев</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены: '+demoEntryCount()+' записей за 6 месяцев.':'Демо-данные не загружены.')+'</p></section>';const wipeSection='<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div>';return head('Настройки')+'<div class="tw settings-page" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Журнал изменений</b><p class="mu">Все новые записи сохраняются без автоматического удаления. Для отдельного хранения можно скачать журнал в текстовом файле TXT.</p></section><section><b>Дополнительные разделы</b><label class="setting-toggle"><span>Включить раздел «Долги и инвестиции»</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Раздел ведёт выданные и полученные долги, платежи, инвестиционные вложения, выводы и текущую оценку активов. При отключении раздел скрывается, но записи и движения по кассам сохраняются.</p></section>'+'<section><b>Режим редактирования интерфейса</b><label class="setting-toggle"><span>Разрешить перетаскивание разделов и пунктов меню</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="layoutEdit" '+(S.set.layoutEdit?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Когда режим включён, перетаскивайте пункты боковой панели и карточки на страницах, чтобы менять их порядок. На дашборде дополнительно доступны настройка графиков и удаление ненужных блоков. Порядок сохраняется в этом профиле.</p></section>'+hotkeySettingsPanel()+dataStorageWarning()+''+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button> <button class="btn" data-a="csv" data-id="debts">Долги</button> <button class="btn" data-a="csv" data-id="investments">Инвестиции</button> <button class="btn" data-a="csv" data-id="salesPlans">Планы продаж</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+demoSection+'<section><b>Установка приложения</b><p class="mu">Установка доступна через кнопку, если браузер поддерживает её, или вручную через меню браузера. Для iPhone и iPad показана отдельная инструкция Safari.</p><button class="btn p" data-a="inst">Установить как приложение</button></section>'+wipeSection+'</div><div class="ft">Buildbook, версия 2.35<br>Developed by <b>Quinta Legione</b></div>'}
+function normalizeLocalTelegramBase(value){
+ try{
+  const url=new URL(String(value||'').trim()),host=url.hostname.replace(/^\[|\]$/g,'').toLowerCase();
+  if(url.protocol!=='http:'||!['localhost','127.0.0.1','::1'].includes(host)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)return '';
+  return url.origin;
+ }catch{return ''}
+}
+async function localTelegramRequest(path,options={}){
+ const base=options.baseUrl||TELEGRAM_UI.baseUrl,headers={};
+ if(options.token)headers.Authorization='Bearer '+options.token;
+ if(options.body!==undefined)headers['Content-Type']='application/json';
+ const timeoutMs=options.timeoutMs===undefined?30_000:options.timeoutMs;
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120_000)throw new RangeError('Тайм-аут локального API должен быть от 1 до 120000 мс.');
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+ let response,payload=null;
+ try{
+  response=await fetch(base+path,{method:options.method||'GET',headers,body:options.body,signal:controller.signal,credentials:'include',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
+  try{payload=await response.json()}catch(error){
+   if(controller.signal.aborted)throw error;
+  }
+ }catch(cause){
+  const error=new Error(controller.signal.aborted?'Локальный сервис не ответил за отведённое время.':'Локальный сервис недоступен или сессия не может быть использована.');
+  error.code=controller.signal.aborted?'BUILD_BOOK_LOCAL_API_TIMEOUT':'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
+  error.cause=cause;
+  throw error;
+ }finally{clearTimeout(timer)}
+ if(!response.ok){const error=new Error(typeof payload?.error==='string'?payload.error:'Локальный сервис вернул ошибку.');error.status=response.status;error.code=typeof payload?.code==='string'?payload.code:response.status===401?'BUILD_BOOK_LOCAL_API_UNAUTHORIZED':response.status===409?'BUILD_BOOK_STORAGE_CONFLICT':'BUILD_BOOK_LOCAL_API_ERROR';throw error}
+ return payload||{};
+}
+async function refreshTelegramStatus(silent=false){
+ if(TELEGRAM_UI.checking)return;
+ TELEGRAM_UI.checking=true;TELEGRAM_UI.error='';
+ try{
+  const status=await localTelegramRequest('/api/telegram/status');
+  if(!status||typeof status.enabled!=='boolean'||typeof status.running!=='boolean')throw new Error('Некорректный статус локального сервиса.');
+  TELEGRAM_UI.connected=true;TELEGRAM_UI.status=status;
+ }catch(error){
+  TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;
+  TELEGRAM_UI.error=error.status===401?'Сессия не подключена или истекла.':'Локальный API недоступен. Запустите хост и проверьте адрес.';
+  if(STORAGE_MODE==='canonical'&&(error.status===401||error.code==='BUILD_BOOK_LOCAL_API_UNAVAILABLE')){
+   APP_FATAL_ERROR=new Error(error.status===401?'Сессия локального хранилища истекла. Скачайте резервную копию текущего состояния и подключите хост заново.':'Локальный хост недоступен. Работа остановлена до восстановления соединения; скачайте резервную копию текущего состояния.');
+   render();
+  }
+ }finally{
+  TELEGRAM_UI.checking=false;TELEGRAM_UI.checked=true;
+  if(!silent&&V.tab==='telegram')render();
+ }
+}
+function telegramConnectForm(){
+ if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
+ const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ первоначального подключения','password','','required autocomplete="off"')+'</div><p class="mu">Ключ используется один раз для обмена на защищённую браузерную сессию. Он не сохраняется в Buildbook. Токен Telegram-бота сюда вводить не нужно: он остаётся только в локальном файле .env.</p>';
+ modal('Подключение локального хоста',body,form=>{
+  const base=normalizeLocalTelegramBase(form.elements.apiUrl.value);
+  if(!base)return showModalError(form,'Укажите HTTP-адрес localhost, 127.0.0.1 или ::1.');
+  if(STORAGE_MODE==='canonical'&&base!==location.origin)return showModalError(form,'Для канонического профиля используйте текущий адрес Buildbook: '+location.origin);
+  const token=String(form.elements.token.value||'').trim();
+  if(token.length<32)return showModalError(form,'Ключ локального API должен содержать не менее 32 символов.');
+  const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
+  TELEGRAM_UI.baseUrl=base;
+  if(STORAGE_MODE!=='canonical'){S.set.localApiUrl=base;save.skip=1;save()}
+  TELEGRAM_UI.busy=true;if(submit)submit.disabled=true;
+  form.elements.token.value='';
+  localTelegramRequest('/api/session/bootstrap',{baseUrl:base,method:'POST',token,body:'{}'})
+   .then(async()=>{
+    if(STORAGE_MODE==='canonical'){
+     const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
+     const runtime=runtimeModule.createCanonicalProfileRuntime({baseUrl:location.origin});
+     const latest=await runtime.client.readProfile();
+     if(!latest||!latest.profile||!latest.profile.state)throw new Error('Сессия восстановлена, но канонический профиль пуст. Данные не переключены.');
+     canonicalReconnectReady=true;
+     TELEGRAM_UI.connected=true;TELEGRAM_UI.checked=true;TELEGRAM_UI.status=null;
+     TELEGRAM_UI.error='Сессия восстановлена. После резервного копирования загрузите актуальный профиль.';
+    }else await refreshTelegramStatus(true);
+    overlay.remove();render();
+   })
+   .catch(error=>{canonicalReconnectReady=false;showModalError(form,error.status===401?'Ключ подключения не принят. Проверьте BUILDBOOK_LOCAL_API_TOKEN.':(error.message||'Не удалось подключить локальный хост. Проверьте адрес, Origin и состояние сервиса.'));if(submit)submit.disabled=false})
+   .finally(()=>{TELEGRAM_UI.busy=false});
+  return false;
+ },false,'Подключить');
+}
+async function closeTelegramSession(){
+ if(STORAGE_MODE==='canonical'){
+  alert('Нельзя закрыть сессию, пока приложение работает с файловым профилем: для сохранения данных она необходима. Сначала явно вернитесь к IndexedDB.');
+  return;
+ }
+ try{await localTelegramRequest('/api/session/close',{method:'POST'})}catch{}
+ TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Сессия закрыта.';render();
+}
+function telegram(){
+ if(STORAGE_MODE==='canonical'||normalizeLocalTelegramBase(location.origin))TELEGRAM_UI.baseUrl=location.origin;
+ else if(S.set.localApiUrl)TELEGRAM_UI.baseUrl=String(S.set.localApiUrl);
+ if(TEST_MODE&&!TELEGRAM_UI.checked){TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Проверка локального хоста отключена в тестовом режиме.'}
+ if(!TEST_MODE&&!TELEGRAM_UI.checked&&!TELEGRAM_UI.checking)refreshTelegramStatus();
+ const status=TELEGRAM_UI.status,queue=status&&status.queue?status.queue:{},stamp=value=>{if(!value)return'—';const date=new Date(value);return Number.isNaN(date.getTime())?'—':date.toLocaleString('ru-RU')};
+ const connection=TELEGRAM_UI.checking?'<span class="mu">Проверяем локальный сервис…</span>':TELEGRAM_UI.connected?'<span class="ok">Подключено</span>':'<span class="mu">'+esc(TELEGRAM_UI.error||'Нет активной сессии.')+'</span>';
+ const statusCard=TELEGRAM_UI.connected?'<section><div class="hd"><h2>Состояние сервиса</h2><span class="'+(status.enabled&&status.running?'ok':'mu')+'">'+(status.enabled?(status.running?'Работает':'Включён, но остановлен'):'Отключён настройкой')+'</span></div><div class="k">'+kpi('В очереди',Number(queue.pending)||0)+kpi('Обрабатывается',Number(queue.processing)||0)+kpi('Завершено',Number(queue.completed)||0)+kpi('Отклонено',Number(queue.rejected)||0)+kpi('Обработано за цикл',status.lastProcessed||0)+kpi('Ошибки подряд',status.consecutiveFailures||0)+'</div><p class="mu">Запущен: '+stamp(status.startedAt)+' · Последний цикл: '+stamp(status.lastCycleAt)+'</p>'+(status.lastError?'<p class="bad">'+esc(status.lastError.message||'Ошибка сервиса Telegram')+'</p>':'')+'</section>':'<section><b>Локальный сервис не подключён</b><p class="mu">Запустите host-службу на этом компьютере, затем подключите браузер с помощью ключа BUILDBOOK_LOCAL_API_TOKEN.</p><button class="btn p" data-a="tgconnect">Подключить локальный хост</button></section>';
+ const warning=status&&status.enabled&&STORAGE_MODE!=='canonical'?'<section style="border:1px solid var(--bad);padding:14px;border-radius:10px"><b class="bad">Telegram polling включён</b><p class="mu">Интерфейс сейчас использует IndexedDB, а Telegram — файловый профиль. Это разные хранилища. Остановите хост и установите BUILDBOOK_TELEGRAM_ENABLED=false, пока не переключите интерфейс на канонический профиль.</p></section>':STORAGE_MODE==='canonical'?'<section><b>Каноническое хранилище активно</b><p class="mu">Интерфейс и Telegram используют один файловый профиль. Запись защищена проверкой ревизии; при конфликте сохранение останавливается.</p><button class="btn" data-a="storage-indexeddb">Вернуться к IndexedDB</button></section>':'<section><b>Безопасный режим</b><p class="mu">Telegram по умолчанию отключён. Перед включением polling переключите интерфейс на тот же файловый профиль.</p></section>';
+ return head('Telegram')+'<div class="tw" style="padding:18px;display:grid;gap:16px;max-width:1080px"><section><div class="hd"><h2>Локальное подключение</h2>'+connection+'</div><p class="mu">Buildbook общается с локальным host API по loopback-адресу. Секрет бота, allowlist и получение обновлений Telegram остаются на стороне фонового процесса.</p><p class="mu">API: '+esc(TELEGRAM_UI.baseUrl)+'</p><div class="ac"><button class="btn" data-a="tgrefresh">Обновить статус</button>'+(STORAGE_MODE==='canonical'?'<button class="btn" data-a="storage-indexeddb">Вернуться к IndexedDB</button>':TELEGRAM_UI.connected?'<button class="btn" data-a="tgclose">Закрыть сессию</button>':'<button class="btn p" data-a="tgconnect">Подключить</button>')+'</div></section>'+statusCard+warning+'<section><b>Команды бота</b><p class="mu">Разрешённый пользователь пишет боту в личный чат. Подтверждение уходит только после записи в файловый профиль. Чужие сообщения игнорируются без ответа.</p><ul><li><code>/доход 1250 Описание</code></li><li><code>/расход 450 Описание</code></li><li><code>/статистика</code> — доходы и расходы за текущий месяц</li><li><code>/статистика 2026-11</code> — за выбранный месяц</li><li><code>/help</code> — список команд</li></ul><p class="mu">Доход и расход попадают в кассу «Наличные» или в первую кассу и в видимые категории «Другое» или «Еда». Повтор той же доставки не создаёт вторую операцию. Статистика считает только обычные доходы и расходы, как сводка в интерфейсе.</p></section><section><b>Первоначальная настройка хоста</b><ol><li>Скопируйте <code>.env.example</code> в <code>.env</code> и укажите абсолютные пути, ключ локального API, токен бота и числовой Telegram user ID.</li><li>Запустите <code>scripts/start-buildbook-local-host.ps1</code>.</li><li>Подключите браузер ключом локального API. Ключ не сохраняется; сервер меняет его на HttpOnly-сессию.</li></ol><p class="mu">Не публикуйте .env и не помещайте токен Telegram-бота в браузер или репозиторий.</p></section></div>';
+}
+
+function sets(){const demoSection='<section><b>Демо-данные за полгода</b><p class="mu">Создаёт отдельные тестовые кассы и реалистичную историю за шесть календарных месяцев: закупки и остатки, сборки и продажи, финансовые операции, долги, инвестиции, планы, задачи, чек-листы, корзину и журнал. Ваши существующие записи и балансы не заменяются. При очистке связанные с вашими реальными записями элементы сохраняются.</p><button class="btn p" data-a="demoload">Загрузить демо-данные за 6 месяцев</button> <button class="btn" data-a="demoremove" '+(S.set.demoLoaded?'':'disabled')+'>Удалить демо-данные</button><p class="mu">'+(S.set.demoLoaded?'Демо-данные загружены: '+demoEntryCount()+' записей за 6 месяцев.':'Демо-данные не загружены.')+'</p></section>';const wipeSection='<div><button class="btn" data-a="wipe" style="color:var(--bad)">Удалить все данные</button></div>';return head('Настройки')+'<div class="tw settings-page" style="padding:18px;display:grid;gap:16px;max-width:900px"><label>Тема<select data-f="theme">'+opt([['auto','Как в системе'],['light','Светлая'],['dark','Тёмная']],S.set.theme)+'</select></label><section><b>Журнал изменений</b><p class="mu">Все новые записи сохраняются без автоматического удаления. Для отдельного хранения можно скачать журнал в текстовом файле TXT.</p></section><section><b>Дополнительные разделы</b><label class="setting-toggle"><span>Включить раздел «Долги и инвестиции»</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="debtsInvestments" '+(S.set.debtsInvestments?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Раздел ведёт выданные и полученные долги, платежи, инвестиционные вложения, выводы и текущую оценку активов. При отключении раздел скрывается, но записи и движения по кассам сохраняются.</p></section>'+'<section><b>Режим редактирования интерфейса</b><label class="setting-toggle"><span>Разрешить перетаскивание разделов и пунктов меню</span><span class="toggle-switch"><input type="checkbox" role="switch" data-f="layoutEdit" '+(S.set.layoutEdit?'checked':'')+'><i aria-hidden="true"></i></span></label><p class="mu">Когда режим включён, перетаскивайте пункты боковой панели и карточки на страницах, чтобы менять их порядок. На дашборде дополнительно доступны настройка графиков и удаление ненужных блоков. Порядок сохраняется в этом профиле.</p></section>'+hotkeySettingsPanel()+dataStorageWarning()+''+'<section><div class="hd"><b>Кассы</b><button class="btn" data-a="aadd">+ Добавить кассу</button></div>'+S.accounts.map(account=>'<div class="cat-item"><span>'+esc(account.name)+' · начальный остаток '+R(account.open)+'</span><button class="btn ic" data-a="aedit" data-id="'+esc(account.id)+'">Изменить</button></div>').join('')+'</section>'+categoryPanel('e','Категории расходов')+categoryPanel('i','Категории доходов')+'<div><b>Локальное хранилище</b><p class="mu" id="storage-info">Получаем сведения о хранилище…</p><button class="btn" data-a="storage">Обновить сведения</button> <button class="btn" data-a="storage-persist">Запросить постоянное хранение</button></div><div><b>Резервная копия</b><p class="mu">Данные хранятся только в этом браузере. Последняя копия: '+(S.set.backup||'ещё не делали')+'.</p><button class="btn p" data-a="exp">Скачать копию (JSON)</button> <button class="btn" data-a="host-export">Экспорт для локального хоста</button> <label class="btn" style="display:inline-block;cursor:pointer">Проверить файл переноса<input type="file" accept=".json,application/json" data-hostimport hidden></label><p class="mu">Специальный переносимый файл содержит профиль, журнал и фотографии, но не включает служебные данные хоста и секреты. Перенос доступен только в пустой локальный профиль после подключения хоста. Перед импортом скачайте отдельную резервную копию. После записи приложение проверит профиль повторным чтением и контрольной суммой; исходный IndexedDB-профиль не изменяется. После проверки импорта можно отдельно подтвердить переключение интерфейса на этот файловый профиль; IndexedDB останется нетронутой.</p> <label class="btn" style="display:inline-block;cursor:pointer">Загрузить копию<input type="file" accept=".json" data-imp hidden></label> <button class="btn p" data-a="expzip">Скачать полный бэкап ZIP</button> <label class="btn" style="display:inline-block;cursor:pointer">Восстановить из ZIP<input type="file" accept=".zip,application/zip" data-zipimp hidden></label></div><div><b>Книги Excel (XLSX)</b><p class="mu">Выгрузка включает несколько листов, а отчёты оформляются отдельными таблицами.</p><button class="btn p" data-a="xlsx" data-id="all">Экспорт всех разделов XLSX</button> <button class="btn" data-a="xlsx" data-id="reports">Экспорт отчётов XLSX</button></div><div><b>Импорт книги Excel</b><p class="mu">Выберите XLSX/XLS-книгу. Для каждого листа можно выбрать тип данных и сопоставить столбцы.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать книгу Excel<input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods" data-xlsximp hidden></label></div><div><b>Таблицы для Excel (CSV)</b><br><button class="btn" data-a="csv" data-id="batches">Склад</button> <button class="btn" data-a="csv" data-id="builds">Сборки</button> <button class="btn" data-a="csv" data-id="tx">Операции</button> <button class="btn" data-a="csv" data-id="accounts">Кассы</button> <button class="btn" data-a="csv" data-id="tasks">Задачи</button> <button class="btn" data-a="csv" data-id="debts">Долги</button> <button class="btn" data-a="csv" data-id="investments">Инвестиции</button> <button class="btn" data-a="csv" data-id="salesPlans">Планы продаж</button></div><div><b>Импорт таблицы CSV</b><p class="mu">Выберите файл, проверьте предпросмотр и сопоставьте столбцы с полями Buildbook. Ошибочные строки будут пропущены с указанием причины.</p><label class="btn" style="display:inline-block;cursor:pointer">Выбрать CSV для импорта<input type="file" accept=".csv,text/csv" data-csvimp hidden></label></div>'+demoSection+'<section><b>Установка приложения</b><p class="mu">Установка доступна через кнопку, если браузер поддерживает её, или вручную через меню браузера. Для iPhone и iPad показана отдельная инструкция Safari.</p><button class="btn p" data-a="inst">Установить как приложение</button></section>'+wipeSection+'</div><div class="ft">Buildbook, версия 2.35<br>Developed by <b>Quinta Legione</b></div>'}
 
 let APP_READY;
 /* тестовый интерфейс доступен только при ?test=1 и использует отдельную IndexedDB */
@@ -3748,7 +3934,7 @@ getState:()=>JSON.parse(JSON.stringify(S)),getDebts:()=>JSON.parse(JSON.stringif
 getLogs:()=>JSON.parse(JSON.stringify(LOG)),
 getPhotos:()=>JSON.parse(JSON.stringify(PH)),shrinkPhoto:file=>shrink(file),createBackupSnapshot:date=>createBackupSnapshot(date),createZipBackup:date=>{const snapshot=createBackupSnapshot(date),photos=snapshot.photos;delete snapshot.photos;return createZipBackupBlob(snapshot,photos)},completeBackupExport:(blob,name,date,download)=>completeBackupExport(blob,name,date,download),backupTimestamp:()=>S.set.backup||'',photoStorageInfo:async()=>{const stored=(await repository.read('p'))||{};return Object.fromEntries(Object.entries(stored).map(([id,list])=>[id,(list||[]).map(item=>({isBinary:!!item&&item.__buildbookBlob===1&&item.bytes instanceof ArrayBuffer,type:item&&item.type||'',size:item&&item.bytes instanceof ArrayBuffer?item.bytes.byteLength:item&&item.size||0}))]))},setPhotos:next=>{PH=JSON.parse(JSON.stringify(next||{}));save.skip=1;save();return true},readZipBackup:buffer=>readZipBackup(buffer),createBuildCardZip:id=>createBuildCardZip(id),readBuildCardZip:buffer=>readBuildCardZip(buffer),inspectBuildDocx:buffer=>{const outer=unzipStore(buffer),entry=[...outer.entries()].find(([name])=>name.endsWith('.docx'));if(!entry)throw new Error('В ZIP-карточке отсутствует DOCX.');const inner=unzipStore(entry[1]);return {filename:entry[0],names:[...inner.keys()],documentXml:new TextDecoder().decode(inner.get('word/document.xml')||new Uint8Array())}},importBuildCardZip:buffer=>importBuildCardZip(buffer),buildCardText:id=>buildCardText(id),buildCardPrintHtml:id=>buildCardPrintHtml(id),
 setState:next=>{const migrated=migrateState(next);S=migrated.state;EXP=S.categories.e;INC=S.categories.i;syncCategories();normalizeStock();LOG=[];PH={};last=JSON.stringify(S);save.skip=1;save();render();return true},
-action:(name,id)=>act(name,id),hotkeyActions:()=>HOTKEY_ACTIONS.map(item=>({...item})),hotkeyComboFromEvent:event=>hotkeyComboFromEvent(event),hotkeyComboMatches:(event,combo)=>hotkeyComboMatches(event,combo),runHotkeyAction:action=>runHotkeyAction(action),planActual:planId=>{const plan=typeof planId==='object'?planId:S.salesPlans.find(x=>x.id===planId);return plan?planActual(plan):null},planLabel:planId=>{const plan=typeof planId==='object'?planId:S.salesPlans.find(x=>x.id===planId);return plan?planLabel(plan):''},undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
+action:(name,id)=>act(name,id),calendarDiagnostics:()=>({selection:V.calendar||null,entries:V.calendar&&V.calendar.selectedDate?calendarEntries(V.calendar.selectedDate).length:0,tasks:V.calendar&&V.calendar.selectedDate?calendarTaskEntries(V.calendar.selectedDate).length:0}),layoutDiagnostics:()=>({tab:V.tab,htmlInline:document.documentElement.style.overflowY,bodyInline:document.body.style.overflowY,htmlComputed:getComputedStyle(document.documentElement).overflowY,bodyComputed:getComputedStyle(document.body).overflowY,viewportWidth:innerWidth,mobile:!!(matchMedia&&matchMedia('(max-width:760px)').matches)}),hotkeyActions:()=>HOTKEY_ACTIONS.map(item=>({...item})),hotkeyComboFromEvent:event=>hotkeyComboFromEvent(event),hotkeyComboMatches:(event,combo)=>hotkeyComboMatches(event,combo),runHotkeyAction:action=>runHotkeyAction(action),planActual:planId=>{const plan=typeof planId==='object'?planId:S.salesPlans.find(x=>x.id===planId);return plan?planActual(plan):null},planLabel:planId=>{const plan=typeof planId==='object'?planId:S.salesPlans.find(x=>x.id===planId);return plan?planLabel(plan):''},undoEntry:index=>undoJournalEntry(+index),migrateLegacyLogs:logs=>{LOG=JSON.parse(JSON.stringify(logs||[]));const changed=migrateLegacyJournalEntries(JSON.stringify(S));return {changed,logs:JSON.parse(JSON.stringify(LOG))}},
 render:()=>render(),
 openSale:()=>sellParts(),
 available:batchId=>{const b=S.batches.find(x=>x.id==batchId);return b?avail(b):null},
@@ -3843,7 +4029,7 @@ async function installApp(){
   await promptEvent.prompt();
   const choice=await promptEvent.userChoice;
   toast(choice&&choice.outcome==='accepted'?'Buildbook добавлен в приложения.': 'Установка не подтверждена. Вы можете повторить её через меню браузера.');
- }catch(error){alert('Не удалось открыть установку: '+(error&&error.message||'ошибка браузера')+'\\n\\n'+installInstructions())}
+ }catch(error){alert('Не удалось открыть установку: '+(error&&error.message||'ошибка браузера')+'\n\n'+installInstructions())}
  render();
 }
 
@@ -3950,16 +4136,23 @@ function persistLayoutOrder(source){
  }
  save.skip=1;save();render();
 }
+function syncTransactionOverflow(){
+ const active=V.tab==='tx',value=active?'hidden':'';
+ document.documentElement.style.overflowY=value;document.body.style.overflowY=value;
+}
+window.addEventListener('resize',syncTransactionOverflow);
 function render(){
  if(APP_LOCKED){renderLegacyUnlockScreen();return}
- const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=false;
- if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Не удалось открыть Buildbook</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Данные не были заменены пустой базой. Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p></section>';return}
+ const mainNav=document.querySelector('nav');if(mainNav)mainNav.hidden=!!APP_FATAL_ERROR;
+ if(APP_FATAL_ERROR){$('#m').innerHTML='<section class="tw" style="padding:24px"><h1>Работа с хранилищем остановлена</h1><p>'+esc(APP_FATAL_ERROR.message||'Ошибка локального хранилища.')+'</p><p>Автоматического перехода на другое хранилище не будет. Данные в памяти не удаляются, но новые изменения не принимаются.</p>'+(STORAGE_MODE==='canonical'?'<p class="mu">Проверьте локальный хост и браузерную сессию. Если ошибка возникла во время работы, сначала скачайте резервную копию текущего состояния.</p>'+(STARTUP_STAGE==='ready'?'<button class="btn p" data-a="expzip">Скачать резервную копию текущего состояния</button> ':'')+'<button class="btn" data-a="tgconnect">Повторно подключить хост</button>'+(canonicalReconnectReady?'<button class="btn p" data-a="canonical-reload">Загрузить актуальный профиль</button> ':'')+'<button class="btn" data-a="storage-indexeddb">Вернуться к IndexedDB</button>':'<p>Закройте другие вкладки приложения и повторите запуск. При необходимости восстановите резервную копию.</p>')+'</section>';return}
  const conflictBanner=storageConflict?'<section class="tw" style="padding:16px;margin-bottom:14px;border:1px solid var(--bad)"><b>Данные изменены в другой вкладке</b><p class="mu">Сохранение в этой вкладке остановлено, чтобы не перезаписать более свежий профиль. Изменения, сделанные здесь после конфликта, пока остаются только в памяти этой вкладки. Скачайте отдельную копию, затем перезагрузите приложение и при необходимости объедините резервную копию.</p><button class="btn p" data-a="expzip">Скачать полный бэкап этой вкладки</button> <button class="btn" data-a="reload">Перезагрузить Buildbook</button></section>':'';
  archiveOldCompletedTasks();
  if(V.tab==='assets'&&!S.set.debtsInvestments)V.tab='set';
- $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,set:sets}[V.tab]();
+ $('#m').innerHTML=conflictBanner+{home,dash,planning,calendar,stock,builds,tx:money,assets,reports:reports,tasks,trash,log:logv,telegram,set:sets}[V.tab]();
  document.body.classList.toggle('transaction-screen',V.tab==='tx');
  document.documentElement.classList.toggle('transaction-screen',V.tab==='tx');
+ syncTransactionOverflow();
+ const main=document.querySelector('main');if(main){main.style.maxWidth='none';main.style.minWidth='0';main.style.width='auto';main.style.boxSizing='border-box'}
  document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('on',b.dataset.id==V.tab);if(b.dataset.id==='assets'){b.hidden=!S.set.debtsInvestments;b.style.display=b.hidden?'none':''}});
  document.body.classList.toggle('nav-collapsed',!!S.set.navCollapsed);
  applyLayoutEditing();
@@ -4070,6 +4263,26 @@ function trash(){
  return head('Корзина',action)+'<p class="mu">Удалённые записи хранятся отдельно от рабочего учёта. Восстановление проверяет ID, связанные партии и доступное количество. Окончательное удаление нельзя отменить.</p>'+table(['Удалено','Тип','Запись','Дополнительно',''],rows,'Корзина пуста.');
 }
 
+function renameCategory(kind,group,oldName){
+ const categories=kind==='e'?EXP:INC;
+ if(!categories[group]||!categories[group].includes(oldName))return false;
+ const body=fld('name','Новое название категории','text',oldName,'required');
+ modal('Переименовать категорию',body,form=>{
+  const nextName=String(form.elements.name.value||'').trim();
+  if(!nextName)return showModalError(form,'Введите название категории.');
+  if(nextName===oldName)return true;
+  if(Object.values(categories).some(items=>items.includes(nextName)))return showModalError(form,'Категория с таким названием уже существует.');
+  categories[group][categories[group].indexOf(oldName)]=nextName;
+  S.tx.forEach(transaction=>{if(transaction.cat===oldName&&(transaction.grp===group||!transaction.grp))transaction.cat=nextName});
+  const oldKey=group+'::'+oldName,newKey=group+'::'+nextName;
+  S.hiddenCategories[kind]=(S.hiddenCategories[kind]||[]).map(item=>item===oldKey?newKey:item);
+  if(kind==='e'&&group===S.stockGroup)S.batches.forEach(batch=>{if(batch.type===oldName)batch.type=nextName});
+  if(kind==='i'&&group===S.partSaleGroup&&S.partSaleCategory===oldName)S.partSaleCategory=nextName;
+  syncCategories();save();render();
+ });
+ return true;
+}
+
 function act(a,id){const A={
 'hotkey-add':()=>{
  const select=$('#hotkey-new-action'),action=select&&select.value;
@@ -4080,7 +4293,7 @@ function act(a,id){const A={
 'hotkey-listen':()=>{if(!S.set.hotkeys.some(item=>item.id===id))return;V.hotkeyCaptureId=id;render()},
 'hotkey-remove':()=>{S.set.hotkeys=normalizeStoredHotkeys(S.set.hotkeys).filter(item=>item.id!==id);if(V.hotkeyCaptureId===id)V.hotkeyCaptureId='';save();render()},
 'hotkey-reset':()=>{if(!confirm('Вернуть стандартные сочетания клавиш? Ваши назначения будут заменены.'))return;S.set.hotkeys=DEFAULT_HOTKEYS.map(item=>({...item}));V.hotkeyCaptureId='';save();render();toast('Стандартные сочетания восстановлены.')},
-'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;navOtherOpen=false;V.txMenuOpen=false;render();scrollTo(0,0)},'other-toggle':()=>{if(!S.set.layoutEdit){navOtherOpen=!navOtherOpen;applyLayoutEditing()}},'nav-to-other':()=>moveNavigationTab(id,'other'),'nav-to-main':()=>moveNavigationTab(id,'main'),'txmenu-toggle':()=>{V.txMenuOpen=!V.txMenuOpen;render()},navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),calprev:()=>calendarShift(-1),calnext:()=>calendarShift(1),calnow:()=>{const d=new Date();V.calendar={year:d.getFullYear(),month:d.getMonth()};render()},calday:()=>calendarDay(id),caldayclear:()=>{if(V.calendar)delete V.calendar.selectedDate;render()},padd:()=>pform(),bview:()=>buildDetails(id),pe:()=>{const batch=find('batches',id);if(batch&&batch.kitPurchaseId){tform(batch.kitPurchaseId);return}pform(id)},badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
+'assets-tab':()=>{if(['debts','investments'].includes(id)){V.assetsTab=id;render()}},assets:()=>{V.tab='assets';render();scrollTo(0,0)},'assets-archive':()=>{V.showArchivedAssets=!V.showArchivedAssets;render()},'debt-add':()=>debtForm(),'debt-edit':()=>debtForm(id),'debt-pay':()=>debtPaymentForm(id),'debt-archive':()=>{const r=archiveDebtRecord(id);if(!r.ok)alert(r.error)},'investment-add-new':()=>investmentForm(),'investment-edit':()=>investmentForm(id),'investment-add':()=>investmentMovementForm(id,'contribution'),'investment-withdraw':()=>investmentMovementForm(id,'withdrawal'),'investment-close':()=>{const r=closeInvestmentRecord(id);if(!r.ok)alert(r.error)},nav:()=>{V.tab=id;navOtherOpen=false;V.txMenuOpen=false;render();scrollTo(0,0)},'other-toggle':()=>{if(!S.set.layoutEdit){navOtherOpen=!navOtherOpen;applyLayoutEditing()}},'nav-to-other':()=>moveNavigationTab(id,'other'),'nav-to-main':()=>moveNavigationTab(id,'main'),'txmenu-toggle':()=>{V.txMenuOpen=!V.txMenuOpen;render()},tgconnect:()=>telegramConnectForm(),'canonical-reload':()=>{if(!canonicalReconnectReady){alert('Сначала восстановите браузерную сессию локального хоста.');return}if(STARTUP_STAGE==='ready'&&!confirm('Перед перезагрузкой скачайте резервную копию текущего состояния. Подтверждаете, что копия сохранена? После перезагрузки будет загружена последняя версия канонического профиля, а несохранённые изменения этой вкладки не будут перенесены.'))return;location.reload()},'storage-indexeddb':()=>{if(!confirm('Переключить Buildbook обратно на IndexedDB? Файловый профиль локального хоста останется без изменений. Два хранилища будут независимыми.'))return;try{localStorage.setItem(STORAGE_MODE_KEY,'indexeddb')}catch(error){alert('Не удалось изменить режим хранилища: '+(error.message||'ошибка'));return}location.reload()},tgrefresh:()=>{TELEGRAM_UI.checked=false;refreshTelegramStatus()},tgclose:()=>closeTelegramSession(),navcollapse:()=>{S.set.navCollapsed=!S.set.navCollapsed;save.skip=1;save();render()},search:()=>globalSearch(),rptab:()=>{if(['expenses','income','summary','builds'].includes(id)){V.report=id;render()}},rcsv:()=>exportDataCsv(id),xlsx:()=>exportXlsx(id),calprev:()=>calendarShift(-1),calnext:()=>calendarShift(1),calnow:()=>{const d=new Date();V.calendar={year:d.getFullYear(),month:d.getMonth()};render()},calday:()=>calendarDay(id),caldayclear:()=>{if(V.calendar)delete V.calendar.selectedDate;render()},padd:()=>pform(),bview:()=>buildDetails(id),pe:()=>{const batch=find('batches',id);if(batch&&batch.kitPurchaseId){tform(batch.kitPurchaseId);return}pform(id)},badd:()=>bform(),be:()=>bform(id),tadd:()=>tform(0,id),te:()=>{const t=find('tx',id);if(t&&(t.debtId||t.investmentId)){alert('Эту операцию нельзя редактировать отдельно: измените долг или инвестицию в соответствующем разделе.');return}if(t&&t.partSale){alert('Продажу комплектующего нельзя редактировать как обычную операцию. Удалите её с возвратом детали и создайте заново.');return}if(t&&t.kind=='transfer'){transferForm(id);return}tform(id)},sellParts:()=>sellParts(),xfer:()=>transferForm(),
 pprob:()=>problemForm(id),pclear:()=>clearProblemForm(id),pwriteoff:()=>writeoffForm(id),phistory:()=>stockHistory(),
 pd:()=>{const b=find('batches',id);if(!b)return;if(b.kitPurchaseId){alert('Эта позиция входит в покупку комплектом. Изменяйте весь комплект через транзакцию, чтобы сохранить распределение себестоимости.');return}const linkedBuilds=S.builds.filter(build=>(build.lines||[]).some(line=>line.batchId==b.id));if(linkedBuilds.length){alert('Нельзя удалить партию: она используется в сборках '+linkedBuilds.map(build=>'№'+build.num+(build.name?' («'+build.name+'»)':'')).join(', ')+'. Сначала удалите или измените состав этих сборок.');return}if(S.tx.some(t=>t.partSale&&t.batchId==b.id)){alert('По этой партии уже есть продажи. Сначала отмените связанные продажи.');return}if(!confirm('Переместить партию «'+b.desc+'» в корзину?'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный расход?')){relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}S.trash.unshift(makeTrashEntry('batch',b,{relatedTx}));S.batches=S.batches.filter(x=>x.id!==b.id);save();render()},
 bd:()=>{const b=find('builds',id);if(!b)return;if(!confirm('Переместить сборку №'+b.num+' в корзину? Детали вернутся в доступный остаток.'))return;let relatedTx=null;const linked=b.txId&&find('tx',b.txId);if(linked&&confirm('Переместить в корзину и связанный доход?')){const cashCheck=checkTransactionBalance(null,linked);if(!cashCheck.ok){alert(cashCheck.error+' Сборка не удалена.');return}relatedTx=trashClone(linked);S.tx=S.tx.filter(x=>x.id!==linked.id)}const photos=Array.isArray(PH[b.id])?trashClone(PH[b.id]):[];S.trash.unshift(makeTrashEntry('build',b,{relatedTx,photos}));S.builds=S.builds.filter(x=>x.id!==b.id);delete PH[b.id];save();render()},
@@ -4088,7 +4301,7 @@ td:()=>{const t=find('tx',id);if(!t)return;if(t.buildId){alert('Продажа �
 aadd:()=>accountForm(),
 aedit:()=>accountForm(id),
 
-cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccedit',catKey(k,g,select.value))},
+cceditpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)renameCategory(k,g,select.value)},
 cchidepick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('cchide',catKey(k,g,select.value))},
 ccdelpick:()=>{const[k,g]=JSON.parse(decodeURIComponent(id)),select=[...document.querySelectorAll('[data-cat-group]')].find(x=>{try{const pair=JSON.parse(decodeURIComponent(x.dataset.catGroup));return pair[0]===k&&pair[1]===g}catch(_){return false}});if(select&&select.value)act('ccdel',catKey(k,g,select.value))},
 txcat:()=>{try{const[k,g,c]=JSON.parse(decodeURIComponent(id));V.t.k=k;V.t.grp=g;V.t.cat=c;const overlay=document.querySelector('.ov');if(overlay)overlay.remove();render();toast('Показана категория «'+c+'».')}catch(error){alert('Не удалось выбрать категорию.')}},
@@ -4099,10 +4312,10 @@ cgroupedit:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;
 cghide:()=>{const [k,g]=JSON.parse(decodeURIComponent(id));if(k=='e'&&g==S.stockGroup){alert('Группу типов склада нельзя скрыть: она используется в учёте комплектующих.');return}const a=S.hiddenGroups[k]||(S.hiddenGroups[k]=[]),i=a.indexOf(g);i>=0?a.splice(i,1):a.push(g);save();render()},
 cgroupdel:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(g==S.stockGroup){alert('Системную группу типов склада удалить нельзя.');return}if((o[g]||[]).length){alert('Сначала удалите или перенесите категории внутри группы.');return}if(S.tx.some(t=>t.grp==g)){alert('Группа используется в истории операций. Скрывайте её вместо удаления.');return}if(!confirm('Удалить пустую группу «'+g+'»?'))return;delete o[g];S.hiddenGroups[k]=(S.hiddenGroups[k]||[]).filter(x=>x!=g);syncCategories();save();render()},
 ccadd:()=>{const [k,g]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g])return;const n=(prompt('Название новой категории в группе «'+g+'»')||'').trim();if(!n)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g].push(n);syncCategories();save();render()},
-ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(old))return;const n=(prompt('Новое название категории',old)||'').trim();if(!n||n==old)return;if(Object.values(o).some(a=>a.includes(n))){alert('Категория с таким названием уже существует.');return}o[g][o[g].indexOf(old)]=n;S.tx.forEach(t=>{if(t.cat==old&&(t.grp==g||!t.grp))t.cat=n});const hk=g+'::'+old,hk2=g+'::'+n;S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).map(x=>x==hk?hk2:x);if(k=='e'&&g==S.stockGroup)S.batches.forEach(b=>{if(b.type==old)b.type=n});if(k=='i'&&g==S.partSaleGroup&&S.partSaleCategory==old)S.partSaleCategory=n;syncCategories();save();render()},
+ccedit:()=>{const [k,g,old]=JSON.parse(decodeURIComponent(id));renameCategory(k,g,old)},
 cchide:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]),key=g+'::'+n,i=a.indexOf(key);i>=0?a.splice(i,1):a.push(key);save();render()},
 ccdel:()=>{const [k,g,n]=JSON.parse(decodeURIComponent(id)),o=k=='e'?EXP:INC;if(!o[g]||!o[g].includes(n))return;if(k=='e'&&g==S.stockGroup&&n!='Компы и другое'){alert('Это тип комплектующих склада. Его нельзя удалить, но можно переименовать или скрыть в выборе финансовой категории.');return}if(k=='i'&&g==S.partSaleGroup&&n==S.partSaleCategory){alert('Эта категория используется для продаж комплектующих. Переименуйте её или скройте.');return}const used=S.tx.some(t=>t.cat==n&&(t.grp==g||!t.grp));if(used){if(confirm('Категория уже встречается в истории. Скрыть её вместо удаления?')){const key=g+'::'+n,a=S.hiddenCategories[k]||(S.hiddenCategories[k]=[]);if(!a.includes(key))a.push(key);save();render()}return}if(!confirm('Удалить категорию «'+n+'»?'))return;o[g].splice(o[g].indexOf(n),1);S.hiddenCategories[k]=(S.hiddenCategories[k]||[]).filter(x=>x!=g+'::'+n);syncCategories();save();render()},
-exp:()=>{if(downloadBackup('buildbook-'+today()+'.json',true)){render();toast('Копия скачана')}},expzip:()=>downloadZipBackup(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
+exp:()=>{if(downloadBackup('buildbook-'+today()+'.json',true)){render();toast('Копия скачана')}},expzip:()=>downloadZipBackup(),'host-export':()=>downloadHostProfileExport(),reload:()=>{if(confirm('Перезагрузить Buildbook? Несохранённые изменения этой вкладки останутся только в скачанной резервной копии.'))location.reload()},storage:()=>refreshStorageInfo(), 'storage-persist':()=>requestPersistentStorage(),logexport:()=>exportJournal(),demoload:()=>loadDemoData(),demoremove:()=>removeDemoData(),
 kadd:()=>kform(0,+id),ke:()=>kform(id),kd:()=>{const task=find('tasks',id);if(!task||!confirm('Переместить задачу в корзину?'))return;S.trash.unshift(makeTrashEntry('task',task));S.tasks=S.tasks.filter(t=>t.id!==id);save();render()},knote:()=>{S.set.hideTaskNotes=!S.set.hideTaskNotes;save();render()},ckadd:()=>{const value=(prompt('Текст пункта чек-листа')||'').trim();if(!value)return;S.checklist.push({id:uid(),text:value,done:0});save();render()},ckdone:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item)return;item.done=item.done?0:1;save();render()},ckdel:()=>{const item=(S.checklist||[]).find(x=>x.id===id);if(!item||!confirm('Переместить пункт чек-листа в корзину?'))return;S.trash.unshift(makeTrashEntry('checklist',item));S.checklist=S.checklist.filter(x=>x.id!==id);save();render()},kdone:()=>{const t=find('tasks',id);if(!t)return;t.done=t.done?0:1;if(t.done){t.doneAt=today();delete t.archivedAt}else{delete t.doneAt;delete t.archivedAt}save();render()},krestore:()=>{const t=find('tasks',id);if(!t)return;delete t.archivedAt;delete t.doneAt;t.done=0;save();render();toast('Задача возвращена в работу.')},
 trrestore:()=>restoreTrashItem(id),trdel:()=>{if(!confirm('Удалить запись из корзины навсегда?'))return;S.trash=S.trash.filter(x=>x.id!==id);save();render()},emptytrash:()=>{if(!S.trash.length||!confirm('Окончательно удалить все записи из корзины?'))return;S.trash=[];save();render()},
 undo:()=>{const e=LOG[+id];if(!e)return;if(!Array.isArray(e.changes)||!e.changes.length){alert('Для этой записи нет безопасного набора изменений.');return}if(!confirm('Отменить только действие «'+e.l+'»? Более поздние независимые действия сохранятся. Если изменённые поля уже затронуты последующими операциями, отмена будет заблокирована.'))return;const result=undoJournalEntry(+id);if(!result.ok){alert(result.message);return}toast('Действие отменено. Более поздние операции сохранены.')},
@@ -4151,6 +4364,49 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('input',e=>{const k=e.target.dataset.f;if(!k)return;const v=e.target.type=='checkbox'?e.target.checked:e.target.value;if(k=='year'){S.set.year=+v;save.skip=1;save()}else if(k=='theme'){S.set.theme=v;save.skip=1;save();theme()}else if(k=='debtsInvestments'){S.set.debtsInvestments=!!v;save.skip=1;save()}else if(k=='layoutEdit'){S.set.layoutEdit=!!v;save.skip=1;save()}else{const[a,b]=k.split('.');V[a][b]=v}render();const n=document.querySelector(`[data-f="${k}"]`);if(n&&n.type!='checkbox'&&n.tagName!='SELECT'){n.focus();try{n.setSelectionRange(999,999)}catch(_){}}});
 document.addEventListener('change',e=>{
+ if(e.target.matches('[data-hostimport]')){
+  const file=e.target.files[0];e.target.value='';
+  if(!file)return;
+  if(file.size>34*1024*1024){alert('Файл больше допустимых 34 MiB.');return}
+  file.text().then(async text=>{
+   if(!window.BuildbookProfileImport||typeof window.BuildbookProfileImport.parseAndValidate!=='function')throw new Error('Модуль проверки импорта не загружен.');
+   const verified=await window.BuildbookProfileImport.parseAndValidate(text);
+   const summary=state=>{
+    const keys=['accounts','batches','builds','tx','debts','investments','stockEvents','salesPlans','tasks','checklist','trash'];
+    return keys.map(key=>[key,Array.isArray(state&&state[key])?state[key].length:0]);
+   };
+   const formatSummary=items=>items.map(([key,count])=>key+': '+count).join(' · ');
+   const sourceCounts=summary(verified.payload.state);
+   if(!confirm('Перед переносом обязательно скачайте отдельную резервную копию через «Скачать копию (JSON)».\n\nПодтверждаете, что резервная копия сохранена и вы хотите проверить целевой локальный хост?'))return;
+   if(!TELEGRAM_UI.connected){
+    await refreshTelegramStatus(true);
+    if(!TELEGRAM_UI.connected)throw new Error('Сначала подключите локальный хост во вкладке Telegram.');
+   }
+   const target=await localTelegramRequest('/api/profile');
+   if(!target||!Number.isSafeInteger(target.revision)||target.revision<0||!(target.profile===null||isPlainRecord(target.profile))){
+    throw new Error('Локальный хост вернул некорректное состояние профиля.');
+   }
+   if(target.profile!==null)throw new Error('Целевой профиль локального хоста уже содержит данные. Обычный перенос запрещён, чтобы не перезаписать существующий профиль.');
+   const bytes=verified.sizeBytes;
+   const size=bytes<1024*1024?(bytes/1024).toFixed(1)+' KiB':(bytes/1024/1024).toFixed(2)+' MiB';
+   const details='Схема: '+verified.sourceSchemaVersion+'\nРазмер данных: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\n'+formatSummary(sourceCounts);
+   if(!confirm('Целевой профиль пуст. Будет создана его первая ревизия.\n\n'+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить импорт?'))return;
+   const envelope={format:verified.format,version:verified.version,sourceSchemaVersion:verified.sourceSchemaVersion,exportedAt:verified.exportedAt,payload:verified.payload,sha256:verified.sha256};
+   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope}),timeoutMs:120_000});
+   if(!imported||imported.imported!==true||imported.revision!==target.revision+1)throw new Error('Хост не подтвердил ожидаемый результат импорта.');
+   const readback=await localTelegramRequest('/api/profile');
+   if(!readback||readback.revision!==imported.revision||!isPlainRecord(readback.profile))throw new Error('Импорт записан, но повторное чтение профиля не подтвердило ревизию. Не переключайте приложение на хост до проверки.');
+   const actual=await window.BuildbookProfileExport.createEnvelope({state:readback.profile.state,logs:readback.profile.logs,photos:readback.profile.photos});
+   if(actual.sha256!==verified.sha256)throw new Error('Импорт записан, но контрольная сумма прочитанного профиля не совпала. Исходный IndexedDB-профиль сохранён; не переключайте режим хранения.');
+   toast('Профиль перенесён в локальный хост и проверен чтением обратно.');
+   alert('Перенос завершён и проверен.\n\nРевизия локального профиля: '+readback.revision+'\nКонтрольная сумма совпадает.');
+   if(confirm('Переключить Buildbook на проверенный файловый профиль сейчас? IndexedDB останется нетронутой резервной копией.')){
+    try{localStorage.setItem(STORAGE_MODE_KEY,'canonical');location.reload()}
+    catch(error){alert('Профиль перенесён, но режим не переключён: '+(error.message||'ошибка доступа к настройкам браузера'))}
+   }
+  }).catch(error=>alert('Не удалось перенести профиль: '+(error&&error.message||'ошибка файла')));
+  return;
+ }
  if(e.target.matches('[data-xlsximp]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(xlsxImportWizard).catch(err=>alert('Не удалось прочитать XLSX: '+err.message));return}
  if(e.target.matches('[data-csvimp]')){const file=e.target.files[0];e.target.value='';if(file)file.text().then(importCsvWizard).catch(err=>alert('Не удалось прочитать CSV: '+err.message));return}
  if(e.target.matches('[data-buildzip]')){const file=e.target.files[0];e.target.value='';if(file)file.arrayBuffer().then(buildCardImportWizard).catch(err=>alert('Не удалось прочитать ZIP-карточку: '+err.message));return}
@@ -4274,12 +4530,32 @@ document.addEventListener('change',e=>{if(e.target.matches('[data-n]')){S.notes=
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;V.tab=='set'&&render()});
 addEventListener('appinstalled',()=>{dip=null;toast('Buildbook установлено как приложение.');if(V.tab==='set')render()});
 if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js');
-APP_READY=load().then(()=>{theme();render();if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});return true}).catch(error=>{
- APP_FATAL_ERROR=error;
- console.error('Buildbook startup:',error);
- render();
- return false;
-});
+async function initializeCanonicalStorage(){
+ if(STORAGE_MODE!=='canonical')return;
+ if(TEST_MODE||location.protocol!=='http:')throw new Error('Канонический профиль доступен только в обычном браузере через локальный HTTP-хост. Автономная сборка продолжает использовать IndexedDB.');
+ STARTUP_STAGE='connecting-canonical-profile';
+ const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
+ canonicalRuntime=runtimeModule.createCanonicalProfileRuntime({baseUrl:location.origin});
+ await canonicalRuntime.verifySession();
+ repository=canonicalRuntime.repository;
+ storageChannel=null;
+ const canonical=await repository.readProfile();
+ if(!canonical.state)throw new Error('Файловый профиль локального хоста пуст. Сначала вернитесь в IndexedDB, подключите локальный хост и импортируйте резервную копию профиля в настройках.');
+}
+APP_READY=(async()=>{
+ try{
+  await initializeCanonicalStorage();
+  await load();
+  theme();render();
+  if(navigator.storage&&navigator.storage.persist&&STORAGE_MODE==='indexeddb')navigator.storage.persist().catch(()=>{});
+  return true;
+ }catch(error){
+  APP_FATAL_ERROR=error;
+  console.error('Buildbook startup:',error);
+  render();
+  return false;
+ }
+})();
 addEventListener('pagehide',()=>{flushSave().catch(reportStorageError)});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave().catch(reportStorageError)});
 </script></body></html>

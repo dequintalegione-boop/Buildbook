@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+data/
+*.api-lock
+*.telegram-lock

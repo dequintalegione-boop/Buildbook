@@ -1,0 +1,116 @@
+(function registerProfileImport(global) {
+  'use strict';
+
+  const FORMAT = 'buildbook-profile-export';
+  const VERSION = 1;
+  const SOURCE_SCHEMA_VERSION = 5;
+  const MAX_PROFILE_BYTES = 32 * 1024 * 1024;
+  const MAX_FILE_BYTES = 34 * 1024 * 1024;
+  const ISO_EXPORT_DATE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+  function isValidExportDate(value) {
+    if (typeof value !== 'string') return false;
+    const match = ISO_EXPORT_DATE.exec(value);
+    if (!match) return false;
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = '', zone, sign, offsetHourText, offsetMinuteText] = match;
+    const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+    const hour = Number(hourText), minute = Number(minuteText), second = Number(secondText);
+    const offsetHour = Number(offsetHourText || 0), offsetMinute = Number(offsetMinuteText || 0);
+    if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59
+      || offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
+    const date = new Date(0);
+    date.setUTCFullYear(year, month - 1, day);
+    date.setUTCHours(hour, minute, second, Number((fraction + '000').slice(0, 3)));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+      || date.getUTCHours() !== hour || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second) return false;
+    return Number.isFinite(Date.parse(value)) && (sign === '+' || sign === '-' || zone === 'Z');
+  }
+  const HEX_SHA256 = /^[a-f0-9]{64}$/;
+
+  function record(value, label) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new TypeError(label + ' должен быть объектом.');
+    }
+  }
+
+  function equalDigest(left, right) {
+    if (left.length !== right.length) return false;
+    let mismatch = 0;
+    for (let i = 0; i < left.length; i += 1) mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+    return mismatch === 0;
+  }
+
+  async function validateEnvelope(input) {
+    record(input, 'Файл импорта');
+    if (input.format !== FORMAT || input.version !== VERSION) {
+      throw new Error('Формат или версия файла импорта не поддерживается.');
+    }
+    if (input.sourceSchemaVersion !== SOURCE_SCHEMA_VERSION) {
+      throw new Error('Версия схемы профиля в файле не поддерживается.');
+    }
+    if (!isValidExportDate(input.exportedAt)) {
+      throw new Error('В файле указана некорректная дата экспорта.');
+    }
+    if (typeof input.sha256 !== 'string' || !HEX_SHA256.test(input.sha256)) {
+      throw new Error('Контрольная сумма файла имеет неверный формат.');
+    }
+    const envelopeKeys = ['format', 'version', 'sourceSchemaVersion', 'exportedAt', 'payload', 'sha256'];
+    if (Object.keys(input).some(key => !envelopeKeys.includes(key))) {
+      throw new Error('Файл содержит неизвестные поля конверта.');
+    }
+    record(input.payload, 'Данные профиля');
+    const payloadKeys = ['state', 'logs', 'photos'];
+    if (Object.keys(input.payload).some(key => !payloadKeys.includes(key))) {
+      throw new Error('Данные профиля содержат неподдерживаемые поля.');
+    }
+    record(input.payload.state, 'Состояние профиля');
+    if (!Array.isArray(input.payload.logs)) throw new TypeError('Журнал профиля должен быть массивом.');
+    record(input.payload.photos, 'Фотографии профиля');
+
+    if (!global.crypto || !global.crypto.subtle || typeof TextEncoder !== 'function') {
+      throw new Error('В этой среде недоступна проверка SHA-256.');
+    }
+    let serialized;
+    try {
+      serialized = JSON.stringify(input.payload);
+    } catch (_) {
+      throw new TypeError('Данные профиля должны быть сериализуемыми JSON-данными.');
+    }
+    if (typeof serialized !== 'string') throw new TypeError('Не удалось прочитать данные профиля.');
+    const bytes = new TextEncoder().encode(serialized);
+    if (bytes.byteLength > MAX_PROFILE_BYTES) {
+      throw new RangeError('Размер профиля превышает допустимые 32 MiB.');
+    }
+    const digest = await global.crypto.subtle.digest('SHA-256', bytes);
+    const actual = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (!equalDigest(actual, input.sha256)) {
+      throw new Error('Контрольная сумма не совпадает: файл повреждён или изменён.');
+    }
+
+    return Object.freeze({
+      format: FORMAT,
+      version: VERSION,
+      sourceSchemaVersion: SOURCE_SCHEMA_VERSION,
+      exportedAt: input.exportedAt,
+      payload: input.payload,
+      sha256: input.sha256,
+      sizeBytes: bytes.byteLength,
+    });
+  }
+
+  async function parseAndValidate(text) {
+    if (typeof text !== 'string') throw new TypeError('Содержимое файла должно быть текстом.');
+    // Reject oversized input before JSON.parse allocates the object graph.
+    if (text.length > MAX_FILE_BYTES) throw new RangeError('Размер файла превышает допустимые 34 MiB.');
+    if (typeof TextEncoder !== 'function' || new TextEncoder().encode(text).byteLength > MAX_FILE_BYTES) {
+      throw new RangeError('Размер файла превышает допустимые 34 MiB.');
+    }
+    let parsed;
+    try { parsed = JSON.parse(text); } catch (_) {
+      throw new Error('Файл импорта не содержит корректный JSON.');
+    }
+    return validateEnvelope(parsed);
+  }
+
+  global.BuildbookProfileImport = Object.freeze({ validateEnvelope, parseAndValidate });
+})(window);

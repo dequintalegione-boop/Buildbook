@@ -1,0 +1,277 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createTelegramPoller } from '../host/telegram-poller.mjs';
+
+function fixture({ updates = [], accept = async () => ({ accepted: true }), offset = null } = {}) {
+  let savedOffset = offset;
+  let requestedUrl;
+  const gate = { accept };
+  const offsetStore = {
+    async read() { return savedOffset; },
+    async write(value) { savedOffset = value; },
+  };
+  const fetchImpl = async url => {
+    requestedUrl = new URL(url);
+    const bytes = new TextEncoder().encode(JSON.stringify({ ok: true, result: updates }));
+    return {
+      ok: true,
+      headers: { get(name) { return name.toLowerCase() === 'content-length' ? String(bytes.byteLength) : null; } },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      }),
+    };
+  };
+  return {
+    poller: createTelegramPoller({ botToken: 'test-secret-token', gate, offsetStore, fetchImpl, timeoutSeconds: 0 }),
+    get offset() { return savedOffset; },
+    get requestedUrl() { return requestedUrl; },
+  };
+}
+
+test('durably checkpoints only after accepted updates have been enqueued', async () => {
+  const seen = [];
+  const f = fixture({
+    updates: [{ update_id: 10 }, { update_id: 11 }],
+    accept: async update => {
+      seen.push(update.update_id);
+      return { accepted: true };
+    },
+  });
+  const result = await f.poller.pollOnce();
+  assert.deepEqual(seen, [10, 11]);
+  assert.deepEqual(result, { received: 2, accepted: 2, rejected: 0, nextOffset: 12 });
+  assert.equal(f.offset, 12);
+  assert.equal(f.requestedUrl.searchParams.get('offset'), null);
+});
+
+test('does not advance offset when durable enqueue fails', async () => {
+  const f = fixture({
+    offset: 7,
+    updates: [{ update_id: 7 }, { update_id: 8 }],
+    accept: async update => {
+      if (update.update_id === 8) throw new Error('disk unavailable');
+      return { accepted: true };
+    },
+  });
+  await assert.rejects(f.poller.pollOnce(), /disk unavailable/);
+  assert.equal(f.offset, 7);
+});
+
+test('aborted polling stops processing and does not checkpoint the batch', async () => {
+  const controller = new AbortController();
+  const seen = [];
+  const f = fixture({
+    offset: 40,
+    updates: [{ update_id: 40 }, { update_id: 41 }],
+    accept: async update => {
+      seen.push(update.update_id);
+      controller.abort(new Error('shutdown requested'));
+      return { accepted: true };
+    },
+  });
+
+  await assert.rejects(f.poller.pollOnce({ signal: controller.signal }), /shutdown requested/);
+  assert.deepEqual(seen, [40]);
+  assert.equal(f.offset, 40);
+});
+
+test('replays durably accepted updates when offset checkpoint persistence fails', async () => {
+  let savedOffset = 7;
+  let failFirstWrite = true;
+  let accepted = 0;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async update => {
+      assert.equal(update.update_id, 7);
+      accepted += 1;
+      return { accepted: true };
+    } },
+    offsetStore: {
+      async read() { return savedOffset; },
+      async write(value) {
+        if (failFirstWrite) {
+          failFirstWrite = false;
+          throw new Error('checkpoint storage unavailable');
+        }
+        savedOffset = value;
+      },
+    },
+    fetchImpl: async () => {
+      const bytes = new TextEncoder().encode(JSON.stringify({ ok: true, result: [{ update_id: 7 }] }));
+      return {
+        ok: true,
+        headers: { get: () => String(bytes.byteLength) },
+        body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }),
+      };
+    },
+    timeoutSeconds: 0,
+  });
+
+  await assert.rejects(poller.pollOnce(), /checkpoint storage unavailable/);
+  assert.equal(savedOffset, 7);
+  await poller.pollOnce();
+  assert.equal(accepted, 2);
+  assert.equal(savedOffset, 8);
+});
+
+test('advances past rejected users and sends persisted offset on next poll', async () => {
+  const f = fixture({ updates: [{ update_id: 25 }], accept: async () => ({ accepted: false }) });
+  const result = await f.poller.pollOnce();
+  assert.equal(result.rejected, 1);
+  assert.equal(f.offset, 26);
+  await f.poller.pollOnce();
+  assert.equal(f.requestedUrl.searchParams.get('offset'), '26');
+});
+
+test('rejects invalid configuration and malformed Telegram responses', async () => {
+  assert.throws(() => createTelegramPoller({ botToken: '', gate: {}, offsetStore: {} }), /bot token/);
+  const f = fixture();
+  const bad = createTelegramPoller({
+    botToken: 'secret',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => null, write: async () => {} },
+    fetchImpl: async () => ({ ok: true, headers: { get: () => null }, body: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('{"ok":false,"result":[]}')); controller.close(); } }) }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(bad.pollOnce(), /invalid getUpdates response/);
+});
+
+
+test('rejects a response whose declared content length exceeds the bounded reader limit', async () => {
+  const f = fixture();
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => null, write: async () => {} },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => String(1024 * 1024 + 1) },
+      body: { cancel: async () => {} },
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /exceeds the allowed size/);
+});
+
+test('rejects response bodies that cannot be read with a bounded stream', async () => {
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => null, write: async () => {} },
+    fetchImpl: async () => ({ ok: true, headers: { get: () => null }, async json() { return { ok: true, result: [] }; } }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /bounded readable body/);
+});
+
+
+test('rejects a streamed body that crosses the byte limit even without content-length', async () => {
+  const oversized = new Uint8Array(1024 * 1024 + 1);
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 9, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(oversized);
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /exceeds the allowed size/);
+});
+
+test('rejects malformed UTF-8 even when replacement decoding could produce JSON', async () => {
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 4, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]));
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /invalid UTF-8 JSON/);
+});
+
+test('does not checkpoint when Telegram returns malformed JSON', async () => {
+  let checkpointed = false;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 3, write: async () => { checkpointed = true; } },
+    fetchImpl: async () => ({
+      ok: true,
+      headers: { get: () => null },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{broken'));
+          controller.close();
+        },
+      }),
+    }),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(poller.pollOnce(), /invalid UTF-8 JSON/);
+  assert.equal(checkpointed, false);
+});
+
+test('exposes only a validated durable checkpoint to the runtime', async () => {
+  const f = fixture({ offset: 19 });
+  assert.equal(await f.poller.readCheckpoint(), 19);
+
+  const invalid = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => Number.MAX_SAFE_INTEGER + 1, write: async () => {} },
+    fetchImpl: async () => assert.fail('must not poll'),
+    timeoutSeconds: 0,
+  });
+  await assert.rejects(invalid.readCheckpoint(), /invalid checkpoint/);
+});
+
+
+test('times out when a successful Telegram response body stalls', async () => {
+  let requestSignal;
+  const poller = createTelegramPoller({
+    botToken: 'test-secret-token',
+    gate: { accept: async () => ({ accepted: true }) },
+    offsetStore: { read: async () => 12, write: async () => assert.fail('must not checkpoint') },
+    fetchImpl: async (_url, options) => {
+      requestSignal = options.signal;
+      return {
+        ok: true,
+        headers: { get: () => null },
+        body: {
+          getReader() {
+            return {
+              read: () => new Promise(() => {}),
+              cancel: async () => {},
+              releaseLock() {},
+            };
+          },
+        },
+      };
+    },
+    timeoutSeconds: 0,
+    requestTimeoutMs: 15,
+  });
+
+  await assert.rejects(poller.pollOnce(), error => error.code === 'TELEGRAM_POLL_TIMEOUT');
+  assert.equal(requestSignal.aborted, true);
+});
