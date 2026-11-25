@@ -20,12 +20,12 @@ function requestWithHost(base, host) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, controlTelegram) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, controlTelegram });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -79,6 +79,37 @@ test('serves only the fixed public UI allowlist without exposing host data or se
     assert.equal((await fetch(base + path)).status, 404, path);
   }
   assert.equal((await fetch(base + '/api/profile')).status, 401);
+});
+
+
+test('Telegram lifecycle endpoint requires a session and accepts only start/stop actions', async t => {
+  const calls = [];
+  const { base, request } = await fixture(t, async action => {
+    calls.push(action);
+    return { enabled: true, running: action === 'start' };
+  });
+  const denied = await fetch(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(denied.status, 401);
+
+  const started = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(started.status, 200);
+  assert.deepEqual(await started.json(), { ok: true, status: { enabled: true, running: true } });
+
+  const invalid = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'restart' }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(calls, ['start']);
 });
 
 test('rejects requests without a browser session', async (t) => {
