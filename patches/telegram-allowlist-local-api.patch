@@ -1,0 +1,36 @@
+--- a/host/local-api.mjs
++++ b/host/local-api.mjs
+@@ -6,6 +6,7 @@
+ import { resolve, relative, isAbsolute, dirname } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
++import { handleTelegramAllowlistRoutes } from './telegram-allowlist-routes.mjs';
+ 
+ const MAX_BODY_BYTES = 34 * 1024 * 1024;
+ const SUPPORTED_PROFILE_SCHEMA_VERSION = 5;
+@@ -250,7 +251,7 @@
+  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
+  * Browser clients read/write the canonical profile through this API, never the file.
+  */
+-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
++export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
+     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
+   }
+@@ -268,6 +269,8 @@
+   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
+   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
+   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
++  if (getTelegramAllowlist !== null && typeof getTelegramAllowlist !== 'function') throw new TypeError('getTelegramAllowlist must be a function or null.');
++  if (setTelegramAllowlist !== null && typeof setTelegramAllowlist !== 'function') throw new TypeError('setTelegramAllowlist must be a function or null.');
+   if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
+     throw new TypeError('getTelegramMessages must be a function or null.');
+   }
+@@ -655,6 +658,7 @@
+       }
+       return;
+     }
++    if (await handleTelegramAllowlistRoutes({ request, response, pathname, getTelegramAllowlist, setTelegramAllowlist, readJson, send })) return;
+     if (request.method === 'POST' && pathname === '/api/telegram/bot/verify') {
+       if (typeof verifyTelegramBot !== 'function') {
+         send(response, 503, { error: 'Проверка Telegram Bot API не настроена на локальном хосте.' });
