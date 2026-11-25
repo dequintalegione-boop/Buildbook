@@ -2,7 +2,7 @@ import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { request as httpRequest } from 'node:http';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProfileStore } from '../host/profile-store.mjs';
@@ -20,12 +20,12 @@ function requestWithHost(base, host) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -54,6 +54,10 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   await writeFile(join(dir, 'index.html'), '<!doctype html><title>Buildbook test</title>');
   await writeFile(join(dir, '.env'), 'BUILDBOOK_LOCAL_API_TOKEN=must-not-leak');
   await writeFile(join(dir, 'profile.json'), '{"private":true}');
+  await mkdir(join(dir, 'scripts'), { recursive: true });
+  await writeFile(join(dir, 'scripts', 'manage-buildbook-telegram.bat'), '@echo off\\r\\n');
+  await writeFile(join(dir, 'scripts', 'manage-buildbook-telegram.ps1'), 'Write-Host \'safe helper\'');
+  await writeFile(join(dir, 'scripts', 'unlisted-helper.ps1'), 'private helper');
   const store = createProfileStore(join(dir, 'canonical-profile.json'));
   const api = createLocalApiServer({
     profileStore: store,
@@ -75,10 +79,45 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
 
-  for (const path of ['/.env', '/profile.json', '/data/profile.json', '/host/local-api.mjs', '/unknown.js']) {
+  for (const path of ['/.env', '/profile.json', '/data/profile.json', '/host/local-api.mjs', '/scripts/unlisted-helper.ps1', '/unknown.js']) {
     assert.equal((await fetch(base + path)).status, 404, path);
   }
+  const manager = await fetch(base + '/scripts/manage-buildbook-telegram.bat');
+  assert.equal(manager.status, 200);
+  assert.ok(manager.headers.get('content-type').startsWith('text/plain'));
+  assert.equal(manager.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(await manager.text(), /@echo off/);
+  const managerScript = await fetch(base + '/scripts/manage-buildbook-telegram.ps1');
+  assert.equal(managerScript.status, 200);
+  assert.match(await managerScript.text(), /safe helper/);
+  const helperHead = await fetch(base + '/scripts/manage-buildbook-telegram.bat', { method: 'HEAD' });
+  assert.equal(helperHead.status, 200);
+  assert.equal(await helperHead.text(), '');
+  const helperPost = await fetch(base + '/scripts/manage-buildbook-telegram.bat', { method: 'POST' });
+  assert.equal(helperPost.status, 405);
+  const helperScriptPost = await fetch(base + '/scripts/manage-buildbook-telegram.ps1', { method: 'POST' });
+  assert.equal(helperScriptPost.status, 405);
+  const helperPut = await fetch(base + '/scripts/manage-buildbook-telegram.ps1', { method: 'PUT', body: 'must not be accepted' });
+  assert.equal(helperPut.status, 405);
   assert.equal((await fetch(base + '/api/profile')).status, 401);
+});
+
+test('launches only explicitly allowlisted local helper actions', async t => {
+  const launched = [];
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async action => { launched.push(action); },
+  });
+  const opened = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
+  assert.equal(opened.status, 202);
+  assert.deepEqual(await opened.json(), {
+    ok: true,
+    action: 'telegram-manage',
+    message: 'Локальный помощник открыт в отдельном окне.',
+  });
+  assert.deepEqual(launched, ['telegram-manage']);
+  const denied = await request(base + '/api/local-actions/run-arbitrary-command', { method: 'POST' });
+  assert.equal(denied.status, 404);
+  assert.deepEqual(launched, ['telegram-manage']);
 });
 
 test('rejects requests without a browser session', async (t) => {
