@@ -17,6 +17,7 @@ test('updates only allowlisted Telegram keys atomically and keeps a protected ba
       '# Keep this comment',
       'BUILDBOOK_LOCAL_API_TOKEN=local-secret',
       'BUILDBOOK_TELEGRAM_BOT_TOKEN=old-token',
+      'BUILDBOOK_TELEGRAM_BOT_TOKEN=duplicate-old-token',
       'BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS=1001',
       '',
     ].join('\n'), { mode: 0o600 });
