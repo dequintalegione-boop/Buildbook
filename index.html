@@ -3927,7 +3927,7 @@ if(!TEST_MODE)setInterval(()=>{
 },15000);
 
 function telegramConnectForm(){
- const localOrigin=['localhost','127.0.0.1','::1'].includes(location.hostname.replace(/^\\[|\\]$/g,''));
+ const localOrigin=['localhost','127.0.0.1','::1'].includes(location.hostname);
  if(STORAGE_MODE==='canonical'||localOrigin)TELEGRAM_UI.baseUrl=location.origin;
  const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ (не нужен при запуске через PWA)','password','','autocomplete="off"')+'</div><p class="mu">Если Buildbook открыт с локального хоста, подключение выполнится автоматически — ключ из .env вводить не потребуется. При подключении к отдельному хосту можно использовать ключ первоначального подключения. Токен Telegram-бота сюда вводить не нужно.</p>';
  modal('Подключение локального хоста',body,form=>{
