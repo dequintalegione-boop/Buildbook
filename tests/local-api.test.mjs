@@ -103,13 +103,21 @@ test('Telegram lifecycle endpoint requires a session and accepts only start/stop
   assert.equal(started.status, 200);
   assert.deepEqual(await started.json(), { ok: true, status: { enabled: true, running: true } });
 
+  const stopped = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'stop' }),
+  });
+  assert.equal(stopped.status, 200);
+  assert.deepEqual(await stopped.json(), { ok: true, status: { enabled: true, running: false } });
+
   const invalid = await request(base + '/api/telegram/control', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'restart' }),
   });
   assert.equal(invalid.status, 400);
-  assert.deepEqual(calls, ['start']);
+  assert.deepEqual(calls, ['start', 'stop']);
 });
 
 test('Telegram lifecycle endpoint reports unavailable when host control is not configured', async t => {
