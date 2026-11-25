@@ -79,10 +79,23 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
             requestError.code = 'TELEGRAM_POLL_FAILED';
             throw requestError;
           }
-          if (!response?.ok) throw new Error(`Telegram getUpdates failed with HTTP ${response?.status ?? 'unknown'}.`);
+          // Read even non-2xx responses through the same byte limit: Telegram
+          // communicates flood-control retry_after in the bounded JSON body.
+          const body = await readBoundedTelegramJson(response);
+          if (!response?.ok || body?.ok === false) {
+            const error = new Error('Telegram returned an invalid getUpdates response (HTTP/API error).');
+            error.code = response?.status === 429 ? 'TELEGRAM_RATE_LIMITED'
+              : response?.status === 401 || response?.status === 403 ? 'TELEGRAM_AUTH_FAILED'
+                : 'TELEGRAM_HTTP_ERROR';
+            const retryAfter = body?.parameters?.retry_after;
+            if (Number.isSafeInteger(retryAfter) && retryAfter > 0) {
+              error.retryAfterMs = Math.min(retryAfter, 3600) * 1000;
+            }
+            throw error;
+          }
           // The deadline covers both fetch and bounded body consumption; abort alone
           // is insufficient if a custom stream or transport ignores cancellation.
-          return readBoundedTelegramJson(response);
+          return body;
         })();
         payload = await Promise.race([request, timeoutPromise]);
       } finally {
