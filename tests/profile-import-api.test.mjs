@@ -43,20 +43,11 @@ async function fixture(t) {
     headers: { cookie, origin: base, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return { base, importProfile };
+  return { base, cookie, importProfile };
 }
 
 test('imports a checksum-valid profile into empty canonical storage and verifies readback', async t => {
-  const { base, importProfile } = await fixture(t);
-  const response = await importProfile({ expectedRevision: 0, envelope: envelope() });
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { revision: 1, imported: true, verified: true });
-  const stored = await fetch(base + '/api/profile', {
-    headers: { cookie: (await fetch(base + '/api/health')).headers.get('set-cookie') || '' },
-  });
-  // Import success itself is asserted above; profile reads require the session cookie,
-  // so fetch it through the session established by a fresh fixture request below.
-  assert.notEqual(stored.status, 200);
+  const { base, cookie, importProfile } = await fixture(t);\n  const response = await importProfile({ expectedRevision: 0, envelope: envelope() });\n  assert.equal(response.status, 200);\n  assert.deepEqual(await response.json(), { revision: 1, imported: true, verified: true });\n  const stored = await fetch(base + '/api/profile', { headers: { cookie } });\n  assert.deepEqual(await stored.json(), { revision: 1, profile: payload });
 });
 
 test('rejects a tampered export checksum without writing any profile data', async t => {
@@ -85,7 +76,7 @@ test('rejects import into a non-empty profile and preserves existing data', asyn
   assert.equal(put.status, 200);
   const response = await importProfile({ expectedRevision: 1, envelope: envelope() });
   assert.equal(response.status, 409);
-  assert.equal((await response.json()).code, 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY');
+  assert.equal((await response.json()).code, 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY');\n  const stored = await fetch(base + '/api/profile', { headers: { cookie } });\n  assert.deepEqual(await stored.json(), { revision: 1, profile: { marker: 'keep-me' } });
 });
 
 test('rejects stale expected revision before import and leaves the profile untouched', async t => {
@@ -104,5 +95,5 @@ test('rejects stale expected revision before import and leaves the profile untou
   assert.equal(put.status, 200);
   const response = await importProfile({ expectedRevision: 0, envelope: envelope() });
   assert.equal(response.status, 409);
-  assert.equal((await response.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');
+  assert.equal((await response.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');\n  const stored = await fetch(base + '/api/profile', { headers: { cookie } });\n  assert.deepEqual(await stored.json(), { revision: 1, profile: { marker: 'current' } });
 });
