@@ -45,6 +45,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   let telegramEnabled = telegramEnabledRaw === 'true';
+  const telegramConfigured = Boolean(String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim() && String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim());
   let telegram = null;
   let telegramBotProfile = null;
   let telegramBotProfileAt = 0;
@@ -119,12 +120,9 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     port: parsePort(env),
     staticRoot: appRoot,
   });
-  if (telegramEnabled) {
+  if (telegramConfigured) {
     const telegramConfig = readTelegramServiceConfig(env);
-    for (const path of [telegramConfig.inboxPath, telegramConfig.offsetPath, telegramConfig.instanceLockPath]) {
-      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
-    }
-    telegram = createTelegramHostService({ config: telegramConfig, profileStore, fetchImpl, onError });
+    telegram = createConfiguredTelegram(telegramConfig);
   }
 
   let address = null;
@@ -143,7 +141,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
         address = await api.listen();
         // start() synchronously acquires the Telegram instance lock before
         // returning its loop promise. Do not await the long-running loop.
-        if (telegram) {
+        if (telegram && telegramEnabled) {
           telegramLoop = telegram.service.start();
           telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
         }
