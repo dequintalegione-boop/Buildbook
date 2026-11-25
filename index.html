@@ -3965,19 +3965,21 @@ function telegramSetupWizard(){
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
   if(submit){submit.disabled=true;submit.textContent='Проверяем…'}
   form.elements.botToken.value='';
-  localTelegramRequest('/api/telegram/bot/verify',{method:'POST',body:JSON.stringify({token}),timeoutMs:15000})
-   .then(result=>{
+  localTelegramRequest('/api/telegram/setup',{method:'POST',body:JSON.stringify({token,userId}),timeoutMs:30000})
+   .then(async result=>{
     if(!result.bot||!result.bot.id)throw new Error('Локальный хост вернул неполный профиль бота.');
     TELEGRAM_UI.botProfile=result.bot;
+    TELEGRAM_UI.checked=false;
+    await refreshTelegramStatus(true);
     overlay.remove();
-    modal('Токен подтверждён','<p><b>'+esc(result.bot.firstName)+'</b>'+(result.bot.username?' · @'+esc(result.bot.username):'')+'</p><p class="mu">ID бота: '+esc(result.bot.id)+'</p><p class="ok">Telegram Bot API подтвердил токен.</p><p class="mu">Следующий шаг — сохранение токена и user ID в локальный .env. На этом этапе секрет не сохранялся: для безопасности он удалён из формы и использован только для проверки.</p>',()=>true,true,'Готово');
+    modal('Бот подключён','<p><b>'+esc(result.bot.firstName)+'</b>'+(result.bot.username?' · @'+esc(result.bot.username):'')+'</p><p class="mu">ID бота: '+esc(result.bot.id)+'</p><p class="ok">Токен проверен, настройки сохранены локально, Telegram-сервис запущен.</p><p class="mu">Секрет находится только в локальном .env. В интерфейсе он не отображается.</p>',()=>true,true,'Готово');
    })
    .catch(error=>{
     showModalError(form,error.message||'Не удалось проверить токен Telegram.');
     if(submit){submit.disabled=false;submit.textContent='Проверить токен'}
    });
   return false;
- },false,'Проверить токен');
+ },false,'Подключить бота');
 }
 async function closeTelegramSession(){
  if(STORAGE_MODE==='canonical'){
