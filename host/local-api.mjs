@@ -131,7 +131,7 @@ function send(response, status, payload) {
   response.end(body);
 }
 
-function readJson(request) {
+function readJson(request, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let settled = false;
@@ -146,7 +146,7 @@ function readJson(request) {
     request.on('data', chunk => {
       if (tooLarge || settled) return;
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         tooLarge = true;
         chunks.length = 0;
         fail('Тело запроса превышает допустимый размер.', 413);
@@ -541,7 +541,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       try {
-        const body = await readJson(request);
+        const body = await readJson(request, 32 * 1024);
         if (!body || typeof body !== 'object' || Array.isArray(body)
           || Object.keys(body).length !== 1 || !Array.isArray(body.commands) || body.commands.length > 100) {
           send(response, 400, { error: 'Передайте список команд бота.' });
@@ -619,7 +619,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       try {
-        const body = await readJson(request);
+        const body = await readJson(request, 2048);
         if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 2
           || typeof body.token !== 'string' || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)
           || typeof body.userId !== 'string' || !/^[1-9]\d{0,15}$/.test(body.userId)) {
@@ -653,7 +653,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       try {
-        const body = await readJson(request);
+        const body = await readJson(request, 1024);
         if (!body || typeof body !== 'object' || Array.isArray(body)
           || Object.keys(body).length !== 1 || typeof body.token !== 'string'
           || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)) {
