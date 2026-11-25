@@ -20,12 +20,12 @@ function requestWithHost(base, host) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -100,6 +100,24 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   const helperPut = await fetch(base + '/scripts/manage-buildbook-telegram.ps1', { method: 'PUT', body: 'must not be accepted' });
   assert.equal(helperPut.status, 405);
   assert.equal((await fetch(base + '/api/profile')).status, 401);
+});
+
+test('launches only explicitly allowlisted local helper actions', async t => {
+  const launched = [];
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async action => { launched.push(action); },
+  });
+  const opened = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
+  assert.equal(opened.status, 202);
+  assert.deepEqual(await opened.json(), {
+    ok: true,
+    action: 'telegram-manage',
+    message: 'Локальный помощник открыт в отдельном окне.',
+  });
+  assert.deepEqual(launched, ['telegram-manage']);
+  const denied = await request(base + '/api/local-actions/run-arbitrary-command', { method: 'POST' });
+  assert.equal(denied.status, 404);
+  assert.deepEqual(launched, ['telegram-manage']);
 });
 
 test('rejects requests without a browser session', async (t) => {
