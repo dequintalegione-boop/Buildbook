@@ -3928,7 +3928,7 @@ if(!TEST_MODE)setInterval(()=>{
 function isLocalHostOrigin(){return ['localhost','127.0.0.1','::1'].includes(location.hostname.replaceAll('[','').replaceAll(']',''))}
 async function autoConnectLocalHost(){
  const localOrigin=isLocalHostOrigin();
- if(!localOrigin||TELEGRAM_UI.connected||TELEGRAM_UI.busy||TELEGRAM_UI.checking)return;
+ if(TEST_MODE||!localOrigin||TELEGRAM_UI.connected||TELEGRAM_UI.busy||TELEGRAM_UI.checking)return;
  if(Date.now()-(TELEGRAM_UI.autoConnectAttemptAt||0)<15000)return;
  TELEGRAM_UI.autoConnectAttemptAt=Date.now();
  TELEGRAM_UI.baseUrl=location.origin;
