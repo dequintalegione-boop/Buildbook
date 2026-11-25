@@ -1,0 +1,39 @@
+{
+  "name": "buildbook-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Buildbook desktop application shell",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "desktop": "electron .",
+    "desktop:dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "ru.buildbook.desktop",
+    "productName": "Buildbook",
+    "asarUnpack": [
+      "host/**"
+    ],
+    "files": [
+      "index.html",
+      "repository.js",
+      "host/**",
+      "desktop/**",
+      "icon.svg",
+      "manifest.webmanifest"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
