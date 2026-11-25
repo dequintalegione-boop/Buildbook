@@ -594,9 +594,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const queue = raw?.queue && typeof raw.queue === 'object' ? raw.queue : null;
         const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
-        send(response, 200, {
-          enabled: raw?.enabled === true,
-          configured: raw?.configured === true,
+        const payload = {
+          enabled: raw?.enabled !== false,
           running: raw?.running === true,
           startedAt: timestamp(raw?.startedAt),
           lastCycleAt: timestamp(raw?.lastCycleAt),
@@ -614,7 +613,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
             message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
             at: timestamp(raw.lastError.at),
           } : null,
-        });
+        };
+        if (typeof raw?.configured === 'boolean') payload.configured = raw.configured;
+        send(response, 200, payload);
       } catch {
         send(response, 500, { error: 'Не удалось получить статус Telegram.' });
       }
