@@ -7,6 +7,7 @@ import { createTelegramHostService } from './telegram-host-service.mjs';
 import { readTelegramServiceConfig } from './telegram-config.mjs';
 import { createTelegramBotApi } from './telegram-bot-api.mjs';
 import { updateTelegramEnvFile } from './telegram-env-store.mjs';
+import { configureTelegramHost } from './telegram-setup.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -65,6 +66,15 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return telegram.service.stop();
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
+    configureTelegram: async ({ token, userId }) => {
+      if (telegram) await telegram.service.stop();
+      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
+      telegram = configured.telegram;
+      telegramEnabled = true;
+      telegramLoop = telegram.service.start();
+      telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+      return configured.bot;
+    },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
