@@ -90,6 +90,12 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       if (!telegramBotProfile) telegramBotProfile = await telegramBotApi.getMe(token);
       return telegramBotProfile;
     },
+    getTelegramBotProfile: async () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) return null;
+      if (!telegramBotProfile) telegramBotProfile = await telegramBotApi.getMe(token);
+      return telegramBotProfile;
+    },
     getTelegramCommands: () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) throw new Error('Telegram bot is not configured.');
