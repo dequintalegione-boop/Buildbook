@@ -910,3 +910,22 @@ test('Telegram status is allowlisted and never serializes host secrets or raw er
     at: '2026-11-25T00:00:00.000Z',
   });
 });
+
+
+test('does not expose Telegram lifecycle error messages to the browser', async t => {
+  const secret = 'bot-token=do-not-return';
+  const { base, request } = await fixture(t, async () => {
+    throw Object.assign(new Error(secret), { publicMessage: secret });
+  });
+  const response = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(response.status, 409);
+  const body = await response.text();
+  assert.equal(body.includes(secret), false);
+  assert.deepEqual(JSON.parse(body), {
+    error: 'Не удалось изменить состояние сервиса Telegram.',
+  });
+});
