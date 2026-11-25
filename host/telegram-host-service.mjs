@@ -45,10 +45,12 @@ export function createTelegramHostService({
   if (typeof config.botToken !== 'string' || !config.botToken) throw new TypeError('Telegram bot token is required.');
   if (typeof config.botId !== 'string' || !/^\d{1,16}$/.test(config.botId)) throw new TypeError('Telegram bot ID is required.');
   const tokenIdentity = String(config.botToken).split(':');
-  if (tokenIdentity.length < 2 || tokenIdentity[1].length < 20
-    || !/^\d{1,16}$/.test(tokenIdentity[0]) || !Number.isSafeInteger(Number(tokenIdentity[1])) || Number(tokenIdentity[1]) <= 0
-    || String(Number(tokenIdentity[1])) !== tokenIdentity[1] || tokenIdentity[1] !== config.botId) {
-    // soft check - keep original validation style from upstream when present
+  // Bot identity is the numeric prefix before ':'. Reject non-canonical prefixes and mismatches.
+  if (tokenIdentity.length < 2
+    || !/^\d{1,16}$/.test(tokenIdentity[0])
+    || String(Number(tokenIdentity[0])) !== tokenIdentity[0]
+    || tokenIdentity[0] !== config.botId) {
+    throw new TypeError('Telegram bot ID must match the bot token identity.');
   }
   if (!Array.isArray(config.allowedUserIds) || config.allowedUserIds.length < 1 || config.allowedUserIds.length > 100) {
     throw new TypeError('Telegram host allowlist must contain 1–100 user IDs.');
@@ -107,5 +109,7 @@ export function createTelegramHostService({
     status,
     gate,
     getStatus() { return status.snapshot({ running: service.running }); },
+    getAllowlist() { return gate.getAllowlist(); },
+    setAllowlist(ids) { return gate.setAllowlist(ids); },
   });
 }

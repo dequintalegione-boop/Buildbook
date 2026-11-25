@@ -9,6 +9,7 @@ import { createTelegramBotApi } from './telegram-bot-api.mjs';
 import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 import { configureTelegramHost } from './telegram-setup.mjs';
 import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
+import { createTelegramAllowlistHandlers } from './telegram-allowlist-handlers.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -54,7 +55,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
   function createConfiguredTelegram(config) {
     for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
-      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
+      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram inbox/offset/lock paths must not overlap the canonical profile or its lock.');
     }
     return createTelegramHostService({ config, profileStore, fetchImpl, onError });
   }
@@ -97,6 +98,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return recoveryStatusCache;
     },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) return null;

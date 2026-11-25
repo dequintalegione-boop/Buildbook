@@ -62,9 +62,16 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
     throw new TypeError('A valid numeric Telegram bot identity is required.');
   }
   botId = String(Number(botId));
-  const allowed = normalizeAllowlist(allowlist);
+  let allowed = normalizeAllowlist(allowlist);
 
   return Object.freeze({
+    getAllowlist() {
+      return [...allowed];
+    },
+    setAllowlist(next) {
+      allowed = normalizeAllowlist(next);
+      return this.getAllowlist();
+    },
     async accept(update) {
       const userId = numericId(update?.message?.from?.id);
       if (!userId || !allowed.has(userId)) {
