@@ -68,22 +68,20 @@ export async function updateTelegramEnvFile({ envFile, values } = {}) {
   await copyFile(envFile, backupPath);
   await restrictFileAccess(backupPath);
 
-  const pending = new Set(keys);
+  const written = new Set();
   const lines = original.replace(/^\uFEFF/, '').split(/\r?\n/);
   const output = [];
   for (const line of lines) {
     const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)=/.exec(line);
-    if (match && pending.has(match[1])) {
+    if (match && Object.hasOwn(values, match[1])) {
       const key = match[1];
-      if (Object.hasOwn(values, key)) {
-        output.push(key + '=' + values[key]);
-        pending.delete(key);
-      }
+      if (!written.has(key)) output.push(key + '=' + values[key]);
+      written.add(key);
       continue;
     }
     output.push(line);
   }
-  for (const key of pending) output.push(key + '=' + values[key]);
+  for (const key of keys) if (!written.has(key)) output.push(key + '=' + values[key]);
 
   const temporary = envFile + '.' + randomUUID() + '.tmp';
   try {
