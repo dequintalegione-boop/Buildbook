@@ -16,7 +16,7 @@ export function createTelegramReplySender({ botToken, fetchImpl = globalThis.fet
 
   return async function sendReply({ chatId, text, replyToMessageId } = {}) {
     const chat = String(chatId ?? '');
-    if (!/^\\d{1,16}$/.test(chat) || !Number.isSafeInteger(Number(chat)) || String(Number(chat)) !== chat || Number(chat) <= 0) {
+    if (!/^\d{1,16}$/.test(chat) || !Number.isSafeInteger(Number(chat)) || String(Number(chat)) !== chat || Number(chat) <= 0) {
       throw new TypeError('Telegram reply requires a canonical numeric chat ID.');
     }
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_REPLY_CHARS) {
