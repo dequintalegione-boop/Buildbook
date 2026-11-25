@@ -442,7 +442,7 @@ const defaultState=()=>({
  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false,otherTabs:[],hotkeys:DEFAULT_HOTKEYS.map(item=>({...item}))}
 });
 let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,txMenuOpen:false,hotkeyCaptureId:'',calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
-let TELEGRAM_UI={baseUrl:normalizeLocalTelegramBase(location.origin)||'http://127.0.0.1:43127',checked:false,checkedAt:0,checking:false,busy:false,connected:false,status:null,diagnostics:null,messages:[],botProfile:null,recovery:null,error:''};
+let TELEGRAM_UI={baseUrl:normalizeLocalTelegramBase(location.origin)||'http://127.0.0.1:43127',checked:false,checkedAt:0,checking:false,busy:false,connected:false,status:null,diagnostics:null,messages:[],botProfile:null,botProfileError:'',recovery:null,error:''};
 let canonicalReconnectReady=false;
 const DATA_SCHEMA_VERSION=5;
 let STARTUP_STAGE='script-ready';
@@ -3907,10 +3907,11 @@ async function refreshTelegramStatus(silent=false){
   if(!diagnostics||typeof diagnostics.ok!=='boolean')throw new Error('Не удалось получить диагностику локального хоста.');
   if(!activity||!Array.isArray(activity.messages))throw new Error('Некорректный журнал сообщений Telegram.');
   if(!recovery||typeof recovery.supported!=='boolean'||typeof recovery.installed!=='boolean')throw new Error('Некорректный статус автовосстановления.');
-  const profile=status.configured?await localTelegramRequest('/api/telegram/bot/profile'):{bot:null};
-  TELEGRAM_UI.connected=true;TELEGRAM_UI.status=status;TELEGRAM_UI.diagnostics=diagnostics;TELEGRAM_UI.messages=activity.messages;TELEGRAM_UI.botProfile=profile?.bot||null;TELEGRAM_UI.recovery=recovery;
+  let profile={bot:null};
+  if(status.configured){try{profile=await localTelegramRequest('/api/telegram/bot/profile')}catch{profile={bot:null,error:'Не удалось подтвердить токен через Telegram Bot API.'}}}
+  TELEGRAM_UI.connected=true;TELEGRAM_UI.status=status;TELEGRAM_UI.diagnostics=diagnostics;TELEGRAM_UI.messages=activity.messages;TELEGRAM_UI.botProfile=profile?.bot||null;TELEGRAM_UI.botProfileError=profile?.error||'';TELEGRAM_UI.recovery=recovery;
  }catch(error){
-  TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;TELEGRAM_UI.diagnostics=null;TELEGRAM_UI.messages=[];TELEGRAM_UI.botProfile=null;TELEGRAM_UI.recovery=null;
+  TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;TELEGRAM_UI.diagnostics=null;TELEGRAM_UI.messages=[];TELEGRAM_UI.botProfile=null;TELEGRAM_UI.botProfileError='';TELEGRAM_UI.recovery=null;
   TELEGRAM_UI.error=error.status===401?'Сессия не подключена или истекла.':'Локальный API недоступен. Запустите хост и проверьте адрес.';
   if(STORAGE_MODE==='canonical'&&(error.status===401||error.code==='BUILD_BOOK_LOCAL_API_UNAVAILABLE')){
    APP_FATAL_ERROR=new Error(error.status===401?'Сессия локального хранилища истекла. Скачайте резервную копию текущего состояния и подключите хост заново.':'Локальный хост недоступен. Работа остановлена до восстановления соединения; скачайте резервную копию текущего состояния.');
@@ -4035,7 +4036,7 @@ function telegram(){
  const recovery=TELEGRAM_UI.recovery;
  const recoveryCard=recovery?'<section><div class="hd"><h2>Автовосстановление хоста</h2><span class="'+(recovery.state==='unavailable'?'bad':recovery.installed&&recovery.restartCount>0?'ok':'mu')+'">'+(recovery.state==='unavailable'?'Проверка недоступна':recovery.installed&&recovery.restartCount>0?'Настроено':'Не установлено')+'</span></div>'+(recovery.supported?(recovery.state==='unavailable'?'<p class="mu">Не удалось проверить задачу Windows Task Scheduler. Проверьте её в Планировщике заданий.</p>':recovery.installed&&recovery.restartCount>0?'<p class="mu">Windows Task Scheduler перезапускает локальный хост после аварийного завершения: до '+recovery.restartCount+' повторов, интервал '+esc(recovery.restartInterval||'не задан')+'.</p><p class="mu">Состояние задачи: '+esc(recovery.state)+'</p>':'<p class="mu">Задача автозапуска отсутствует или в ней не настроен повторный запуск после сбоя.</p><button class="btn" data-a="tgautostartinstall">Установить автовосстановление</button>'):'<p class="mu">Проверка Task Scheduler доступна только в Windows.</p>')+'</section>':'';
  const bot=TELEGRAM_UI.botProfile;
- const botProfileCard=bot?'<section><div class="hd"><h2>Подключённый бот</h2><span class="ok">Токен подтверждён</span></div><b>'+esc(bot.firstName)+'</b>'+(bot.username?'<p class="mu">@'+esc(bot.username)+'</p>':'')+'<p class="mu">ID бота: '+esc(bot.id)+'</p></section>':'';
+ const botProfileCard=bot?'<section><div class="hd"><h2>Подключённый бот</h2><span class="ok">Токен подтверждён</span></div><b>'+esc(bot.firstName)+'</b>'+(bot.username?'<p class="mu">@'+esc(bot.username)+'</p>':'')+'<p class="mu">ID бота: '+esc(bot.id)+'</p></section>':TELEGRAM_UI.status?.configured?'<section><div class="hd"><h2>Профиль бота</h2><span class="bad">Не подтверждён</span></div><p class="mu">'+esc(TELEGRAM_UI.botProfileError||'Не удалось получить профиль бота из Telegram.')+'</p></section>':'';
  const messages=Array.isArray(TELEGRAM_UI.messages)?TELEGRAM_UI.messages:[];
  const messageStatus={pending:'Ожидает',processing:'Обрабатывается',completed:'Обработано',rejected:'Отклонено'};
  const messagesCard=TELEGRAM_UI.connected?'<section><div class="hd"><h2>Последние сообщения</h2><span class="mu">'+(messages.length?'Последнее: '+stamp(messages[0].receivedAt):'Ожидает первое сообщение')+'</span></div>'+(messages.length?'<div class="tg-message-list">'+messages.map(item=>'<article class="tg-message-row"><div class="hd"><span class="bd '+(item.status==='completed'?'ok':item.status==='rejected'?'bad':'')+'">'+esc(messageStatus[item.status]||'Неизвестно')+'</span><small>'+stamp(item.receivedAt)+'</small></div><p>'+esc(item.preview||'Текст сообщения отсутствует')+'</p>'+(item.lastError?'<small class="bad">'+esc(item.lastError)+'</small>':'')+'</article>').join('')+'</div>':'<p class="mu">Пока нет сообщений. Здесь будут отображаться последние входящие сообщения и результат обработки.</p>')+'</section>':'';
