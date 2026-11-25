@@ -25,7 +25,7 @@ function makeStore(profile) {
   };
 }
 
-test('parser accepts supported income and expense commands', () => {
+test('parser accepts supported commands and ignores commands addressed to a bot', () => {
   assert.deepEqual(parseTelegramFinanceCommand('/доход 1250,50 Сборка ПК'), {
     kind: 'i', amount: 1250.5, desc: 'Сборка ПК',
   });
@@ -33,9 +33,7 @@ test('parser accepts supported income and expense commands', () => {
     kind: 'e', amount: 450, desc: 'Lunch',
   });
   assert.equal(parseTelegramFinanceCommand('обычный текст'), null);
-  assert.deepEqual(parseTelegramFinanceCommand('/доход@BuildbookBot 10 Сборка'), {
-    kind: 'i', amount: 10, desc: 'Сборка',
-  });
+  assert.equal(parseTelegramFinanceCommand('/доход@BuildbookBot 10 Сборка'), null);
 });
 
 test('parser rejects malformed amounts and empty descriptions', () => {
