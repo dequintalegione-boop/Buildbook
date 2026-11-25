@@ -42,7 +42,7 @@ $lines = @(
   'BUILDBOOK_LOCAL_API_HOST=127.0.0.1'
   'BUILDBOOK_LOCAL_API_PORT=43127'
   "BUILDBOOK_LOCAL_API_TOKEN=$apiToken"
-  'BUILDBOOK_TELEGRAM_ENABLED=true'
+  'BUILDBOOK_TELEGRAM_ENABLED=false'
   "BUILDBOOK_TELEGRAM_BOT_TOKEN=$token"
   "BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS=$userId"
   "BUILDBOOK_TELEGRAM_INBOX_PATH=$inbox"
@@ -52,7 +52,9 @@ $lines = @(
 [System.IO.File]::WriteAllLines($envFile, $lines, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host ''
-Write-Host 'Настройка сохранена. Закройте это окно и запустите Buildbook через стартовый BAT-файл.' -ForegroundColor Green
+Write-Host 'Настройка сохранена. Telegram оставлен выключенным до подтверждения канонического профиля.' -ForegroundColor Green
+Write-Host 'Сначала запустите локальный хост, подключите Buildbook и завершите перенос/проверку профиля.'
+Write-Host 'После переключения Buildbook на канонический файловый профиль включите Telegram в .env и перезапустите хост.' -ForegroundColor Yellow
 Write-Host 'В .env находятся секреты. Не отправляйте его другим людям и не добавляйте в Git.'
 Write-Host ''
 Read-Host 'Нажмите Enter для выхода' | Out-Null
