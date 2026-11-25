@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramCommands = null, setTelegramCommands = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -264,6 +264,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (configureTelegram !== null && typeof configureTelegram !== 'function') {
     throw new TypeError('configureTelegram must be a function or null.');
   }
+  if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
+  if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
   if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
     throw new TypeError('getTelegramMessages must be a function or null.');
   }
@@ -496,6 +498,45 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 200, { ok: true, running: raw?.running === true });
       } catch (error) {
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/commands') {
+      if (typeof getTelegramCommands !== 'function') {
+        send(response, 409, { error: 'Сначала подключите Telegram-бота.' });
+        return;
+      }
+      try {
+        const commands = await getTelegramCommands();
+        if (!Array.isArray(commands) || commands.length > 100) throw new Error('Invalid command list.');
+        send(response, 200, { commands });
+      } catch {
+        send(response, 502, { error: 'Не удалось получить команды бота из Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/commands') {
+      if (typeof setTelegramCommands !== 'function') {
+        send(response, 409, { error: 'Сначала подключите Telegram-бота.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || !Array.isArray(body.commands) || body.commands.length > 100) {
+          send(response, 400, { error: 'Передайте список команд бота.' });
+          return;
+        }
+        await setTelegramCommands(body.commands);
+        send(response, 200, { ok: true });
+      } catch (error) {
+        send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200 ? error.message : 'Не удалось сохранить команды бота.' });
       }
       return;
     }
