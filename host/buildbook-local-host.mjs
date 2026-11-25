@@ -58,6 +58,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return telegram.service.stop();
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
+    getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
     staticRoot: appRoot,
