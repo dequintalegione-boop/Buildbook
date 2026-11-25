@@ -371,6 +371,46 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
       return;
     }
+    if (request.method === 'GET' && pathname === '/api/diagnostics') {
+      try {
+        // Read through the same canonical store used by both browser and Telegram.
+        // Only operational metadata is returned; never expose profile contents or paths.
+        const stored = await profileStore.read();
+        const rawTelegram = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
+        const queue = rawTelegram?.queue && typeof rawTelegram.queue === 'object' ? rawTelegram.queue : null;
+        const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+        const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
+        const lastCycleAt = timestamp(rawTelegram?.lastCycleAt);
+        const lastCycleAgeMs = lastCycleAt && Number.isFinite(Date.parse(lastCycleAt))
+          ? Math.max(0, Date.now() - Date.parse(lastCycleAt)) : null;
+        send(response, 200, {
+          ok: true,
+          host: { status: 'online', nodeMajor: Number(process.versions.node.split('.')[0]) || null },
+          profile: {
+            status: stored?.profile && typeof stored.profile === 'object' ? 'ready' : 'empty',
+            revision: Number.isSafeInteger(stored?.revision) && stored.revision >= 0 ? stored.revision : null,
+          },
+          telegram: {
+            configured: rawTelegram?.enabled === true,
+            running: rawTelegram?.running === true,
+            lastCycleAt,
+            lastCycleAgeMs,
+            consecutiveFailures: count(rawTelegram?.consecutiveFailures),
+            pending: count(queue?.pending),
+            processing: count(queue?.processing),
+            rejected: count(queue?.rejected),
+            lastError: rawTelegram?.lastError ? {
+              code: 'TELEGRAM_SERVICE_ERROR',
+              at: timestamp(rawTelegram.lastError.at),
+            } : null,
+          },
+          checkedAt: new Date().toISOString(),
+        });
+      } catch {
+        send(response, 503, { ok: false, error: 'Не удалось проверить канонический профиль.' });
+      }
+      return;
+    }
     if (request.method === 'POST' && (pathname === '/api/telegram/start' || pathname === '/api/telegram/stop')) {
       const action = pathname.endsWith('/start') ? startTelegram : stopTelegram;
       if (typeof action !== 'function') {
