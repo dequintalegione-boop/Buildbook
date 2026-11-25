@@ -20,12 +20,12 @@ function requestWithHost(base, host) {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, apiOptions = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, ...apiOptions });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -148,6 +148,36 @@ test('sets restrictive browser security headers on API responses', async (t) => 
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
   assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'");
+});
+
+test('Telegram lifecycle control accepts only start and stop through a valid session', async t => {
+  const actions = [];
+  const { base, request } = await fixture(t, {
+    getTelegramStatus: () => ({ enabled: true, running: actions.at(-1) === 'start' }),
+    controlTelegram: async action => { actions.push(action); },
+  });
+  const started = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(started.status, 200);
+  assert.deepEqual(await started.json(), { ok: true, enabled: true, running: true });
+  const stopped = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'stop' }),
+  });
+  assert.equal(stopped.status, 200);
+  assert.deepEqual(await stopped.json(), { ok: true, enabled: true, running: false });
+  assert.deepEqual(actions, ['start', 'stop']);
+  const invalid = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'execute', command: 'anything' }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(actions, ['start', 'stop']);
 });
 
 test('serves health and an empty profile', async (t) => {
