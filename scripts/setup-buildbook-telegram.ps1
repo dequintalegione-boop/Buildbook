@@ -26,7 +26,10 @@ if (Test-Path $envFile) {
 
 $dataDir = Join-Path $root 'data'
 New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-$apiToken = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Minimum 0 -Maximum 256) })
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$randomBytes = New-Object byte[] 32
+try { $rng.GetBytes($randomBytes) } finally { $rng.Dispose() }
+$apiToken = -join ($randomBytes | ForEach-Object { $_.ToString('x2') })
 $profile = Join-Path $dataDir 'profile.json'
 $profileLock = Join-Path $dataDir 'profile.lock'
 $inbox = Join-Path $dataDir 'telegram-inbox.json'
