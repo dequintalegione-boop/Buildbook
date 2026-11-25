@@ -45,6 +45,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   let telegramEnabled = telegramEnabledRaw === 'true';
   let telegram = null;
+  let telegramBotProfile = null;
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
   function createConfiguredTelegram(config) {
     for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
@@ -76,12 +77,19 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       if (telegram) await telegram.service.stop();
       const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
       telegram = configured.telegram;
+      telegramBotProfile = configured.bot;
       telegramEnabled = true;
       telegramLoop = telegram.service.start();
       telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
       return configured.bot;
     },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    getTelegramBotProfile: async () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) return null;
+      if (!telegramBotProfile) telegramBotProfile = await telegramBotApi.getMe(token);
+      return telegramBotProfile;
+    },
     getTelegramCommands: () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) throw new Error('Telegram bot is not configured.');
