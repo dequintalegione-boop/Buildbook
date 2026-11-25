@@ -17,10 +17,31 @@ if ([int]$Matches[1] -lt 22) {
 }
 
 $envFile = Join-Path $root '.env'
+$dataDir = Join-Path $env:LOCALAPPDATA 'Buildbook\data'
 if (-not (Test-Path $envFile)) {
   Copy-Item (Join-Path $root '.env.example') $envFile
-  Write-Host 'Создан .env из .env.example. Заполните секреты и абсолютные пути, затем запустите скрипт ещё раз.'
-  exit 1
+  $token = & node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+  if (-not $token -or $token.Length -lt 32) {
+    throw 'Не удалось сгенерировать BUILDBOOK_LOCAL_API_TOKEN.'
+  }
+  New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+  $content = Get-Content -LiteralPath $envFile -Raw
+  $content = $content -replace 'BUILDBOOK_PROFILE_PATH=.*', ("BUILDBOOK_PROFILE_PATH=" + (Join-Path $dataDir 'profile.json'))
+  $content = $content -replace 'BUILDBOOK_PROFILE_LOCK_PATH=.*', ("BUILDBOOK_PROFILE_LOCK_PATH=" + (Join-Path $dataDir 'profile.lock'))
+  $content = $content -replace 'BUILDBOOK_LOCAL_API_TOKEN=.*', ("BUILDBOOK_LOCAL_API_TOKEN=" + $token)
+  $content = $content -replace 'BUILDBOOK_TELEGRAM_INBOX_PATH=.*', ("BUILDBOOK_TELEGRAM_INBOX_PATH=" + (Join-Path $dataDir 'telegram-inbox.json'))
+  $content = $content -replace 'BUILDBOOK_TELEGRAM_OFFSET_PATH=.*', ("BUILDBOOK_TELEGRAM_OFFSET_PATH=" + (Join-Path $dataDir 'telegram-offset.json'))
+  $content = $content -replace 'BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH=.*', ("BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH=" + (Join-Path $dataDir 'telegram.lock'))
+  Set-Content -LiteralPath $envFile -Value $content -Encoding utf8 -NoNewline
+  Write-Host ''
+  Write-Host 'Создан .env: сгенерирован ключ API и пути данных в' $dataDir
+  Write-Host 'Ключ первоначального подключения (BUILDBOOK_LOCAL_API_TOKEN):'
+  Write-Host $token
+  Write-Host ''
+  Write-Host 'Скопируйте ключ и вставьте его во вкладке Telegram → Подключить.'
+  Write-Host 'Токен бота и user ID настроите позже кнопкой «Настроить бота» в интерфейсе.'
+  Write-Host 'Запускаю локальный хост...'
+  Write-Host ''
 }
 
 $logDir = Join-Path $root 'data'
