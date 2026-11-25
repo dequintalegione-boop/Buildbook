@@ -46,6 +46,14 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
     getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
+    startTelegram: () => {
+      if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      return telegram.service.start();
+    },
+    stopTelegram: () => {
+      if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      return telegram.service.stop();
+    },
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
     staticRoot: appRoot,
