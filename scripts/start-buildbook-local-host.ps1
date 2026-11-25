@@ -35,11 +35,9 @@ if (-not (Test-Path $envFile)) {
   Set-Content -LiteralPath $envFile -Value $content -Encoding utf8 -NoNewline
   Write-Host ''
   Write-Host 'Создан .env: сгенерирован ключ API и пути данных в' $dataDir
-  Write-Host 'Ключ первоначального подключения (BUILDBOOK_LOCAL_API_TOKEN):'
-  Write-Host $token
-  Write-Host ''
-  Write-Host 'Скопируйте ключ и вставьте его во вкладке Telegram → Подключить.'
-  Write-Host 'Токен бота и user ID настроите позже кнопкой «Настроить бота» в интерфейсе.'
+  Write-Host 'При открытии интерфейса по адресу локального хоста подключение PWA выполняется автоматически.'
+  Write-Host 'Для ручного подключения к отдельному адресу ключ находится в .env (BUILDBOOK_LOCAL_API_TOKEN).'
+  Write-Host 'Токен бота и user ID настройте позже кнопкой «Настроить бота» в интерфейсе.'
   Write-Host 'Запускаю локальный хост...'
   Write-Host ''
 }
