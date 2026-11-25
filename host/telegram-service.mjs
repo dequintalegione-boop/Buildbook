@@ -65,7 +65,8 @@ export function createTelegramService({
         // normal exponential-backoff ceiling (retry_after is bounded by poller).
         const serverDelay = Number.isSafeInteger(error?.retryAfterMs) && error.retryAfterMs > 0
           ? Math.min(error.retryAfterMs, 3_600_000) : 0;
-        const delay = Math.max(exponentialDelay, serverDelay);\n        try { onError(error, { failures, retryDelayMs: delay }); } catch {}
+        const delay = Math.max(exponentialDelay, serverDelay);
+        try { onError(error, { failures, retryDelayMs: delay }); } catch {}
         try { await wait(delay, signal); } catch { break; }
       }
     }
