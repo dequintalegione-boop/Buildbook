@@ -8,6 +8,7 @@ import { readTelegramServiceConfig } from './telegram-config.mjs';
 import { createTelegramBotApi } from './telegram-bot-api.mjs';
 import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 import { configureTelegramHost } from './telegram-setup.mjs';
+import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -83,6 +84,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
       return configured.bot;
     },
+    getHostRecoveryStatus: () => getWindowsRecoveryStatus(),
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
