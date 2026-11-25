@@ -83,7 +83,7 @@ export function createTelegramPoller({ botToken, gate, offsetStore, fetchImpl = 
           // communicates flood-control retry_after in the bounded JSON body.
           const body = await readBoundedTelegramJson(response);
           if (!response?.ok || body?.ok === false) {
-            const error = new Error('Telegram getUpdates returned an HTTP/API error.');
+            const error = new Error('Telegram returned an invalid getUpdates response (HTTP/API error).');
             error.code = response?.status === 429 ? 'TELEGRAM_RATE_LIMITED'
               : response?.status === 401 || response?.status === 403 ? 'TELEGRAM_AUTH_FAILED'
                 : 'TELEGRAM_HTTP_ERROR';
