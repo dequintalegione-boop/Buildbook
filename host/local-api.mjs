@@ -388,7 +388,11 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 400, { error: 'Укажите action: start или stop.' });
           return;
         }
-        const status = await controlTelegram(body.action);
+        const rawStatus = await controlTelegram(body.action);
+        const status = {
+          enabled: rawStatus?.enabled !== false,
+          running: rawStatus?.running === true,
+        };
         send(response, 200, { ok: true, status });
       } catch (error) {
         send(response, 409, { error: error?.publicMessage || 'Не удалось изменить состояние сервиса Telegram.' });
