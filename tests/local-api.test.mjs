@@ -84,7 +84,7 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   }
   const manager = await fetch(base + '/scripts/manage-buildbook-telegram.bat');
   assert.equal(manager.status, 200);
-  assert.match(manager.headers.get('content-type'), /^text\\/plain/);
+  assert.ok(manager.headers.get('content-type').startsWith('text/plain'));
   assert.equal(manager.headers.get('x-content-type-options'), 'nosniff');
   assert.match(await manager.text(), /@echo off/);
   const managerScript = await fetch(base + '/scripts/manage-buildbook-telegram.ps1');
