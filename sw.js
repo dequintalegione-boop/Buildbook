@@ -1,8 +1,8 @@
-/* Buildbook service worker — buildbook-53
- * Network-first shell; injects telegram-overrides.js into HTML so UI updates
- * reach clients even when index.html on disk is an older shell.
+/* Buildbook service worker — buildbook-54
+ * Network-first shell. Injects telegram-overrides.js only at the REAL document
+ * end (never into the first </body> that appears inside JS print templates).
  */
-const C = 'buildbook-53';
+const C = 'buildbook-54';
 const PRECACHE = [
   './',
   './index.html',
@@ -37,19 +37,38 @@ function isHtmlShell(request, url) {
   return path === '/' || path.endsWith('/index.html');
 }
 
+/** Inject overrides before the final document </body>, not the first match. */
+function injectOverridesHtml(html) {
+  if (!html || html.includes('telegram-overrides.js')) return html;
+  // Preferred: end of the main app script then body/html close.
+  const endMarker = '</script></body></html>';
+  const endAt = html.lastIndexOf(endMarker);
+  if (endAt >= 0) {
+    return (
+      html.slice(0, endAt + '</script>'.length) +
+      '\n' + OVERRIDES_TAG + '\n' +
+      '</body></html>'
+    );
+  }
+  const bodyAt = html.lastIndexOf('</body>');
+  if (bodyAt >= 0) {
+    return html.slice(0, bodyAt) + OVERRIDES_TAG + '\n' + html.slice(bodyAt);
+  }
+  return html + '\n' + OVERRIDES_TAG + '\n';
+}
+
 async function withOverrides(response) {
   try {
     const ctype = response.headers.get('content-type') || '';
     if (!ctype.includes('text/html')) return response;
-    let html = await response.text();
-    if (!html.includes('telegram-overrides.js')) {
-      if (html.includes('</body>')) html = html.replace('</body>', OVERRIDES_TAG + '\n</body>');
-      else html += '\n' + OVERRIDES_TAG + '\n';
-    }
+    const html = injectOverridesHtml(await response.text());
+    const headers = new Headers(response.headers);
+    // Body length changed — drop stale length so the browser does not truncate.
+    headers.delete('content-length');
     return new Response(html, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers,
     });
   } catch {
     return response;
@@ -66,7 +85,9 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then(async (response) => {
           if (!response || !response.ok) throw new Error('network');
-          const finalResponse = isHtmlShell(event.request, url) ? await withOverrides(response) : response;
+          const finalResponse = isHtmlShell(event.request, url)
+            ? await withOverrides(response)
+            : response;
           const copy = finalResponse.clone();
           caches.open(C).then((cache) => cache.put(event.request, copy)).catch(() => {});
           return finalResponse;
