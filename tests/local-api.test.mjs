@@ -54,6 +54,10 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   await writeFile(join(dir, 'index.html'), '<!doctype html><title>Buildbook test</title>');
   await writeFile(join(dir, '.env'), 'BUILDBOOK_LOCAL_API_TOKEN=must-not-leak');
   await writeFile(join(dir, 'profile.json'), '{"private":true}');
+  await mkdir(join(dir, 'scripts'), { recursive: true });
+  await writeFile(join(dir, 'scripts', 'manage-buildbook-telegram.bat'), '@echo off\\r\\n');
+  await writeFile(join(dir, 'scripts', 'manage-buildbook-telegram.ps1'), 'Write-Host \'safe helper\'');
+  await writeFile(join(dir, 'scripts', 'unlisted-helper.ps1'), 'private helper');
   const store = createProfileStore(join(dir, 'canonical-profile.json'));
   const api = createLocalApiServer({
     profileStore: store,
@@ -75,9 +79,17 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
 
-  for (const path of ['/.env', '/profile.json', '/data/profile.json', '/host/local-api.mjs', '/unknown.js']) {
+  for (const path of ['/.env', '/profile.json', '/data/profile.json', '/host/local-api.mjs', '/scripts/unlisted-helper.ps1', '/unknown.js']) {
     assert.equal((await fetch(base + path)).status, 404, path);
   }
+  const manager = await fetch(base + '/scripts/manage-buildbook-telegram.bat');
+  assert.equal(manager.status, 200);
+  assert.match(manager.headers.get('content-type'), /^text\\/plain/);
+  assert.equal(manager.headers.get('x-content-type-options'), 'nosniff');
+  assert.match(await manager.text(), /@echo off/);
+  const managerScript = await fetch(base + '/scripts/manage-buildbook-telegram.ps1');
+  assert.equal(managerScript.status, 200);
+  assert.match(await managerScript.text(), /safe helper/);
   assert.equal((await fetch(base + '/api/profile')).status, 401);
 });
 
