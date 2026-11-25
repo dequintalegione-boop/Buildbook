@@ -47,6 +47,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   let telegramEnabled = telegramEnabledRaw === 'true';
   let telegram = null;
   let telegramBotProfile = null;
+  let recoveryStatusCache = null;
+  let recoveryStatusAt = 0;
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
   function createConfiguredTelegram(config) {
     for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
@@ -84,7 +86,13 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
       return configured.bot;
     },
-    getHostRecoveryStatus: () => getWindowsRecoveryStatus(),
+    getHostRecoveryStatus: async () => {
+      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 60_000) {
+        recoveryStatusCache = await getWindowsRecoveryStatus();
+        recoveryStatusAt = Date.now();
+      }
+      return recoveryStatusCache;
+    },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
