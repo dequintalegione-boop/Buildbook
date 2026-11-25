@@ -3927,20 +3927,22 @@ if(!TEST_MODE)setInterval(()=>{
 },15000);
 
 function telegramConnectForm(){
- if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
- const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ первоначального подключения','password','','required autocomplete="off"')+'</div><p class="mu">Ключ используется один раз для обмена на защищённую браузерную сессию. Он не сохраняется в Buildbook. Токен Telegram-бота сюда вводить не нужно: он остаётся только в локальном файле .env.</p>';
+ const localOrigin=['localhost','127.0.0.1','::1'].includes(location.hostname.replace(/^\\[|\\]$/g,''));
+ if(STORAGE_MODE==='canonical'||localOrigin)TELEGRAM_UI.baseUrl=location.origin;
+ const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ (не нужен при запуске через PWA)','password','','autocomplete="off"')+'</div><p class="mu">Если Buildbook открыт с локального хоста, подключение выполнится автоматически — ключ из .env вводить не потребуется. При подключении к отдельному хосту можно использовать ключ первоначального подключения. Токен Telegram-бота сюда вводить не нужно.</p>';
  modal('Подключение локального хоста',body,form=>{
   const base=normalizeLocalTelegramBase(form.elements.apiUrl.value);
   if(!base)return showModalError(form,'Укажите HTTP-адрес localhost, 127.0.0.1 или ::1.');
   if(STORAGE_MODE==='canonical'&&base!==location.origin)return showModalError(form,'Для канонического профиля используйте текущий адрес Buildbook: '+location.origin);
   const token=String(form.elements.token.value||'').trim();
-  if(token.length<32)return showModalError(form,'Ключ локального API должен содержать не менее 32 символов.');
+  if(token&&token.length<32)return showModalError(form,'Ключ локального API должен содержать не менее 32 символов.');
+  if(!token&&base!==location.origin)return showModalError(form,'Автоподключение доступно только к текущему локальному хосту. Для другого адреса укажите ключ подключения.');
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
   TELEGRAM_UI.baseUrl=base;
   if(STORAGE_MODE!=='canonical'){S.set.localApiUrl=base;save.skip=1;save()}
   TELEGRAM_UI.busy=true;if(submit)submit.disabled=true;
   form.elements.token.value='';
-  localTelegramRequest('/api/session/bootstrap',{baseUrl:base,method:'POST',token,body:'{}'})
+  localTelegramRequest(token?'/api/session/bootstrap':'/api/session/bootstrap-local',{baseUrl:base,method:'POST',token:token||undefined,body:'{}'})
    .then(async()=>{
     if(STORAGE_MODE==='canonical'){
      const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
