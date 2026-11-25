@@ -75,8 +75,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
     configureTelegram: async ({ token, userId }) => {
-      if (telegram) await telegram.service.stop();
       const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
+      if (telegram) await telegram.service.stop();
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
       telegramEnabled = true;
