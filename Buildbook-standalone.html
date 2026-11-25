@@ -479,7 +479,7 @@ const defaultState=()=>({
  set:{theme:'auto',year:new Date().getFullYear(),backup:'',debtsInvestments:true,hideTaskNotes:false,otherTabs:[],hotkeys:DEFAULT_HOTKEYS.map(item=>({...item}))}
 });
 let S=defaultState(),V={tab:'home',assetsTab:'debts',showArchivedAssets:false,txMenuOpen:false,hotkeyCaptureId:'',calendar:{year:new Date().getFullYear(),month:new Date().getMonth()},s:{type:'',q:'',av:false,problemOnly:false,showZero:false,from:'',to:''},b:{st:'',q:'',from:'',to:''},t:{k:'',q:'',m:'',cat:'',grp:'',acc:''},report:'expenses'},dip;
-let TELEGRAM_UI={baseUrl:location.hostname==='localhost'?'http://localhost:43127':'http://127.0.0.1:43127',checked:false,checking:false,busy:false,connected:false,status:null,error:''};
+let TELEGRAM_UI={baseUrl:normalizeLocalTelegramBase(location.origin)||'http://127.0.0.1:43127',checked:false,checking:false,busy:false,connected:false,status:null,error:''};
 let canonicalReconnectReady=false;
 const DATA_SCHEMA_VERSION=5;
 let STARTUP_STAGE='script-ready';
@@ -821,7 +821,8 @@ function persistCurrent(){
 }
 function reportStorageError(error){
  if(STORAGE_MODE==='canonical'&&error&&error.code!=='BUILD_BOOK_STORAGE_CONFLICT'){
-  APP_FATAL_ERROR=new Error('Не удалось надёжно сохранить канонический профиль: '+(error.message||'локальный сервис недоступен')+'. Работа остановлена, чтобы не создавать несохранённые изменения. Скачайте резервную копию текущего состояния и проверьте локальный хост.');
+  const unknown=error.code==='BUILD_BOOK_SAVE_RESULT_UNKNOWN';
+  APP_FATAL_ERROR=new Error(unknown?'Результат сохранения неизвестен: сервер мог принять запись, но подтверждение не получено. Не повторяйте сохранение вслепую. Скачайте резервную копию текущего состояния, восстановите соединение и загрузите актуальный профиль.':'Не удалось надёжно сохранить канонический профиль: '+(error.message||'локальный сервис недоступен')+'. Работа остановлена, чтобы не создавать несохранённые изменения. Скачайте резервную копию текущего состояния и проверьте локальный хост.');
   render();
   return;
  }
@@ -3882,9 +3883,22 @@ async function localTelegramRequest(path,options={}){
  const base=options.baseUrl||TELEGRAM_UI.baseUrl,headers={};
  if(options.token)headers.Authorization='Bearer '+options.token;
  if(options.body!==undefined)headers['Content-Type']='application/json';
- const response=await fetch(base+path,{method:options.method||'GET',headers,body:options.body,credentials:'include',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
- const payload=await response.json().catch(()=>null);
- if(!response.ok){const error=new Error(typeof payload?.error==='string'?payload.error:'Локальный сервис вернул ошибку.');error.status=response.status;throw error}
+ const timeoutMs=options.timeoutMs===undefined?30_000:options.timeoutMs;
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>120_000)throw new RangeError('Тайм-аут локального API должен быть от 1 до 120000 мс.');
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+ let response,payload=null;
+ try{
+  response=await fetch(base+path,{method:options.method||'GET',headers,body:options.body,signal:controller.signal,credentials:'include',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
+  try{payload=await response.json()}catch(error){
+   if(controller.signal.aborted)throw error;
+  }
+ }catch(cause){
+  const error=new Error(controller.signal.aborted?'Локальный сервис не ответил за отведённое время.':'Локальный сервис недоступен или сессия не может быть использована.');
+  error.code=controller.signal.aborted?'BUILD_BOOK_LOCAL_API_TIMEOUT':'BUILD_BOOK_LOCAL_API_UNAVAILABLE';
+  error.cause=cause;
+  throw error;
+ }finally{clearTimeout(timer)}
+ if(!response.ok){const error=new Error(typeof payload?.error==='string'?payload.error:'Локальный сервис вернул ошибку.');error.status=response.status;error.code=typeof payload?.code==='string'?payload.code:response.status===401?'BUILD_BOOK_LOCAL_API_UNAUTHORIZED':response.status===409?'BUILD_BOOK_STORAGE_CONFLICT':'BUILD_BOOK_LOCAL_API_ERROR';throw error}
  return payload||{};
 }
 async function refreshTelegramStatus(silent=false){
@@ -3947,7 +3961,7 @@ async function closeTelegramSession(){
  TELEGRAM_UI.connected=false;TELEGRAM_UI.status=null;TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Сессия закрыта.';render();
 }
 function telegram(){
- if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
+ if(STORAGE_MODE==='canonical'||normalizeLocalTelegramBase(location.origin))TELEGRAM_UI.baseUrl=location.origin;
  else if(S.set.localApiUrl)TELEGRAM_UI.baseUrl=String(S.set.localApiUrl);
  if(TEST_MODE&&!TELEGRAM_UI.checked){TELEGRAM_UI.checked=true;TELEGRAM_UI.error='Проверка локального хоста отключена в тестовом режиме.'}
  if(!TEST_MODE&&!TELEGRAM_UI.checked&&!TELEGRAM_UI.checking)refreshTelegramStatus();
@@ -4426,7 +4440,7 @@ document.addEventListener('change',e=>{
    const details='Схема: '+verified.sourceSchemaVersion+'\nРазмер данных: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\n'+formatSummary(sourceCounts);
    if(!confirm('Целевой профиль пуст. Будет создана его первая ревизия.\n\n'+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить импорт?'))return;
    const envelope={format:verified.format,version:verified.version,sourceSchemaVersion:verified.sourceSchemaVersion,exportedAt:verified.exportedAt,payload:verified.payload,sha256:verified.sha256};
-   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope})});
+   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope}),timeoutMs:120_000});
    if(!imported||imported.imported!==true||imported.revision!==target.revision+1)throw new Error('Хост не подтвердил ожидаемый результат импорта.');
    const readback=await localTelegramRequest('/api/profile');
    if(!readback||readback.revision!==imported.revision||!isPlainRecord(readback.profile))throw new Error('Импорт записан, но повторное чтение профиля не подтвердило ревизию. Не переключайте приложение на хост до проверки.');
