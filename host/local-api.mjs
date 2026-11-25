@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, getTelegramMessages = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -260,6 +260,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
+  }
+  if (configureTelegram !== null && typeof configureTelegram !== 'function') {
+    throw new TypeError('configureTelegram must be a function or null.');
   }
   if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
     throw new TypeError('getTelegramMessages must be a function or null.');
