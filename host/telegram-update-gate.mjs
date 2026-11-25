@@ -88,5 +88,18 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
       });
       return { accepted: true, ...result };
     },
+    allow(userId) {
+      const normalized = numericId(userId);
+      if (!normalized) throw new TypeError('Telegram allowlist contains an invalid user ID.');
+      if (!allowed.has(normalized) && allowed.size >= 100) throw new TypeError('Telegram allowlist cannot exceed 100 user IDs.');
+      allowed.add(normalized);
+    },
+    revoke(userId) {
+      const normalized = numericId(userId);
+      if (normalized) allowed.delete(normalized);
+    },
+    list() {
+      return [...allowed];
+    },
   });
 }

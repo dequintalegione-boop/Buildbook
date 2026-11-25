@@ -26,6 +26,7 @@ export function createTelegramHostService({
   fetchImpl = globalThis.fetch,
   onCycle = () => {},
   onError = () => {},
+  onSkipped = null,
 } = {}) {
   if (!config || typeof config !== 'object') throw new TypeError('Validated Telegram host config is required.');
   const hasInjectedAdapter = typeof applyUpdate === 'function';
@@ -96,15 +97,24 @@ export function createTelegramHostService({
   const gate = createTelegramUpdateGate({ inbox, botId: config.botId, allowlist: config.allowedUserIds });
   const poller = createTelegramPoller({
     botToken: config.botToken,
-    gate,
+    gate: {
+      async accept(update) {
+        const result = await gate.accept(update);
+        if (!result.accepted && typeof onSkipped === 'function') {
+          try { await onSkipped(update, result); } catch {}
+        }
+        return result;
+      },
+    },
     offsetStore,
     fetchImpl,
     timeoutSeconds: config.timeoutSeconds,
   });
+  const reply = createTelegramReplySender({ botToken: config.botToken, fetchImpl });
   const processor = createTelegramInboxProcessor({
     inbox,
     applyUpdate: canonicalApplyUpdate,
-    deliverReply: createTelegramReplySender({ botToken: config.botToken, fetchImpl }),
+    deliverReply: reply,
   });
   const runtime = createTelegramRuntime({ inbox, poller, processor });
 
@@ -128,6 +138,8 @@ export function createTelegramHostService({
   return Object.freeze({
     service,
     inbox,
+    gate,
+    notify(chatId, text) { return reply({ chatId, text }); },
     status,
     getStatus() { return status.snapshot({ running: service.running }); },
   });

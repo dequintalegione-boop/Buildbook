@@ -209,7 +209,7 @@ function originAllowed(request) {
 
 function publicTelegramSetup(raw) {
   const ids = Array.isArray(raw?.allowedUserIds)
-    ? raw.allowedUserIds.map(id => String(id)).filter(id => /^\d{1,16}$/.test(id)).slice(0, 100)
+    ? raw.allowedUserIds.map(id => String(id)).filter(id => /^\d{1,16}$/.test(id) && id !== '9000000000000001').slice(0, 100)
     : [];
   const account = typeof raw?.defaultAccountId === 'string' && raw.defaultAccountId.length <= 200 && !/[\u0000-\u001f\u007f]/.test(raw.defaultAccountId)
     ? raw.defaultAccountId
@@ -220,6 +220,9 @@ function publicTelegramSetup(raw) {
     allowedUserIds: ids,
     defaultAccountId: account,
     autostart: raw?.autostart === true,
+    pairingUntil: Number.isSafeInteger(raw?.pairingUntil) && raw.pairingUntil > 0 ? raw.pairingUntil : null,
+    needsToken: raw?.needsToken === true,
+    hostTokenReady: raw?.hostTokenReady === true,
     enabled: raw?.enabled === true,
     running: raw?.running === true,
   };
@@ -229,7 +232,7 @@ function publicTelegramSetup(raw) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, getTelegramSetup, applyTelegramSetup, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, getTelegramSetup, applyTelegramSetup, controlTelegram, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -324,6 +327,33 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
 
     // Exchange the host-only bootstrap secret for a short-lived HttpOnly
     // browser session. The session secret is never exposed to JavaScript or disk.
+    if (request.method === 'POST' && pathname === '/api/session/app') {
+      if (!origin || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 403, { error: 'Кнопка подключения работает только в окне Buildbook на этом компьютере.' });
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 0) {
+          send(response, 400, { error: 'Запрос подключения должен содержать пустой JSON-объект.' });
+          return;
+        }
+      } catch (error) {
+        send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
+        return;
+      }
+      for (const [key, session] of sessions) if (session.expiresAt <= now()) sessions.delete(key);
+      if (sessions.size >= MAX_SESSIONS) {
+        send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
+        return;
+      }
+      const sessionId = randomBytes(32).toString('base64url');
+      sessions.set(sessionId, { expiresAt: now() + sessionTtlMs });
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.ceil(sessionTtlMs / 1000));
+      send(response, 200, { ok: true, expiresIn: sessionTtlMs });
+      return;
+    }
+
     if (request.method === 'POST' && pathname === '/api/session/bootstrap') {
       if (!origin || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 403, { error: 'Для подключения требуется локальный браузерный Origin и JSON.' });
@@ -420,6 +450,32 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       } catch (error) {
         const status = error.status === 400 ? 400 : 409;
         send(response, status, { error: status === 400 ? 'Проверьте токен бота и список пользователей.' : 'Не удалось применить настройки Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/control') {
+      if (typeof controlTelegram !== 'function') {
+        send(response, 409, { error: 'Управление Telegram недоступно.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        const allowedKeys = ['action', 'accountId', 'userId', 'botToken'];
+        const actions = ['start', 'stop', 'restart', 'autostart-on', 'autostart-off', 'account', 'remove-user', 'pair', 'cancel-pair', 'adopt-host', 'save-token'];
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !allowedKeys.includes(key)) || !actions.includes(body.action)) {
+          send(response, 400, { error: 'Некорректная команда управления Telegram.' });
+          return;
+        }
+        const view = await controlTelegram(body);
+        send(response, 200, publicTelegramSetup(view));
+      } catch (error) {
+        const status = error.status === 400 ? 400 : 409;
+        send(response, status, { error: 'Не удалось выполнить команду Telegram.' });
       }
       return;
     }

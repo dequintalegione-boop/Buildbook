@@ -49,4 +49,16 @@ test('the app can save a Telegram bot and the token never comes back', async t =
   const listed = await again.json();
   assert.equal(listed.botId, '123456789');
   assert.equal(JSON.stringify(listed).includes('AA-test'), false);
+  const appSession = await fetch(base + '/api/session/app', {
+    method: 'POST',
+    headers: { origin: base, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(appSession.status, 200);
+  const blocked = await fetch(base + '/api/session/app', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(blocked.status, 403);
 });

@@ -75,8 +75,41 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     if (record) secretRecord = { ...record, autostart: autoStartTelegram };
   }
 
+  let pairingUntil = 0;
+  const placeholderUser = '9000000000000001';
+  const envBotToken = /^(\d{1,16}):[A-Za-z0-9_-]{10,}$/.test(String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim())
+    && !String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN).includes('REPLACE')
+    ? String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN).trim()
+    : '';
+
   function mountTelegram(config) {
-    telegram = createTelegramHostService({ config, profileStore, fetchImpl, onError });
+    telegram = createTelegramHostService({
+      config,
+      profileStore,
+      fetchImpl,
+      onError,
+      onSkipped: update => noteSkipped(update),
+    });
+  }
+
+  async function noteSkipped(update) {
+    if (!pairingUntil || Date.now() > pairingUntil || !telegram?.gate) return;
+    const userId = String(update?.message?.from?.id ?? '');
+    if (update?.message?.chat?.type !== 'private' || !/^\d{1,16}$/.test(userId) || userId === placeholderUser) return;
+    try {
+      telegram.gate.allow(userId);
+      telegram.gate.revoke(placeholderUser);
+    } catch {
+      return;
+    }
+    const ids = telegram.gate.list().filter(id => id !== placeholderUser);
+    setupView = { ...setupView, allowedUserIds: ids };
+    pairingUntil = 0;
+    if (secretRecord) {
+      secretRecord = { ...secretRecord, allowedUserIds: ids.length ? ids : [placeholderUser] };
+      writeTelegramSetupFile(telegramPaths.setupPath, secretRecord).catch(() => {});
+    }
+    try { await telegram.notify(String(update.message.chat?.id ?? userId), 'Доступ к Buildbook открыт. Напишите /help'); } catch {}
   }
 
   const savedSetup = readTelegramSetupFileSync(telegramPaths.setupPath);
@@ -106,6 +139,9 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       autostart: autoStartTelegram && setupView.configured,
       enabled: !!telegram,
       running: status?.running === true,
+      pairingUntil: pairingUntil > Date.now() ? pairingUntil : null,
+      needsToken: !setupView.configured && !envBotToken,
+      hostTokenReady: !setupView.configured && !!envBotToken,
     };
   }
 
@@ -158,12 +194,114 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     return currentSetup();
   }
 
+  function beginTelegramLoop() {
+    const loop = telegram.service.start();
+    loop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+  }
+
+  async function persistSecret(patch) {
+    if (!secretRecord) return;
+    secretRecord = { ...secretRecord, ...patch };
+    await writeTelegramSetupFile(telegramPaths.setupPath, secretRecord);
+  }
+
+  async function controlTelegram(input) {
+    const action = String(input?.action || '');
+    if (action === 'pair') {
+      if (!telegram) {
+        const error = new Error('Сначала подключите бота.');
+        error.status = 409;
+        throw error;
+      }
+      pairingUntil = Date.now() + 180000;
+      if (!telegram.getStatus().running) beginTelegramLoop();
+      return currentSetup();
+    }
+    if (action === 'cancel-pair') {
+      pairingUntil = 0;
+      return currentSetup();
+    }
+    if (action === 'remove-user') {
+      if (!telegram?.gate) {
+        const error = new Error('Бот ещё не подключён.');
+        error.status = 409;
+        throw error;
+      }
+      telegram.gate.revoke(input.userId);
+      if (!telegram.gate.list().some(id => id !== placeholderUser)) telegram.gate.allow(placeholderUser);
+      const ids = telegram.gate.list().filter(id => id !== placeholderUser);
+      setupView = { ...setupView, allowedUserIds: ids };
+      await persistSecret({ allowedUserIds: telegram.gate.list() });
+      return currentSetup();
+    }
+    if (action === 'account') {
+      const accountId = String(input.accountId || '').trim();
+      const botToken = secretRecord?.botToken || envBotToken;
+      const allowedUserIds = (secretRecord?.allowedUserIds || setupView.allowedUserIds || []).filter(Boolean);
+      return applyTelegramSetupBody({
+        botToken,
+        allowedUserIds: allowedUserIds.length ? allowedUserIds : [placeholderUser],
+        defaultAccountId: accountId,
+        start: telegram?.getStatus().running === true,
+      });
+    }
+    if (action === 'adopt-host' || action === 'save-token') {
+      const botToken = action === 'adopt-host' ? envBotToken : String(input.botToken || '').trim();
+      const allowedUserIds = setupView.allowedUserIds.length ? setupView.allowedUserIds : [placeholderUser];
+      const view = await applyTelegramSetupBody({
+        botToken,
+        allowedUserIds,
+        defaultAccountId: setupView.defaultAccountId || '',
+        start: true,
+      });
+      pairingUntil = setupView.allowedUserIds.some(id => id !== placeholderUser) ? 0 : Date.now() + 180000;
+      return currentSetup() || view;
+    }
+    if (action === 'start') {
+      if (!telegram) {
+        const error = new Error('Сначала подключите бота.');
+        error.status = 409;
+        throw error;
+      }
+      beginTelegramLoop();
+      return currentSetup();
+    }
+    if (action === 'stop') {
+      if (!telegram) {
+        const error = new Error('Сначала подключите бота.');
+        error.status = 409;
+        throw error;
+      }
+      await telegram.service.stop();
+      return currentSetup();
+    }
+    if (action === 'restart') {
+      if (!telegram) {
+        const error = new Error('Сначала подключите бота.');
+        error.status = 409;
+        throw error;
+      }
+      await telegram.service.stop();
+      beginTelegramLoop();
+      return currentSetup();
+    }
+    if (action === 'autostart-on' || action === 'autostart-off') {
+      autoStartTelegram = action === 'autostart-on' && setupView.configured;
+      await persistSecret({ autostart: autoStartTelegram });
+      return currentSetup();
+    }
+    const error = new Error('Неизвестная команда.');
+    error.status = 400;
+    throw error;
+  }
+
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
     getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
     getTelegramSetup: currentSetup,
     applyTelegramSetup,
+    controlTelegram,
     startTelegram: () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
       autoStartTelegram = true;
