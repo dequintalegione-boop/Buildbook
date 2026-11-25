@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -260,6 +260,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
+  }
+  if (verifyTelegramBot !== null && typeof verifyTelegramBot !== 'function') {
+    throw new TypeError('verifyTelegramBot must be a function or null.');
   }
   if (launchLocalAction !== null && typeof launchLocalAction !== 'function') {
     throw new TypeError('launchLocalAction должен быть функцией или null.');
@@ -522,6 +525,42 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         });
       } catch {
         send(response, 500, { error: 'Не удалось получить статус Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/bot/verify') {
+      if (typeof verifyTelegramBot !== 'function') {
+        send(response, 503, { error: 'Проверка Telegram Bot API не настроена на локальном хосте.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || typeof body.token !== 'string'
+          || body.token.length > 256 || !/^\\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)) {
+          send(response, 400, { error: 'Укажите корректный токен Telegram Bot API.' });
+          return;
+        }
+        // The token exists only for this request. The callback must return a
+        // sanitized bot profile; the token is never reflected in the response.
+        const bot = await verifyTelegramBot(body.token);
+        if (!bot || typeof bot.id !== 'string' || typeof bot.firstName !== 'string') {
+          send(response, 502, { error: 'Telegram вернул некорректный профиль бота.' });
+          return;
+        }
+        send(response, 200, { ok: true, bot });
+      } catch (error) {
+        send(response, 400, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось проверить токен Telegram.',
+          code: typeof error?.code === 'string' ? error.code : 'TELEGRAM_BOT_VERIFY_FAILED',
+        });
       }
       return;
     }
