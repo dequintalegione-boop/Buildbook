@@ -47,20 +47,13 @@ $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyConti
 if (-not $existingTask -and [Environment]::UserInteractive) {
   Write-Host ''
   $answer = Read-Host 'Установить автоматический запуск хоста при входе в Windows и восстановление после сбоя? (Д/н)'
-  if ($answer -match '^(д|да|y|yes)New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-$logFile = Join-Path $logDir 'local-host.log'
-if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 5MB) {
-  $previousLog = "$logFile.1"
-  if (Test-Path $previousLog) { Remove-Item $previousLog -Force }
-  Move-Item $logFile $previousLog -Force
-}
-
-& node --env-file="$envFile" .\host\run-buildbook-local-host.mjs 2>&1 | Tee-Object -FilePath $logFile -Append
-$exitCode = $LASTEXITCODE
-exit $exitCode
-) {
-    & (Join-Path $PSScriptRoot 'install-buildbook-autostart.ps1') -NoStart
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { Write-Warning 'Не удалось установить автозапуск. Его можно включить позже во вкладке Telegram.' }
+  if ($answer -match '^(д|да|y|yes)$') {
+    try {
+      & (Join-Path $PSScriptRoot 'install-buildbook-autostart.ps1') -NoStart
+    } catch {
+      Write-Warning ('Не удалось установить автозапуск: ' + $_.Exception.Message)
+      Write-Warning 'Хост всё равно будет запущен. Автозапуск можно включить позже во вкладке Telegram.'
+    }
   }
 }
 
