@@ -107,5 +107,7 @@ export function createTelegramHostService({
     status,
     gate,
     getStatus() { return status.snapshot({ running: service.running }); },
+    getAllowlist() { return gate.getAllowlist(); },
+    setAllowlist(ids) { return gate.setAllowlist(ids); },
   });
 }
