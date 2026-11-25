@@ -534,7 +534,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
-      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/.test(contentType)) {
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
         send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
         request.resume();
         return;
@@ -543,7 +543,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const body = await readJson(request);
         if (!body || typeof body !== 'object' || Array.isArray(body)
           || Object.keys(body).length !== 1 || typeof body.token !== 'string'
-          || body.token.length > 256 || !/^\\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)) {
+          || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)) {
           send(response, 400, { error: 'Укажите корректный токен Telegram Bot API.' });
           return;
         }
