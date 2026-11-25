@@ -3958,8 +3958,8 @@ function telegramSetupWizard(){
  modal('Мастер подключения Telegram',body,form=>{
   const token=String(form.elements.botToken.value||'').trim();
   const userId=String(form.elements.userId.value||'').trim();
-  if(!/^[1-9]\\d{0,15}$/.test(userId))return showModalError(form,'Введите положительный числовой Telegram user ID.');
-  if(!/^[1-9]\\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
+  if(!/^[1-9]\d{0,15}$/.test(userId))return showModalError(form,'Введите положительный числовой Telegram user ID.');
+  if(!/^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
   if(submit){submit.disabled=true;submit.textContent='Проверяем…'}
   form.elements.botToken.value='';
