@@ -175,6 +175,22 @@ test('Telegram lifecycle control accepts only start and stop through a valid ses
     getTelegramStatus: () => ({ enabled: true, running: actions.at(-1) === 'start' }),
     controlTelegram: async action => { actions.push(action); },
   });
+  const unauthenticated = await fetch(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(unauthenticated.status, 401);
+  assert.deepEqual(actions, []);
+
+  const wrongContentType = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(wrongContentType.status, 415);
+  assert.deepEqual(actions, []);
+
   const started = await request(base + '/api/telegram/control', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
