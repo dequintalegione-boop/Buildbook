@@ -62,7 +62,7 @@ try {
   $backup = $null
   if (Test-Path -LiteralPath $envFile) {
     $lines = @(Get-Content -LiteralPath $envFile)
-    $backup = "$envFile.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    $backup = "$envFile.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     Copy-Item -LiteralPath $envFile -Destination $backup
     Write-Host "Старая конфигурация сохранена в: $backup"
   } else {
