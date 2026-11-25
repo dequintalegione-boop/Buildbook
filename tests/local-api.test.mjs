@@ -111,6 +111,20 @@ test('Telegram lifecycle endpoint requires a session and accepts only start/stop
   assert.equal(stopped.status, 200);
   assert.deepEqual(await stopped.json(), { ok: true, status: { enabled: true, running: false } });
 
+  const wrongType = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: '{"action":"start"}',
+  });
+  assert.equal(wrongType.status, 415);
+
+  const extraField = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start', token: 'must-not-be-accepted' }),
+  });
+  assert.equal(extraField.status, 400);
+
   const invalid = await request(base + '/api/telegram/control', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
