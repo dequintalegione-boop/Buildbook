@@ -48,7 +48,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
     startTelegram: () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
-      return telegram.service.start();
+      telegram.service.start();
     },
     stopTelegram: () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
