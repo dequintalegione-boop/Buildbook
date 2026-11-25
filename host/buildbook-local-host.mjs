@@ -6,6 +6,7 @@ import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramHostService } from './telegram-host-service.mjs';
 import { readTelegramServiceConfig } from './telegram-config.mjs';
 import { createTelegramBotApi } from './telegram-bot-api.mjs';
+import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -41,9 +42,15 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
-  const telegramEnabled = telegramEnabledRaw === 'true';
+  let telegramEnabled = telegramEnabledRaw === 'true';
   let telegram = null;
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
+  function createConfiguredTelegram(config) {
+    for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
+      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
+    }
+    return createTelegramHostService({ config, profileStore, fetchImpl, onError });
+  }
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
