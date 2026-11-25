@@ -25,6 +25,7 @@ const STATIC_ASSETS = new Map([
   ['/manifest.webmanifest', ['manifest.webmanifest', 'application/manifest+json; charset=utf-8']],
   ['/icon.svg', ['icon.svg', 'image/svg+xml']],
   ['/sw.js', ['sw.js', 'text/javascript; charset=utf-8']],
+  ['/scripts/start-buildbook-local-host.bat', ['scripts/start-buildbook-local-host.bat', 'application/octet-stream']],
 ]);
 const STATIC_CSP = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
