@@ -47,6 +47,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   let telegramEnabled = telegramEnabledRaw === 'true';
   let telegram = null;
   let telegramBotProfile = null;
+  let telegramBotProfileAt = 0;
   let recoveryStatusCache = null;
   let recoveryStatusAt = 0;
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
@@ -81,6 +82,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       if (telegram) await telegram.service.stop();
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
+      telegramBotProfileAt = Date.now();
       telegramEnabled = true;
       telegramLoop = telegram.service.start();
       telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
@@ -97,7 +99,10 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) return null;
-      if (!telegramBotProfile) telegramBotProfile = await telegramBotApi.getMe(token);
+      if (!telegramBotProfile || Date.now() - telegramBotProfileAt > 5 * 60_000) {
+        telegramBotProfile = await telegramBotApi.getMe(token);
+        telegramBotProfileAt = Date.now();
+      }
       return telegramBotProfile;
     },
     getTelegramCommands: () => {
