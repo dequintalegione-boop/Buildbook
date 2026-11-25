@@ -3857,13 +3857,13 @@ async function controlTelegramService(action){
  if(!['start','stop'].includes(action))return;
  try{
   await localTelegramRequest('/api/telegram/control',{method:'POST',body:JSON.stringify({action})});
+  await refreshTelegramStatus(true);
   TELEGRAM_UI.error=action==='start'?'Сервис Telegram запущен.':'Сервис Telegram остановлен.';
-  await refreshTelegramStatus(true);
  }catch(error){
-  TELEGRAM_UI.error=error.message||'Не удалось изменить состояние Telegram.';
   await refreshTelegramStatus(true);
-  if(V.tab==='telegram')render();
+  TELEGRAM_UI.error=error.message||'Не удалось изменить состояние Telegram.';
  }
+ if(V.tab==='telegram')render();
 }
 async function refreshTelegramStatus(silent=false){
  if(TELEGRAM_UI.checking)return;
