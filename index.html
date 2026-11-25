@@ -3873,6 +3873,10 @@ async function refreshTelegramStatus(silent=false){
   if(!silent&&V.tab==='telegram')render();
  }
 }
+if(!TEST_MODE)setInterval(()=>{
+ if(V.tab==='telegram'&&!document.hidden&&!TELEGRAM_UI.checking)refreshTelegramStatus(false);
+},15000);
+
 function telegramConnectForm(){
  if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
  const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ первоначального подключения','password','','required autocomplete="off"')+'</div><p class="mu">Ключ используется один раз для обмена на защищённую браузерную сессию. Он не сохраняется в Buildbook. Токен Telegram-бота сюда вводить не нужно: он остаётся только в локальном файле .env.</p>';
