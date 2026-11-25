@@ -95,6 +95,10 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal(await helperHead.text(), '');
   const helperPost = await fetch(base + '/scripts/manage-buildbook-telegram.bat', { method: 'POST' });
   assert.equal(helperPost.status, 405);
+  const helperScriptPost = await fetch(base + '/scripts/manage-buildbook-telegram.ps1', { method: 'POST' });
+  assert.equal(helperScriptPost.status, 405);
+  const helperPut = await fetch(base + '/scripts/manage-buildbook-telegram.ps1', { method: 'PUT', body: 'must not be accepted' });
+  assert.equal(helperPut.status, 405);
   assert.equal((await fetch(base + '/api/profile')).status, 401);
 });
 
