@@ -359,6 +359,42 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     const supplied = Buffer.from(suppliedToken, 'utf8');
     const tokenMatches = supplied.length === expected.length && timingSafeEqual(supplied, expected);
 
+    // PWA/local-host pairing: when the UI is served by this very host,
+    // same-origin possession is sufficient to establish its browser session.
+    // This removes manual .env key copying without opening cross-origin access.
+    if (request.method === 'POST' && pathname === '/api/session/bootstrap-local') {
+      if (!staticRoot || !origin || !/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 403, { error: 'Автоподключение доступно только из интерфейса, который раздаёт локальный хост.' });
+        return;
+      }
+      try {
+        const body = await readJson(request, 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 0) {
+          send(response, 400, { error: 'Запрос подключения должен содержать пустой JSON-объект.' });
+          return;
+        }
+      } catch (error) {
+        send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
+        return;
+      }
+      const previousCookie = readSessionCookie(request);
+      if (previousCookie.present && previousCookie.value === null) {
+        send(response, 400, { error: 'Заголовок браузерной сессии имеет неоднозначный формат.' });
+        return;
+      }
+      if (previousCookie.value) sessions.delete(previousCookie.value);
+      for (const [key, session] of sessions) if (session.expiresAt <= now()) sessions.delete(key);
+      if (sessions.size >= MAX_SESSIONS) {
+        send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
+        return;
+      }
+      const sessionId = randomBytes(32).toString('base64url');
+      sessions.set(sessionId, { expiresAt: now() + sessionTtlMs });
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.ceil(sessionTtlMs / 1000));
+      send(response, 200, { ok: true, expiresIn: sessionTtlMs, method: 'same-origin' });
+      return;
+    }
+
     // Exchange the host-only bootstrap secret for a short-lived HttpOnly
     // browser session. The session secret is never exposed to JavaScript or disk.
     if (request.method === 'POST' && pathname === '/api/session/bootstrap') {
