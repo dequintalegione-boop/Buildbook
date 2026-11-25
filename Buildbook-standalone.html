@@ -3908,10 +3908,11 @@ async function controlTelegramService(action){
  if(!confirm('Вы действительно хотите '+label+' Telegram-сервис?'))return;
  TELEGRAM_UI.busy=true;TELEGRAM_UI.error='';render();
  try{
-  await localTelegramRequest('/api/telegram/'+action,{method:'POST'});
+  const result=await localTelegramRequest('/api/telegram/'+action,{method:'POST'});
   TELEGRAM_UI.checked=false;
   await refreshTelegramStatus(true);
-  toast(action==='start'?'Команда запуска Telegram отправлена.':'Telegram-сервис остановлен.');
+  if(action==='start')toast(result.running?'Telegram-сервис запущен.':'Команда запуска принята, но сервис пока не работает.');
+  else toast('Telegram-сервис остановлен.');
  }catch(error){
   TELEGRAM_UI.error=error.message||'Не удалось изменить состояние Telegram.';
   toast(TELEGRAM_UI.error);
