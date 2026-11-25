@@ -64,7 +64,8 @@ export function createInboxStore(filePath) {
       || typeof item.receivedAt !== 'string' || !Number.isFinite(Date.parse(item.receivedAt))
       || !(item.processedAt === null || typeof item.processedAt === 'string')
       || !(item.replyDeliveredAt === undefined || item.replyDeliveredAt === null || typeof item.replyDeliveredAt === 'string' && Number.isFinite(Date.parse(item.replyDeliveredAt)))
-      || !(item.lastError === null || typeof item.lastError === 'string' && item.lastError.length <= 256)) return false;
+      || !(item.lastError === null || typeof item.lastError === 'string' && item.lastError.length <= 256)
+      || !(item.preview === undefined || typeof item.preview === 'string' && item.preview.length <= 180)) return false;
     if (item.status === 'pending' || item.status === 'processing') {
       return !!item.update && typeof item.update === 'object' && !Array.isArray(item.update);
     }
@@ -244,6 +245,7 @@ export function createInboxStore(filePath) {
           updateId: Number(keyParts[1]),
           userId: String(Number(userId)),
           update: JSON.parse(serializedUpdate),
+          preview: String(update?.message?.text || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180),
           status: 'pending',
           attempts: 0,
           receivedAt: new Date().toISOString(),
@@ -366,11 +368,33 @@ export function createInboxStore(filePath) {
 
       return mutate(state => {
         const before = state.items.length;
+        const terminal = state.items.filter(item => ['completed', 'rejected'].includes(item.status) && item.updateId < offset)
+          .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt));
+        const recentIds = new Set(terminal.slice(0, 50).map(item => item.id));
         state.items = state.items.filter(item =>
-          !(['completed', 'rejected'].includes(item.status) && item.updateId < offset)
+          !(['completed', 'rejected'].includes(item.status) && item.updateId < offset && !recentIds.has(item.id))
         );
         return before - state.items.length;
       });
+    },
+
+    async recent(limit = 30) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+        throw new TypeError('Telegram recent-message limit must be between 1 and 50.');
+      }
+      return readConsistent(state => state.items
+        .slice()
+        .sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
+        .slice(0, limit)
+        .map(item => ({
+          id: item.id,
+          userId: item.userId,
+          preview: typeof item.preview === 'string' ? item.preview : '',
+          status: item.status,
+          receivedAt: item.receivedAt,
+          processedAt: item.processedAt,
+          lastError: item.lastError,
+        })));
     },
 
     async stats() {

@@ -248,20 +248,19 @@ test('rejected inbox records are terminal and excluded from pending work', async
   });
 });
 
-test('compacts only terminal inbox records below the durable Telegram checkpoint', async () => {
+test('retains a bounded recent terminal history while keeping pending work', async () => {
   await withStore(async file => {
     const inbox = createInboxStore(file);
     const enqueue = updateId => inbox.enqueue({
       botId: '123456',
       updateId,
       userId: '1001',
-      update: { update_id: updateId, message: { text: 'income' } },
+      update: { update_id: updateId, message: { text: 'income ' + updateId } },
     });
     const completedOld = (await enqueue(3)).item;
     const rejectedOld = (await enqueue(4)).item;
-    await enqueue(5);
+    const pending = (await enqueue(5)).item;
     const completedNew = (await enqueue(8)).item;
-
     await inbox.markProcessing(completedOld.id);
     await inbox.markCompleted(completedOld.id, 'tx-3');
     await inbox.markProcessing(rejectedOld.id);
@@ -269,15 +268,12 @@ test('compacts only terminal inbox records below the durable Telegram checkpoint
     await inbox.markProcessing(completedNew.id);
     await inbox.markCompleted(completedNew.id, 'tx-8');
 
-    assert.equal(await inbox.compactAcknowledged(5), 2);
-    assert.deepEqual(await inbox.stats(), {
-      total: 2, pending: 1, processing: 0, completed: 1, rejected: 0,
-    });
     assert.equal(await inbox.compactAcknowledged(5), 0);
-
-    const reopened = createInboxStore(file);
-    assert.equal((await reopened.nextPending()).updateId, 5);
-    assert.equal((await reopened.stats()).completed, 1);
+    assert.deepEqual(await inbox.stats(), {
+      total: 4, pending: 1, processing: 0, completed: 2, rejected: 1,
+    });
+    assert.equal((await inbox.nextPending()).updateId, 5);
+    assert.deepEqual((await inbox.recent(10)).map(item => item.status).sort(), ['completed', 'completed', 'pending', 'rejected']);
   });
 });
 

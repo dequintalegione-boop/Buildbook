@@ -131,7 +131,7 @@ function send(response, status, payload) {
   response.end(body);
 }
 
-function readJson(request) {
+function readJson(request, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let settled = false;
@@ -146,7 +146,7 @@ function readJson(request) {
     request.on('data', chunk => {
       if (tooLarge || settled) return;
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         tooLarge = true;
         chunks.length = 0;
         fail('Тело запроса превышает допустимый размер.', 413);
@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -260,6 +260,19 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
+  }
+  if (configureTelegram !== null && typeof configureTelegram !== 'function') {
+    throw new TypeError('configureTelegram must be a function or null.');
+  }
+  if (getHostRecoveryStatus !== null && typeof getHostRecoveryStatus !== 'function') throw new TypeError('getHostRecoveryStatus must be a function or null.');
+  if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
+  if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
+  if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
+  if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
+    throw new TypeError('getTelegramMessages must be a function or null.');
+  }
+  if (verifyTelegramBot !== null && typeof verifyTelegramBot !== 'function') {
+    throw new TypeError('verifyTelegramBot must be a function or null.');
   }
   if (launchLocalAction !== null && typeof launchLocalAction !== 'function') {
     throw new TypeError('launchLocalAction должен быть функцией или null.');
@@ -490,6 +503,87 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       return;
     }
+    if (request.method === 'GET' && pathname === '/api/host/recovery') {
+      if (typeof getHostRecoveryStatus !== 'function') {
+        send(response, 200, { supported: false, installed: false, state: 'unavailable', restartCount: 0, restartInterval: null });
+        return;
+      }
+      try {
+        send(response, 200, await getHostRecoveryStatus());
+      } catch {
+        send(response, 500, { error: 'Не удалось получить статус автовосстановления локального хоста.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/bot/profile') {
+      if (typeof getTelegramBotProfile !== 'function') {
+        send(response, 200, { bot: null });
+        return;
+      }
+      try {
+        const bot = await getTelegramBotProfile();
+        send(response, 200, { bot: bot || null });
+      } catch {
+        send(response, 502, { error: 'Не удалось получить профиль Telegram-бота.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/commands') {
+      if (typeof getTelegramCommands !== 'function') {
+        send(response, 409, { error: 'Сначала подключите Telegram-бота.' });
+        return;
+      }
+      try {
+        const commands = await getTelegramCommands();
+        if (!Array.isArray(commands) || commands.length > 100) throw new Error('Invalid command list.');
+        send(response, 200, { commands });
+      } catch {
+        send(response, 502, { error: 'Не удалось получить команды бота из Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/commands') {
+      if (typeof setTelegramCommands !== 'function') {
+        send(response, 409, { error: 'Сначала подключите Telegram-бота.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 32 * 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || !Array.isArray(body.commands) || body.commands.length > 100) {
+          send(response, 400, { error: 'Передайте список команд бота.' });
+          return;
+        }
+        await setTelegramCommands(body.commands);
+        send(response, 200, { ok: true });
+      } catch (error) {
+        send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200 ? error.message : 'Не удалось сохранить команды бота.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/messages') {
+      if (typeof getTelegramMessages !== 'function') {
+        send(response, 200, { messages: [] });
+        return;
+      }
+      try {
+        const messages = await getTelegramMessages();
+        if (!Array.isArray(messages) || messages.length > 50) {
+          send(response, 502, { error: 'Локальный журнал Telegram вернул некорректные данные.' });
+          return;
+        }
+        send(response, 200, { messages });
+      } catch {
+        send(response, 500, { error: 'Не удалось прочитать журнал Telegram.' });
+      }
+      return;
+    }
     if (request.method === 'GET' && pathname === '/api/telegram/status') {
       if (typeof getTelegramStatus !== 'function') {
         send(response, 404, { error: 'Статус Telegram не подключён.' });
@@ -500,7 +594,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const queue = raw?.queue && typeof raw.queue === 'object' ? raw.queue : null;
         const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
-        send(response, 200, {
+        const payload = {
           enabled: raw?.enabled !== false,
           running: raw?.running === true,
           startedAt: timestamp(raw?.startedAt),
@@ -519,9 +613,81 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
             message: 'Ошибка сервиса Telegram; подробности исключения не сохраняются.',
             at: timestamp(raw.lastError.at),
           } : null,
-        });
+        };
+        if (typeof raw?.configured === 'boolean') payload.configured = raw.configured;
+        send(response, 200, payload);
       } catch {
         send(response, 500, { error: 'Не удалось получить статус Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/setup') {
+      if (typeof configureTelegram !== 'function') {
+        send(response, 503, { error: 'Мастер настройки Telegram не подключён к локальному хосту.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 2048);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 2
+          || typeof body.token !== 'string' || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)
+          || typeof body.userId !== 'string' || !/^[1-9]\d{0,15}$/.test(body.userId)) {
+          send(response, 400, { error: 'Проверьте токен бота и числовой Telegram user ID.' });
+          return;
+        }
+        const bot = await configureTelegram({ token: body.token, userId: body.userId });
+        if (!bot || typeof bot.id !== 'string' || typeof bot.firstName !== 'string') {
+          send(response, 502, { error: 'Локальный хост вернул некорректный профиль бота.' });
+          return;
+        }
+        send(response, 200, { ok: true, configured: true, running: true, bot });
+      } catch (error) {
+        send(response, error?.code === 'BUILD_BOOK_PROFILE_NOT_READY' ? 409 : 400, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось сохранить настройки Telegram.',
+          code: typeof error?.code === 'string' ? error.code : 'TELEGRAM_SETUP_FAILED',
+        });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/bot/verify') {
+      if (typeof verifyTelegramBot !== 'function') {
+        send(response, 503, { error: 'Проверка Telegram Bot API не настроена на локальном хосте.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || typeof body.token !== 'string'
+          || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)) {
+          send(response, 400, { error: 'Укажите корректный токен Telegram Bot API.' });
+          return;
+        }
+        // The token exists only for this request. The callback must return a
+        // sanitized bot profile; the token is never reflected in the response.
+        const bot = await verifyTelegramBot(body.token);
+        if (!bot || typeof bot.id !== 'string' || typeof bot.firstName !== 'string') {
+          send(response, 502, { error: 'Telegram вернул некорректный профиль бота.' });
+          return;
+        }
+        send(response, 200, { ok: true, bot });
+      } catch (error) {
+        send(response, 400, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось проверить токен Telegram.',
+          code: typeof error?.code === 'string' ? error.code : 'TELEGRAM_BOT_VERIFY_FAILED',
+        });
       }
       return;
     }

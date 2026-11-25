@@ -5,6 +5,10 @@ import { createLocalApiServer } from './local-api.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramHostService } from './telegram-host-service.mjs';
 import { readTelegramServiceConfig } from './telegram-config.mjs';
+import { createTelegramBotApi } from './telegram-bot-api.mjs';
+import { updateTelegramEnvFile } from './telegram-env-store.mjs';
+import { configureTelegramHost } from './telegram-setup.mjs';
+import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -40,31 +44,85 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
-  const telegramEnabled = telegramEnabledRaw === 'true';
+  let telegramEnabled = telegramEnabledRaw === 'true';
+  const telegramConfigured = Boolean(String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim() && String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim());
   let telegram = null;
+  let telegramBotProfile = null;
+  let telegramBotProfileAt = 0;
+  let recoveryStatusCache = null;
+  let recoveryStatusAt = 0;
+  const telegramBotApi = createTelegramBotApi({ fetchImpl });
+  function createConfiguredTelegram(config) {
+    for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
+      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
+    }
+    return createTelegramHostService({ config, profileStore, fetchImpl, onError });
+  }
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
-    getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false },
-    startTelegram: () => {
+    getTelegramStatus: () => telegram ? { ...telegram.getStatus(), enabled: telegramEnabled, configured: true } : { enabled: false, configured: false, running: false },
+    startTelegram: async () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      await updateTelegramEnvFile({ envFile: resolve(appRoot, '.env'), values: { BUILDBOOK_TELEGRAM_ENABLED: 'true' } });
+      env.BUILDBOOK_TELEGRAM_ENABLED = 'true';
+      telegramEnabled = true;
       const loop = telegram.service.start();
       loop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
     },
-    stopTelegram: () => {
+    stopTelegram: async () => {
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      await updateTelegramEnvFile({ envFile: resolve(appRoot, '.env'), values: { BUILDBOOK_TELEGRAM_ENABLED: 'false' } });
+      env.BUILDBOOK_TELEGRAM_ENABLED = 'false';
+      telegramEnabled = false;
       return telegram.service.stop();
+    },
+    verifyTelegramBot: token => telegramBotApi.getMe(token),
+    configureTelegram: async ({ token, userId }) => {
+      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
+      if (telegram) await telegram.service.stop();
+      telegram = configured.telegram;
+      telegramBotProfile = configured.bot;
+      telegramBotProfileAt = Date.now();
+      telegramEnabled = true;
+      telegramLoop = telegram.service.start();
+      telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+      return configured.bot;
+    },
+    getHostRecoveryStatus: async () => {
+      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 60_000) {
+        recoveryStatusCache = await getWindowsRecoveryStatus();
+        recoveryStatusAt = Date.now();
+      }
+      return recoveryStatusCache;
+    },
+    getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    getTelegramBotProfile: async () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) return null;
+      if (!telegramBotProfile || Date.now() - telegramBotProfileAt > 5 * 60_000) {
+        telegramBotProfile = await telegramBotApi.getMe(token);
+        telegramBotProfileAt = Date.now();
+      }
+      return telegramBotProfile;
+    },
+    getTelegramCommands: () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) throw new Error('Telegram bot is not configured.');
+      return telegramBotApi.getMyCommands(token);
+    },
+    setTelegramCommands: commands => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) throw new Error('Telegram bot is not configured.');
+      return telegramBotApi.setMyCommands(token, commands);
     },
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
     staticRoot: appRoot,
   });
-  if (telegramEnabled) {
+  if (telegramConfigured) {
     const telegramConfig = readTelegramServiceConfig(env);
-    for (const path of [telegramConfig.inboxPath, telegramConfig.offsetPath, telegramConfig.instanceLockPath]) {
-      if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram queue/offset/lock paths must not overlap the canonical profile or its lock.');
-    }
-    telegram = createTelegramHostService({ config: telegramConfig, profileStore, fetchImpl, onError });
+    telegram = createConfiguredTelegram(telegramConfig);
   }
 
   let address = null;
@@ -83,7 +141,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
         address = await api.listen();
         // start() synchronously acquires the Telegram instance lock before
         // returning its loop promise. Do not await the long-running loop.
-        if (telegram) {
+        if (telegram && telegramEnabled) {
           telegramLoop = telegram.service.start();
           telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
         }
