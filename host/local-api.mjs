@@ -211,7 +211,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -369,6 +369,21 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     }
     if (request.method === 'GET' && pathname === '/api/health') {
       send(response, 200, { ok: true, service: 'buildbook-local-host' });
+      return;
+    }
+    if (request.method === 'POST' && (pathname === '/api/telegram/start' || pathname === '/api/telegram/stop')) {
+      const action = pathname.endsWith('/start') ? startTelegram : stopTelegram;
+      if (typeof action !== 'function') {
+        send(response, 409, { error: 'Управление Telegram недоступно: сервис не настроен при запуске хоста.' });
+        return;
+      }
+      try {
+        await action();
+        const raw = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
+        send(response, 200, { ok: true, running: raw?.running === true });
+      } catch (error) {
+        send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
+      }
       return;
     }
     if (request.method === 'GET' && pathname === '/api/telegram/status') {
