@@ -305,7 +305,7 @@ const DEFAULT_EXP={'Сборка ПК':[...T,'Компы и другое'],'ЧП
 let EXP=JSON.parse(JSON.stringify(DEFAULT_EXP)),INC=JSON.parse(JSON.stringify(DEFAULT_INC));
 const HOTKEY_ACTION_GROUPS=[
  {label:'Открытие разделов',items:[
-  ['nav-home','Открыть сводку'],['nav-dash','Открыть дашборд'],['nav-planning','Открыть планирование'],['nav-calendar','Открыть календарь'],['nav-stock','Открыть склад'],['nav-builds','Открыть сборки'],['nav-tx','Открыть транзакции'],['nav-assets','Открыть долги и инвестиции'],['nav-reports','Открыть отчёты'],['nav-tasks','Открыть задачи'],['nav-trash','Открыть корзину'],['nav-log','Открыть журнал'],['nav-set','Открыть настройки']
+  ['nav-home','Открыть сводку'],['nav-dash','Открыть дашборд'],['nav-planning','Открыть планирование'],['nav-calendar','Открыть календарь'],['nav-stock','Открыть склад'],['nav-builds','Открыть сборки'],['nav-tx','Открыть транзакции'],['nav-assets','Открыть долги и инвестиции'],['nav-reports','Открыть отчёты'],['nav-tasks','Открыть задачи'],['nav-trash','Открыть корзину'],['nav-log','Открыть журнал'],['nav-telegram','Открыть Telegram'],['nav-set','Открыть настройки']
  ]},
  {label:'Создание записей',items:[
   ['new-expense','Добавить расход'],['new-income','Добавить доход'],['new-stock-batch','Добавить партию на склад'],['new-build','Создать сборку'],['new-task','Создать задачу'],['new-debt','Добавить долг'],['new-investment','Добавить инвестицию'],['new-sales-plan','Создать план продаж'],['new-account','Добавить кассу']
@@ -329,6 +329,7 @@ const DEFAULT_HOTKEYS=[
  {id:'default-settings',action:'nav-set',combo:'Ctrl+Alt+9'},
  {id:'default-planning',action:'nav-planning',combo:'Ctrl+Alt+0'},
  {id:'default-assets',action:'nav-assets',combo:'Ctrl+Alt+A'},
+ {id:'default-telegram',action:'nav-telegram',combo:'Ctrl+Alt+G'},
  {id:'default-new-build',action:'new-build',combo:'Ctrl+Alt+N'},
  {id:'default-new-task',action:'new-task',combo:'Ctrl+Alt+T'},
  {id:'default-new-income',action:'new-income',combo:'Ctrl+Alt+I'},
