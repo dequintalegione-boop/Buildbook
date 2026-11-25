@@ -409,9 +409,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
       return;
     }
-    const localActionMatch = pathname.match(/^\\/api\\/local-actions\\/([a-z0-9-]+)$/);
-    if (request.method === 'POST' && localActionMatch) {
-      const action = localActionMatch[1];
+    const localActionPrefix = '/api/local-actions/';
+    const localAction = pathname.startsWith(localActionPrefix) ? pathname.slice(localActionPrefix.length) : '';
+    if (request.method === 'POST' && localAction) {
+      const action = localAction;
       if (!Object.hasOwn(LOCAL_ACTION_SCRIPTS, action)) {
         send(response, 404, { error: 'Локальное действие не найдено.' });
         return;
