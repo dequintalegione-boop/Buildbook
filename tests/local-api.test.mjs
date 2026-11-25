@@ -20,12 +20,12 @@ function requestWithHost(base, host) {
   });
 }
 
-async function fixture(t, controlTelegram) {
+async function fixture(t, controlTelegram, getTelegramStatus) {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-api-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, controlTelegram });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, controlTelegram, getTelegramStatus });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
