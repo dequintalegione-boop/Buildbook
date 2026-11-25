@@ -60,7 +60,6 @@ export function createTelegramService({
       } catch (error) {
         if (signal.aborted) break;
         failures += 1;
-        try { onError(error, { failures }); } catch {}
         const exponentialDelay = Math.min(retryMaxMs, retryBaseMs * (2 ** Math.min(failures - 1, 30)));
         // Respect Telegram flood-control instructions even when they exceed our
         // normal exponential-backoff ceiling (retry_after is bounded by poller).
