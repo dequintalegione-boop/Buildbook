@@ -84,9 +84,10 @@ test('serves only the fixed public UI allowlist without exposing host data or se
 
 test('Telegram lifecycle endpoint requires a session and accepts only start/stop actions', async t => {
   const calls = [];
+  const secret = '123456:must-never-appear';
   const { base, request } = await fixture(t, async action => {
     calls.push(action);
-    return { enabled: true, running: action === 'start' };
+    return { enabled: true, running: action === 'start', botToken: secret, lastError: secret };
   });
   const denied = await fetch(base + '/api/telegram/control', {
     method: 'POST',
@@ -102,6 +103,7 @@ test('Telegram lifecycle endpoint requires a session and accepts only start/stop
   });
   assert.equal(started.status, 200);
   assert.deepEqual(await started.json(), { ok: true, status: { enabled: true, running: true } });
+  assert.equal((await started.clone().text()).includes(secret), false);
 
   const stopped = await request(base + '/api/telegram/control', {
     method: 'POST',
