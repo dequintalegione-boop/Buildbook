@@ -112,6 +112,17 @@ test('Telegram lifecycle endpoint requires a session and accepts only start/stop
   assert.deepEqual(calls, ['start']);
 });
 
+test('Telegram lifecycle endpoint reports unavailable when host control is not configured', async t => {
+  const { base, request } = await fixture(t);
+  const response = await request(base + '/api/telegram/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'start' }),
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /управление Telegram недоступно/i);
+});
+
 test('rejects requests without a browser session', async (t) => {
   const { base } = await fixture(t);
   const response = await fetch(`${base}/api/health`);
