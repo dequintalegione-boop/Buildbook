@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -264,6 +264,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (configureTelegram !== null && typeof configureTelegram !== 'function') {
     throw new TypeError('configureTelegram must be a function or null.');
   }
+  if (getHostRecoveryStatus !== null && typeof getHostRecoveryStatus !== 'function') throw new TypeError('getHostRecoveryStatus must be a function or null.');
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
@@ -499,6 +500,18 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 200, { ok: true, running: raw?.running === true });
       } catch (error) {
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/host/recovery') {
+      if (typeof getHostRecoveryStatus !== 'function') {
+        send(response, 200, { supported: false, installed: false, state: 'unavailable', restartCount: 0, restartInterval: null });
+        return;
+      }
+      try {
+        send(response, 200, await getHostRecoveryStatus());
+      } catch {
+        send(response, 500, { error: 'Не удалось получить статус автовосстановления локального хоста.' });
       }
       return;
     }
