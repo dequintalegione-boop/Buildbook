@@ -551,6 +551,40 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       return;
     }
+    if (request.method === 'POST' && pathname === '/api/telegram/setup') {
+      if (typeof configureTelegram !== 'function') {
+        send(response, 503, { error: 'Мастер настройки Telegram не подключён к локальному хосту.' });
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 2
+          || typeof body.token !== 'string' || body.token.length > 256 || !/^\d{1,16}:[A-Za-z0-9_-]{20,}$/.test(body.token)
+          || typeof body.userId !== 'string' || !/^[1-9]\d{0,15}$/.test(body.userId)) {
+          send(response, 400, { error: 'Проверьте токен бота и числовой Telegram user ID.' });
+          return;
+        }
+        const bot = await configureTelegram({ token: body.token, userId: body.userId });
+        if (!bot || typeof bot.id !== 'string' || typeof bot.firstName !== 'string') {
+          send(response, 502, { error: 'Локальный хост вернул некорректный профиль бота.' });
+          return;
+        }
+        send(response, 200, { ok: true, configured: true, running: true, bot });
+      } catch (error) {
+        send(response, error?.code === 'BUILD_BOOK_PROFILE_NOT_READY' ? 409 : 400, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось сохранить настройки Telegram.',
+          code: typeof error?.code === 'string' ? error.code : 'TELEGRAM_SETUP_FAILED',
+        });
+      }
+      return;
+    }
     if (request.method === 'POST' && pathname === '/api/telegram/bot/verify') {
       if (typeof verifyTelegramBot !== 'function') {
         send(response, 503, { error: 'Проверка Telegram Bot API не настроена на локальном хосте.' });
