@@ -76,6 +76,16 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return configured.bot;
     },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    getTelegramCommands: () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) throw new Error('Telegram bot is not configured.');
+      return telegramBotApi.getMyCommands(token);
+    },
+    setTelegramCommands: commands => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) throw new Error('Telegram bot is not configured.');
+      return telegramBotApi.setMyCommands(token, commands);
+    },
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
     staticRoot: appRoot,
