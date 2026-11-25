@@ -3884,6 +3884,15 @@ async function controlTelegramService(action){
   if(V.tab==='telegram')render();
  }
 }
+async function launchTelegramLocalAction(action){
+ if(!TELEGRAM_UI.connected||TELEGRAM_UI.busy){toast('Сначала подключите локальный хост Buildbook.');return}
+ const allowed=['telegram-setup','telegram-manage','telegram-state','host-autostart-install','host-autostart-uninstall'];
+ if(!allowed.includes(action))return;
+ try{
+  const result=await localTelegramRequest('/api/local-actions/'+action,{method:'POST'});
+  toast(result.message||'Локальный помощник открыт.');
+ }catch(error){toast(error.message||'Не удалось открыть локальный помощник.')}
+}
 async function refreshTelegramStatus(silent=false){
  if(TELEGRAM_UI.checking)return;
  TELEGRAM_UI.checking=true;TELEGRAM_UI.error='';
