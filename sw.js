@@ -2,7 +2,7 @@
  * Cache name must be bumped whenever index.html or app shell changes,
  * otherwise browsers keep serving a stale shell (cache-first).
  */
-const C = 'buildbook-51';
+const C = 'buildbook-53';
 const PRECACHE = [
   './',
   './index.html',
