@@ -4677,6 +4677,11 @@ async function initializeCanonicalStorage(){
  if(STORAGE_MODE!=='canonical')return;
  if(TEST_MODE||location.protocol!=='http:')throw new Error('Канонический профиль доступен только в обычном браузере через локальный HTTP-хост. Автономная сборка продолжает использовать IndexedDB.');
  STARTUP_STAGE='connecting-canonical-profile';
+ if(isLocalHostOrigin()){
+  TELEGRAM_UI.baseUrl=location.origin;
+  await localTelegramRequest('/api/session/bootstrap-local',{method:'POST',body:'{}',timeoutMs:8000});
+  await refreshTelegramStatus(true);
+ }
  const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
  canonicalRuntime=runtimeModule.createCanonicalProfileRuntime({baseUrl:location.origin});
  await canonicalRuntime.verifySession();
