@@ -212,7 +212,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, controlTelegram, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -404,6 +404,30 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         });
       } catch {
         send(response, 500, { error: 'Не удалось получить статус Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/telegram/control') {
+      if (typeof controlTelegram !== 'function') {
+        send(response, 503, { error: 'Управление Telegram не подключено.' });
+        return;
+      }
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== 1 || !['start', 'stop'].includes(body.action)) {
+          send(response, 400, { error: 'Действие должно быть start или stop.' });
+          return;
+        }
+        await controlTelegram(body.action);
+        const raw = typeof getTelegramStatus === 'function' ? getTelegramStatus() : {};
+        send(response, 200, { ok: true, enabled: raw?.enabled !== false, running: raw?.running === true });
+      } catch (error) {
+        send(response, error.status || 409, { error: error.status ? error.message : 'Не удалось изменить состояние Telegram.' });
       }
       return;
     }
