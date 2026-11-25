@@ -38,7 +38,8 @@ try {
   }
 
   $apiBytes = New-Object byte[] 32
-  [Security.Cryptography.RandomNumberGenerator]::Fill($apiBytes)
+  $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $rng.GetBytes($apiBytes) } finally { $rng.Dispose() }
   $apiToken = ([BitConverter]::ToString($apiBytes)).Replace('-', '').ToLowerInvariant()
   [Array]::Clear($apiBytes, 0, $apiBytes.Length)
 
