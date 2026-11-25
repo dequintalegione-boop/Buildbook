@@ -3975,7 +3975,7 @@ async function telegramCommandsEditor(){
  const body='<p class="mu">Команды появятся в меню Telegram рядом с полем ввода. Названия — латиницей, строчными буквами; описание — до 256 символов.</p><div class="tg-command-editor">'+commands.map(row).join('')+'</div><button type="button" class="btn" data-tg-add>+ Добавить команду</button><p class="mu">Обработчик Buildbook поддерживает /income, /expense, /stats и /help (также русские варианты). Новые команды можно добавить в меню, но для выполнения нового действия потребуется отдельно добавить обработчик.</p>';
  const form=modal('Команды Telegram',body,f=>{
   const list=Array.from(f.querySelectorAll('.tg-command-editor-row')).map(item=>({
-   command:String(item.querySelector('[name="command"]').value||'').trim().replace(/^\\//,''),
+   command:String(item.querySelector('[name="command"]').value||'').trim().replace(/^\//,''),
    description:String(item.querySelector('[name="description"]').value||'').trim()
   })).filter(item=>item.command||item.description);
   if(!list.length)return showModalError(f,'Добавьте хотя бы одну команду.');
