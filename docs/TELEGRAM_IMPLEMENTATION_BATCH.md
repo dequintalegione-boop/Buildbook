@@ -1,6 +1,6 @@
 # Telegram integration: implementation batch
 
-This checklist tracks the next implementation batch for `feature/telegram-local-service`. It is not a claim that these items are complete.
+This checklist tracks the Telegram integration work on `feature/telegram-setup-wizard` and its follow-up tasks. It is not a claim that every item below is complete.
 
 ## 20 implementation stages
 
