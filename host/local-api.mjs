@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, getTelegramMessages = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -260,6 +260,9 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
+  }
+  if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
+    throw new TypeError('getTelegramMessages must be a function or null.');
   }
   if (verifyTelegramBot !== null && typeof verifyTelegramBot !== 'function') {
     throw new TypeError('verifyTelegramBot must be a function or null.');
@@ -490,6 +493,23 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 200, { ok: true, running: raw?.running === true });
       } catch (error) {
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/messages') {
+      if (typeof getTelegramMessages !== 'function') {
+        send(response, 200, { messages: [] });
+        return;
+      }
+      try {
+        const messages = await getTelegramMessages();
+        if (!Array.isArray(messages) || messages.length > 50) {
+          send(response, 502, { error: 'Локальный журнал Telegram вернул некорректные данные.' });
+          return;
+        }
+        send(response, 200, { messages });
+      } catch {
+        send(response, 500, { error: 'Не удалось прочитать журнал Telegram.' });
       }
       return;
     }
