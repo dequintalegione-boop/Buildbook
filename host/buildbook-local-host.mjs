@@ -5,6 +5,7 @@ import { createLocalApiServer } from './local-api.mjs';
 import { acquireInstanceLock } from './instance-lock.mjs';
 import { createTelegramHostService } from './telegram-host-service.mjs';
 import { readTelegramServiceConfig } from './telegram-config.mjs';
+import { createTelegramBotApi } from './telegram-bot-api.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -42,6 +43,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   const telegramEnabled = telegramEnabledRaw === 'true';
   let telegram = null;
+  const telegramBotApi = createTelegramBotApi({ fetchImpl });
   const api = createLocalApiServer({
     profileStore,
     accessToken: required(env, 'BUILDBOOK_LOCAL_API_TOKEN'),
@@ -55,6 +57,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
       return telegram.service.stop();
     },
+    verifyTelegramBot: token => telegramBotApi.getMe(token),
     host: String(env.BUILDBOOK_LOCAL_API_HOST || '127.0.0.1').trim(),
     port: parsePort(env),
     staticRoot: appRoot,
