@@ -14,6 +14,9 @@ function Read-Env {
       $map[$Matches[1]] = $Matches[2].Trim()
     }
   }
+  foreach ($key in @('BUILDBOOK_TELEGRAM_ENABLED', 'BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS')) {
+    if (-not $map.ContainsKey($key)) { $map[$key] = '' }
+  }
   return $map
 }
 
