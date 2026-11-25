@@ -59,6 +59,7 @@ try {
   }
 
   $lines = @()
+  $backup = $null
   if (Test-Path -LiteralPath $envFile) {
     $lines = @(Get-Content -LiteralPath $envFile)
     $backup = "$envFile.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -89,12 +90,18 @@ try {
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllLines($envFile, [string[]]$output, $utf8NoBom)
 
+  $aclTargets = @($envFile)
+  if ($backup) { $aclTargets += $backup }
   try {
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    & icacls.exe $envFile /inheritance:r /grant:r "$($identity):(F)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Warning 'Не удалось ограничить ACL автоматически. Проверьте права доступа к .env вручную.' }
+    foreach ($target in $aclTargets) {
+      & icacls.exe $target /inheritance:r /grant:r "$($identity):(F)" | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Не удалось ограничить ACL для файла: $target. Проверьте права доступа вручную."
+      }
+    }
   } catch {
-    Write-Warning 'Не удалось проверить ACL автоматически. Убедитесь, что .env доступен только вашей учётной записи.'
+    Write-Warning 'Не удалось проверить ACL автоматически. Убедитесь, что .env и его резервная копия доступны только вашей учётной записи.'
   }
 
   Write-Host ''
