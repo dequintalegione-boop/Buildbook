@@ -150,6 +150,25 @@ test('sets restrictive browser security headers on API responses', async (t) => 
   assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'");
 });
 
+test('Telegram status exposes only an allowlisted snapshot and never returns credentials', async t => {
+  const secret = '123456789:secret_bot_token_value';
+  const { base, request } = await fixture(t, {
+    getTelegramStatus: () => ({
+      enabled: true, running: false, botToken: secret,
+      allowedUserIds: ['123456'], arbitrary: 'must-not-leak',
+    }),
+  });
+  const response = await request(base + '/api/telegram/status');
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body, {
+    enabled: true, running: false, startedAt: null, lastCycleAt: null,
+    lastProcessed: 0, consecutiveFailures: 0, queue: null, lastError: null,
+  });
+  assert.equal(JSON.stringify(body).includes(secret), false);
+  assert.equal(JSON.stringify(body).includes('123456'), false);
+});
+
 test('Telegram lifecycle control accepts only start and stop through a valid session', async t => {
   const actions = [];
   const { base, request } = await fixture(t, {
