@@ -54,6 +54,6 @@ test('rejects unapproved environment keys and symbolic-link .env paths', async (
     await assert.rejects(updateTelegramEnvFile({
       envFile: link,
       values: { BUILDBOOK_TELEGRAM_ENABLED: 'false' },
-    }), /ordinary file/);
+    }), /обычным файлом/);
   });
 });
