@@ -174,3 +174,14 @@ test('production Telegram UI does not display a developer revision marker', () =
   assert.equal(telegramOverrides.includes('UI-rev 54'), false);
   assert.equal(telegramOverrides.includes('bb-ui-rev'), false);
 });
+
+
+test('Telegram setup wizard checks canonical profile before asking for the bot token', () => {
+  const start = html.indexOf('async function telegramSetupWizard()');
+  const end = html.indexOf('async function closeTelegramSession()', start);
+  const wizard = html.slice(start, end);
+  assert.match(wizard, /STORAGE_MODE!=='canonical'/);
+  assert.match(wizard, /localTelegramRequest\('\/api\/profile'\)/);
+  assert.match(wizard, /Локальный файловый профиль пока пуст/);
+  assert.ok(wizard.indexOf('/api/profile') < wizard.indexOf('const tokenBody='));
+});
