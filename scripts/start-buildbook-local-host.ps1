@@ -2,7 +2,7 @@
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+$nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $nodeCommand) {
   throw 'Node.js 22 LTS или новее не найден. Установите Node.js 22 LTS и убедитесь, что команда node доступна в PATH.'
 }
