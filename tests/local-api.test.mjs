@@ -1175,3 +1175,30 @@ test('allowlist API rejects invalid active flags and malformed added dates', asy
     assert.equal(response.status, 400);
   }
 });
+
+test('activity API paginates history and rejects unsupported query parameters', async t => {
+  const events = Array.from({ length: 5 }, (_, index) => ({
+    id: 'event-' + index,
+    at: '2026-11-26T10:00:0' + index + '.000Z',
+    action: 'telegram_event',
+    status: 'success',
+    message: 'Event ' + index,
+  }));
+  const { base, request } = await fixture(t, {
+    getActivityLog: async ({ limit = 100, offset = 0 } = {}) => events.slice().reverse().slice(offset, offset + limit),
+  });
+  const first = await request(base + '/api/activity?limit=2&offset=0');
+  assert.equal(first.status, 200);
+  const firstBody = await first.json();
+  assert.deepEqual(firstBody.events.map(event => event.message), ['Event 4', 'Event 3']);
+  assert.equal(firstBody.hasMore, true);
+  const second = await request(base + '/api/activity?limit=2&offset=2');
+  const secondBody = await second.json();
+  assert.deepEqual(secondBody.events.map(event => event.message), ['Event 2', 'Event 1']);
+  assert.equal(secondBody.hasMore, true);
+  const last = await request(base + '/api/activity?limit=2&offset=4');
+  const lastBody = await last.json();
+  assert.deepEqual(lastBody.events.map(event => event.message), ['Event 0']);
+  assert.equal(lastBody.hasMore, false);
+  assert.equal((await request(base + '/api/activity?limit=2&other=1')).status, 400);
+});
