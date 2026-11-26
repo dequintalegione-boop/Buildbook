@@ -917,3 +917,19 @@ test('returns completed local helper output to the in-app client', async t => {
     output: 'Автозапуск Buildbook Local Host установлен.',
   });
 });
+
+
+test('returns local helper failures to the in-app client', async t => {
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => {
+      const error = new Error('Task Scheduler rejected the registration request.');
+      error.stderr = 'Access is denied.';
+      throw error;
+    },
+  });
+  const response = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.code, 'LOCAL_ACTION_FAILED');
+  assert.match(body.error, /Access is denied/);
+});
