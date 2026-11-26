@@ -74,6 +74,7 @@ const STATIC_ASSETS = new Map([
   ['/host/profile-repository-adapter.mjs', ['host/profile-repository-adapter.mjs', 'text/javascript; charset=utf-8']],
   ['/scripts/setup-buildbook-telegram.bat', ['scripts/setup-buildbook-telegram.bat', 'text/plain; charset=utf-8']],
   ['/scripts/setup-buildbook-telegram.ps1', ['scripts/setup-buildbook-telegram.ps1', 'text/plain; charset=utf-8']],
+  ['/scripts/install-buildbook.ps1', ['scripts/install-buildbook.ps1', 'text/plain; charset=utf-8']],
   ['/scripts/start-buildbook-local-host.bat', ['scripts/start-buildbook-local-host.bat', 'text/plain; charset=utf-8']],
   ['/scripts/start-buildbook-local-host.ps1', ['scripts/start-buildbook-local-host.ps1', 'text/plain; charset=utf-8']],
   ['/scripts/manage-buildbook-telegram.bat', ['scripts/manage-buildbook-telegram.bat', 'text/plain; charset=utf-8']],
