@@ -496,16 +496,23 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const query = new URL(request.url || '/', 'http://localhost').searchParams;
         const limitRaw = query.get('limit');
         const offsetRaw = query.get('offset');
+        const search = query.get('search') || '';
+        const status = query.get('status') || 'all';
+        const action = query.get('action') || 'all';
         const limit = limitRaw === null ? 100 : Number(limitRaw);
         const offset = offsetRaw === null ? 0 : Number(offsetRaw);
-        if ([...query.keys()].some(key => !['limit', 'offset'].includes(key))
+        if ([...query.keys()].some(key => !['limit', 'offset', 'search', 'status', 'action'].includes(key))
           || !Number.isSafeInteger(limit) || limit < 1 || limit > 499
-          || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000) {
-          send(response, 400, { error: 'Параметры журнала должны содержать limit (1–499) и offset (неотрицательное целое число).' });
+          || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000
+          || search.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(search)
+          || !['all', 'success', 'error'].includes(status)
+          || (action !== 'all' && !/^[a-z0-9._-]{1,64}$/i.test(action))) {
+          send(response, 400, { error: 'Параметры журнала содержат недопустимые limit, offset или фильтры.' });
           return;
         }
+        const filters = { search, status, action };
         const events = typeof getActivityLog === 'function'
-          ? await getActivityLog({ limit: limit + 1, offset })
+          ? await getActivityLog({ limit: limit + 1, offset, ...filters })
           : [];
         if (!Array.isArray(events) || events.length > limit + 1) {
           send(response, 502, { error: 'Журнал действий локального хоста вернул некорректные данные.' });
