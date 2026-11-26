@@ -54,21 +54,6 @@ Write-Host 'При открытии Buildbook через локальный хо
 Write-Host 'Токен Telegram и ваш user ID позже вводятся в мастере внутри приложения.'
 Write-Host 'Запускаю локальный хост...'
 
-$taskName = 'Buildbook Local Host'
-$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-if (-not $existingTask -and [Environment]::UserInteractive) {
-  Write-Host ''
-  $answer = Read-Host 'Установить автоматический запуск хоста при входе в Windows и восстановление после сбоя? (Д/н)'
-  if ($answer -match '^(д|да|y|yes)$') {
-    try {
-      & (Join-Path $PSScriptRoot 'install-buildbook-autostart.ps1') -NoStart
-    } catch {
-      Write-Warning ('Не удалось установить автозапуск: ' + $_.Exception.Message)
-      Write-Warning 'Хост всё равно будет запущен. Автозапуск можно включить позже во вкладке Telegram.'
-    }
-  }
-}
-
 $logDir = Join-Path $root 'data'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $logFile = Join-Path $logDir 'local-host.log'
