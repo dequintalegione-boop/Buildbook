@@ -107,7 +107,7 @@ document.addEventListener('click',function(e){
 async function loadMoreTelegramActivity(){
  if(TELEGRAM_UI.activityLoading||!TELEGRAM_UI.activityHasMore)return;
  TELEGRAM_UI.activityLoading=true;
- const button=document.querySelector('[data-a="tgactivitymore"]');
+ const button=document.querySelector('[data-tg-activity-more]');
  if(button){button.disabled=true;button.textContent='Загружаем…'}
  try{
   const result=await localTelegramRequest('/api/activity?limit=100&offset='+encodeURIComponent(String(TELEGRAM_UI.activityOffset)));
