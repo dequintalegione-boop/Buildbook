@@ -4024,7 +4024,7 @@ function telegramSetupWizard(){
     if(!result.bot||!result.bot.id||!result.bot.firstName)throw new Error('Telegram вернул неполный профиль бота.');
     overlay.remove();
     const bot=result.bot;
-    const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15} autocomplete="off"')+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
+    const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15}" autocomplete="off"')+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
     modal('Мастер подключения Telegram',userBody,userForm=>{
      const userId=String(userForm.elements.userId.value||'').trim();
      if(!/^[1-9]\\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
