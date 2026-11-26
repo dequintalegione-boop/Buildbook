@@ -20,6 +20,7 @@ export function createTelegramHostService({
   fetchImpl = globalThis.fetch,
   onCycle = () => {},
   onError = () => {},
+  onEvent = () => {},
   getCommandSettings = undefined,
 } = {}) {
   if (!config || typeof config !== 'object') throw new TypeError('Validated Telegram host config is required.');
@@ -28,6 +29,7 @@ export function createTelegramHostService({
   if (hasInjectedAdapter === hasProfileAdapter) {
     throw new TypeError('Provide exactly one of applyUpdate or profileStore.');
   }
+  if (typeof onEvent !== 'function') throw new TypeError('onEvent must be a function.');
   if (buildTransaction !== undefined && typeof buildTransaction !== 'function') {
     throw new TypeError('buildTransaction must be a function when supplied.');
   }
@@ -73,7 +75,7 @@ export function createTelegramHostService({
   const status = createTelegramStatus();
   const inbox = createInboxStore(config.inboxPath);
   const offsetStore = createTelegramOffsetStore(config.offsetPath);
-  const gate = createTelegramUpdateGate({ inbox, botId: config.botId, allowlist: config.allowedUserIds });
+  const gate = createTelegramUpdateGate({ inbox, botId: config.botId, allowlist: config.allowedUserIds, onEvent });
   const poller = createTelegramPoller({
     botToken: config.botToken,
     gate,
@@ -85,6 +87,7 @@ export function createTelegramHostService({
     inbox,
     applyUpdate: canonicalApplyUpdate,
     deliverReply: createTelegramReplySender({ botToken: config.botToken, fetchImpl }),
+    onEvent,
   });
   const runtime = createTelegramRuntime({ inbox, poller, processor });
 
