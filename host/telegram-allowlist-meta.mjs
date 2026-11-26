@@ -5,13 +5,13 @@ import { randomUUID } from 'node:crypto';
 function normalizeComment(value) {
   if (value == null) return '';
   const text = String(value).trim().slice(0, 120);
-  if (/[\\u0000-\\u001f\\u007f]/.test(text)) throw new TypeError('Comment contains control characters.');
+  if (/[\u0000-\u001f\u007f]/.test(text)) throw new TypeError('Comment contains control characters.');
   return text;
 }
 
 function normalizeId(value) {
   const raw = String(value || '').trim();
-  if (!/^[1-9]\\d{0,15}$/.test(raw)) return null;
+  if (!/^[1-9]\d{0,15}$/.test(raw)) return null;
   return raw;
 }
 
@@ -63,7 +63,7 @@ export async function writeAllowlistMeta(metaPath, users) {
   const path = resolve(metaPath);
   await mkdir(dirname(path), { recursive: true });
   const temporary = path + '.' + randomUUID() + '.tmp';
-  const payload = JSON.stringify({ version: 2, users: normalized }, null, 2) + '\\n';
+  const payload = JSON.stringify({ version: 2, users: normalized }, null, 2) + '\n';
   try {
     const handle = await open(temporary, 'wx', 0o600);
     try {
