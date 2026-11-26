@@ -55,7 +55,15 @@ $identity = (& whoami.exe).Trim()
 if (-not $identity -or $identity -match '[\r\n]') {
   throw 'Не удалось определить текущую учётную запись Windows для защиты файла .env.'
 }
-& icacls.exe $envFile '/reset' '/inheritancelevel:r' '/grant:r' ($identity + ':(F)') | Out-Null
+& icacls.exe $envFile '/reset' | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw 'Не удалось сбросить ACL файла .env перед защитой секрета.'
+}
+& icacls.exe $envFile '/inheritancelevel:r' | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw 'Не удалось отключить наследование прав для .env.'
+}
+& icacls.exe $envFile '/grant:r' ($identity + ':(F)') | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw 'Не удалось ограничить доступ к .env. Локальный хост не будет запущен с небезопасными правами на секреты.'
 }
