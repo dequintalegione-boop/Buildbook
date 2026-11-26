@@ -268,7 +268,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -284,6 +284,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     throw new TypeError('configureTelegram must be a function or null.');
   }
   if (getHostRecoveryStatus !== null && typeof getHostRecoveryStatus !== 'function') throw new TypeError('getHostRecoveryStatus must be a function or null.');
+  if (getTelegramLatency !== null && typeof getTelegramLatency !== 'function') throw new TypeError('getTelegramLatency must be a function or null.');
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
@@ -716,6 +717,25 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 200, { bot: bot || null });
       } catch {
         send(response, 502, { error: 'Не удалось получить профиль Telegram-бота.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/latency') {
+      if (typeof getTelegramLatency !== 'function') {
+        send(response, 200, { available: false, latencyMs: null, checkedAt: null });
+        return;
+      }
+      try {
+        const result = await getTelegramLatency();
+        const latencyMs = result?.latencyMs;
+        const checkedAt = result?.checkedAt;
+        if (!result || typeof latencyMs !== 'number' || !Number.isFinite(latencyMs) || latencyMs < 0 || latencyMs > 120_000
+          || typeof checkedAt !== 'string' || !Number.isFinite(Date.parse(checkedAt))) {
+          throw new Error('Invalid Telegram latency result.');
+        }
+        send(response, 200, { available: true, latencyMs: Math.round(latencyMs), checkedAt: new Date(checkedAt).toISOString() });
+      } catch {
+        send(response, 502, { available: false, latencyMs: null, checkedAt: null, error: 'Не удалось проверить связь с Telegram Bot API.' });
       }
       return;
     }
