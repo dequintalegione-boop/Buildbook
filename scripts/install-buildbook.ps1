@@ -73,16 +73,74 @@ try {
   if (Test-Path -LiteralPath $tempSettings) { Remove-Item -LiteralPath $tempSettings -Force }
 }
 
-$node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $node) {
-  Start-Process 'https://nodejs.org/en/download'
-  throw 'Node.js 22 LTS или новее не найден. Установите его по открывшейся ссылке и повторно запустите установщик.'
+function Get-BuildbookNode {
+  $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($node) { return $node }
+  $candidates = @(
+    (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\nodejs\node.exe')
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      $env:Path = (Split-Path -Parent $candidate) + ';' + $env:Path
+      return Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+  }
+  return $null
 }
-$version = & $node.Source -p 'process.versions.node'
-if ($LASTEXITCODE -ne 0 -or $version -notmatch '^(\d+)\.') { throw 'Не удалось определить версию Node.js.' }
-if ([int]$Matches[1] -lt 22) {
-  Start-Process 'https://nodejs.org/en/download'
-  throw "Нужен Node.js 22 LTS или новее. Обнаружена версия $version."
+function Get-BuildbookNodeVersion($nodeCommand) {
+  if (-not $nodeCommand) { return $null }
+  $output = & $nodeCommand.Source -p 'process.versions.node'
+  if ($LASTEXITCODE -ne 0 -or [string]$output -notmatch '^(\d+)\.') { return $null }
+  return [string]$output
+}
+
+$node = Get-BuildbookNode
+$version = Get-BuildbookNodeVersion $node
+$nodeReady = $false
+if ($version -and $version -match '^(\d+)\.' -and [int]$Matches[1] -ge 22) { $nodeReady = $true }
+
+if (-not $nodeReady) {
+  Add-Type -AssemblyName System.Windows.Forms
+  $reason = if (-not $version) { 'Node.js 22 LTS или новее не найден.' } else { "Обнаружена версия Node.js $version, требуется 22 LTS или новее." }
+  $message = $reason + [Environment]::NewLine + [Environment]::NewLine + 'Разрешить Windows Package Manager (winget) установить или обновить Node.js LTS? Установка может запросить стандартное подтверждение Windows.'
+  $choice = [System.Windows.Forms.MessageBox]::Show(
+    $message,
+    'Buildbook — установка компонента',
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question
+  )
+  if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {
+    $winget = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($winget) {
+      if ($node) {
+        & $winget.Source upgrade --id OpenJS.NodeJS.LTS --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+      } else {
+        & $winget.Source install --id OpenJS.NodeJS.LTS --exact --source winget --silent --accept-package-agreements --accept-source-agreements
+      }
+      $wingetExit = $LASTEXITCODE
+
+      # A newly installed Node.js may not yet be present in this PowerShell
+      # process PATH. Refresh environment paths and check standard install roots.
+      $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+      $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+      $env:Path = @($machinePath, $userPath, $env:Path) -join ';'
+      $node = Get-BuildbookNode
+      $version = Get-BuildbookNodeVersion $node
+      if ($version -and $version -match '^(\d+)\.' -and [int]$Matches[1] -ge 22) {
+        $nodeReady = $true
+      } elseif ($wingetExit -ne 0) {
+        Write-Warning "winget завершился с кодом $wingetExit. Можно установить Node.js вручную."
+      }
+    } else {
+      Write-Warning 'Windows Package Manager (winget) не найден. Откроется официальный сайт Node.js.'
+    }
+  }
+
+  if (-not $nodeReady) {
+    Start-Process 'https://nodejs.org/en/download'
+    throw 'Для запуска Buildbook нужен Node.js 22 LTS или новее. Установите его по открывшейся официальной ссылке и повторно запустите установщик.'
+  }
 }
 
 $existingHost = $false
