@@ -102,3 +102,67 @@ document.addEventListener('click',function(e){
  e.preventDefault();e.stopPropagation();
  if(typeof telegramAllowlistEditor==='function')telegramAllowlistEditor();
 },true);
+
+
+async function loadMoreTelegramActivity(){
+ if(TELEGRAM_UI.activityLoading||!TELEGRAM_UI.activityHasMore)return;
+ TELEGRAM_UI.activityLoading=true;
+ const button=document.querySelector('[data-a="tgactivitymore"]');
+ if(button){button.disabled=true;button.textContent='Загружаем…'}
+ try{
+  const result=await localTelegramRequest('/api/activity?limit=100&offset='+encodeURIComponent(String(TELEGRAM_UI.activityOffset)));
+  const events=Array.isArray(result?.events)?result.events:[];
+  TELEGRAM_UI.activity=TELEGRAM_UI.activity.concat(events);
+  TELEGRAM_UI.activityOffset=Number(result?.offset||0)+events.length;
+  TELEGRAM_UI.activityHasMore=result?.hasMore===true;
+ }catch(error){toast(error.message||'Не удалось загрузить следующую страницу журнала.')}
+ finally{TELEGRAM_UI.activityLoading=false;render()}
+}
+
+async function exportTelegramActivity(){
+ try{
+  const all=[];
+  let offset=0,hasMore=true;
+  while(hasMore){
+   const result=await localTelegramRequest('/api/activity?limit=499&offset='+encodeURIComponent(String(offset)));
+   const page=Array.isArray(result?.events)?result.events:[];
+   all.push(...page);
+   offset+=page.length;
+   hasMore=result?.hasMore===true;
+   if(!page.length&&hasMore)throw new Error('Журнал вернул пустую страницу при наличии следующих событий.');
+  }
+  const blob=new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),events:all},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download='buildbook-telegram-activity-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  toast('Экспортировано событий: '+all.length);
+ }catch(error){toast(error.message||'Не удалось экспортировать журнал.')}
+}
+
+function filterTelegramActivity(){
+ const panel=document.getElementById('tg-allowlist-panel')||document.querySelector('.tg-dashboard');
+ const list=document.querySelector('[data-tg-activity-list]');
+ if(!list)return;
+ const query=String(document.querySelector('[data-tg-activity-search]')?.value||'').trim().toLowerCase();
+ const status=String(document.querySelector('[data-tg-activity-status]')?.value||'all');
+ list.querySelectorAll('[data-activity-status]').forEach(row=>{
+  const matchesStatus=status==='all'||row.dataset.activityStatus===status;
+  const matchesQuery=!query||String(row.dataset.activityText||'').toLowerCase().includes(query);
+  row.hidden=!(matchesStatus&&matchesQuery);
+ });
+}
+
+document.addEventListener('click',function(event){
+ const more=event.target&&event.target.closest&&event.target.closest('[data-a="tgactivitymore"]');
+ if(more){event.preventDefault();loadMoreTelegramActivity();return}
+ const exportButton=event.target&&event.target.closest&&event.target.closest('[data-tg-activity-export]');
+ if(exportButton){event.preventDefault();exportTelegramActivity()}
+},true);
+document.addEventListener('input',function(event){
+ if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-search]'))filterTelegramActivity();
+},true);
+document.addEventListener('change',function(event){
+ if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status]'))filterTelegramActivity();
+},true);
