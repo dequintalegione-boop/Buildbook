@@ -3999,6 +3999,8 @@ function telegramConnectForm(){
 }
 async function telegramCommandsEditor(){
  if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост.');return}
+ let commandSettings={income:false,expense:false,stats:false,help:true};
+ try{const settingsResult=await localTelegramRequest('/api/telegram/command-settings');if(settingsResult?.commands)commandSettings={...commandSettings,...settingsResult.commands}}catch(error){alert(error.message||'Не удалось загрузить настройки обработки команд.');return}
  let commands;
  try{
   const result=await localTelegramRequest('/api/telegram/commands');
@@ -4011,7 +4013,7 @@ async function telegramCommandsEditor(){
   {command:'help',description:'Список команд Buildbook'}
  ];
  const row=item=>'<div class="tg-command-editor-row"><input name="command" aria-label="Команда" maxlength="32" value="'+esc(item.command||'')+'" placeholder="command"><input name="description" aria-label="Описание команды" maxlength="256" value="'+esc(item.description||'')+'" placeholder="Описание команды"><button type="button" class="btn" data-tg-remove>Удалить</button></div>';
- const body='<p class="mu">Команды появятся в меню Telegram рядом с полем ввода. Названия — латиницей, строчными буквами; описание — до 256 символов.</p><div class="tg-command-editor">'+commands.map(row).join('')+'</div><button type="button" class="btn" data-tg-add>+ Добавить команду</button><p class="mu">Обработчик Buildbook поддерживает /income, /expense, /stats и /help (также русские варианты). Новые команды можно добавить в меню, но для выполнения нового действия потребуется отдельно добавить обработчик.</p>';
+ const body='<p class="mu">Команды появятся в меню Telegram рядом с полем ввода. Названия — латиницей, строчными буквами; описание — до 256 символов.</p><div class="tg-command-editor">'+commands.map(row).join('')+'</div><button type="button" class="btn" data-tg-add>+ Добавить команду</button><hr><h3>Какие команды разрешено выполнять</h3><p class="mu">Эти переключатели управляют обработкой на локальном хосте. Скрытие команды из меню Telegram само по себе не отключает её обработчик.</p><div class="tg-command-switches"><label><input type="checkbox" name="enable-income" '+(commandSettings.income?'checked':'')+'> Добавление доходов</label><label><input type="checkbox" name="enable-expense" '+(commandSettings.expense?'checked':'')+'> Добавление расходов</label><label><input type="checkbox" name="enable-stats" '+(commandSettings.stats?'checked':'')+'> Просмотр статистики</label><label><input type="checkbox" name="enable-help" '+(commandSettings.help?'checked':'')+'> Справка /help</label></div>';
  const form=modal('Команды Telegram',body,f=>{
   const list=Array.from(f.querySelectorAll('.tg-command-editor-row')).map(item=>({
    command:String(item.querySelector('[name="command"]').value||'').trim().replace(/^\//,''),
@@ -4020,7 +4022,7 @@ async function telegramCommandsEditor(){
   if(!list.length)return showModalError(f,'Добавьте хотя бы одну команду.');
   const submit=f.querySelector('button[type="submit"]');if(submit){submit.disabled=true;submit.textContent='Сохраняем…'}
   localTelegramRequest('/api/telegram/commands',{method:'POST',body:JSON.stringify({commands:list}),timeoutMs:20000})
-   .then(async()=>{f.closest('.ov').remove();await refreshTelegramStatus(true);toast('Команды синхронизированы с Telegram.')})
+   .then(async()=>{const settings={income:f.querySelector('[name="enable-income"]').checked,expense:f.querySelector('[name="enable-expense"]').checked,stats:f.querySelector('[name="enable-stats"]').checked,help:f.querySelector('[name="enable-help"]').checked};await localTelegramRequest('/api/telegram/command-settings',{method:'PUT',body:JSON.stringify({commands:settings})});f.closest('.ov').remove();await refreshTelegramStatus(true);toast('Меню и настройки обработки команд сохранены.')})
    .catch(error=>{showModalError(f,error.message||'Не удалось сохранить команды.');if(submit){submit.disabled=false;submit.textContent='Сохранить в Telegram'}});
   return false;
  },true,'Сохранить в Telegram');
