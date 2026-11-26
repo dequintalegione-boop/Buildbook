@@ -540,7 +540,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       try {
         const result = await getTelegramAllowlist();
         const users = Array.isArray(result?.users) ? result.users : [];
-        send(response, 200, { users: users.filter(user => user && /^[1-9]\\d{0,15}$/.test(String(user.id)))
+        send(response, 200, { users: users.filter(user => user && /^[1-9]\d{0,15}$/.test(String(user.id)))
           .map(user => ({
             id: String(user.id),
             comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '',
