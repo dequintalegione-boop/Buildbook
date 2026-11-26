@@ -11,6 +11,7 @@ import { configureTelegramHost } from './telegram-setup.mjs';
 import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 import { createTelegramAllowlistHandlers } from './telegram-allowlist-handlers.mjs';
 import { createActivityLog } from './activity-log.mjs';
+import { createTelegramCommandSettingsStore } from './telegram-command-settings.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -44,6 +45,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
   const activityLog = createActivityLog({ path: resolve(dirname(profilePath), 'host-activity.json') });
+  const commandSettingsStore = createTelegramCommandSettingsStore(resolve(dirname(profilePath), 'telegram-command-settings.json'));
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
@@ -68,7 +70,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
       if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram inbox/offset/lock paths must not overlap the canonical profile or its lock.');
     }
-    return createTelegramHostService({ config, profileStore, fetchImpl, onError });
+    return createTelegramHostService({ config, profileStore, fetchImpl, onError, getCommandSettings: () => commandSettingsStore.read() });
   }
   const api = createLocalApiServer({
     profileStore,
@@ -100,7 +102,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
     configureTelegram: async ({ token, userId }) => {
-      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
+      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError, getCommandSettings: () => commandSettingsStore.read() });
       if (telegram) await telegram.service.stop();
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
@@ -121,6 +123,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     getActivityLog: ({ limit = 100, offset = 0 } = {}) => activityLog.recent(limit, offset),
     recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
+    getTelegramCommandSettings: () => commandSettingsStore.read(),
+    setTelegramCommandSettings: commands => commandSettingsStore.write(commands),
     getTelegramLatency: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) return { available: false, latencyMs: null, checkedAt: null };
