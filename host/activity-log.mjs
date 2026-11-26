@@ -95,13 +95,13 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
         return event;
       });
     },
-    recent(count = 100) {
-      if (!Number.isSafeInteger(count) || count < 1 || count > 500) {
+    recent(count = 100, offset = 0) {
+      if (!Number.isSafeInteger(count) || count < 1 || count > 500 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000) {
         throw new RangeError('Activity log read limit must be between 1 and 500.');
       }
       return serialize(async () => {
         await load();
-        return events.slice(-count).reverse().map(event => ({ ...event }));
+        return events.slice().reverse().slice(offset, offset + count).map(event => ({ ...event }));
       });
     },
   });
