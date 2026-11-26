@@ -4085,7 +4085,7 @@ async function telegramSetupWizard(){
     await refreshTelegramStatus(true);
     clearDraft();
     secondOverlay.remove();
-    modal('Бот подключён','<p><b>'+esc(saved.bot.firstName)+'</b>'+(saved.bot.username?' · @'+esc(saved.bot.username):'')+'</p><p class="mu">ID бота: '+esc(saved.bot.id)+'</p><p class="ok">Токен проверен, пользователь добавлен в список доступа, настройки сохранены локально.</p><p class="mu">Токен хранится только в локальном .env и не отображается в интерфейсе. Обработка сообщений пока выключена. Переключите приложение на канонический файловый профиль, затем отдельно нажмите «Запустить Telegram».</p>',()=>true,true,'Готово');
+    modal('Бот подключён','<p><b>'+esc(saved.bot.firstName)+'</b>'+(saved.bot.username?' · @'+esc(saved.bot.username):'')+'</p><p class="mu">ID бота: '+esc(saved.bot.id)+'</p><p class="ok">Токен проверен, пользователь добавлен в список доступа, настройки сохранены локально.</p><p class="mu">Токен хранится только в локальном .env и не отображается в интерфейсе. Telegram пока не запущен: проверьте белый список и настройки команд, затем отдельно нажмите «Запустить Telegram».</p>',()=>true,true,'Готово');
    };
    finish().catch(error=>{
     showModalError(userForm,error.message||'Не удалось сохранить настройки Telegram.');
