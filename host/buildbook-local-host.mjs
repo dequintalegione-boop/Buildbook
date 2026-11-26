@@ -54,7 +54,6 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   if (telegramEnabled && !telegramConfigured) {
     throw new TypeError('Telegram включён, но токен бота или белый список не настроены. Завершите мастер настройки Telegram.');
   }
-  }
   let telegram = null;
   let telegramBotProfile = null;
   let telegramBotProfileAt = 0;
