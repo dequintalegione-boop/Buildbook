@@ -87,6 +87,15 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegramEnabled = false;
       return telegram.service.stop();
     },
+    restartTelegram: async () => {
+      if (!telegram) throw new Error('Telegram не настроен. Сначала выполните мастер настройки.');
+      await telegram.service.stop();
+      await updateTelegramEnvFile({ envFile: resolve(appRoot, '.env'), values: { BUILDBOOK_TELEGRAM_ENABLED: 'true' } });
+      env.BUILDBOOK_TELEGRAM_ENABLED = 'true';
+      telegramEnabled = true;
+      const loop = telegram.service.start();
+      loop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+    },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
     configureTelegram: async ({ token, userId }) => {
       const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError });
