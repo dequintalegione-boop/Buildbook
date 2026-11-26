@@ -52,6 +52,7 @@ const STATIC_ASSETS = new Map([
   ['/repository.js', ['repository.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-export.js', ['client/profile-export.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-import.js', ['client/profile-import.js', 'text/javascript; charset=utf-8']],
+  ['/client/telegram-overrides.js', ['client/telegram-overrides.js', 'text/javascript; charset=utf-8']],
   ['/client/canonical-profile-runtime.mjs', ['client/canonical-profile-runtime.mjs', 'text/javascript; charset=utf-8']],
   ['/host/profile-repository-adapter.mjs', ['host/profile-repository-adapter.mjs', 'text/javascript; charset=utf-8']],
   ['/scripts/setup-buildbook-telegram.bat', ['scripts/setup-buildbook-telegram.bat', 'text/plain; charset=utf-8']],
