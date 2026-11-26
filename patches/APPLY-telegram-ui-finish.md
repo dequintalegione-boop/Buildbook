@@ -1,33 +1,10 @@
-# Apply remaining Telegram UI / allowlist finish
+# Telegram UI / allowlist finish
 
-Already on `main` from previous merge:
-- dynamic allowlist gate, host service, handlers, routes module
-- auto-generate API token on first host start
-- bot ID validation + SW test fix
+Applied on the working tree:
 
-## 1. Wire local-api routes (required for GET/POST /api/telegram/allowlist)
+- `telegramAllowlistEditor()` is defined in `index.html` and wired via `data-a="tgallowlist"` in the main action map.
+- `client/telegram-overrides.js` is a capture-phase safety net only.
+- First-run and connect copy explain that `BUILDBOOK_LOCAL_API_TOKEN` is host-only, auto-generated, and not entered when the UI is served from the host.
+- Allowlist API remains `GET`/`PUT` `/api/telegram/allowlist` in `host/local-api.mjs` with live gate update through `setAllowlist`.
 
-From repo root:
-
-```bash
-node scripts/apply-allowlist-local-api.mjs
-```
-
-This is idempotent. It adds import, signature params, validation, and the route dispatch for `handleTelegramAllowlistRoutes`.
-
-## 2. UI changes in index.html
-
-The full UI patch is prepared locally (allowlist table editor, connect-key help, first-run buttons). Apply after pulling this branch:
-
-```bash
-# if you have the patch file with full content:
-git apply patches/telegram-ui-allowlist-index.patch
-```
-
-If the patch file is still a placeholder, re-run the UI changes from the assistant session or request a follow-up push of `index.html`.
-
-## Verify
-
-```bash
-node --test tests/*.test.mjs
-```
+No separate `git apply` step is required for these UI pieces.
