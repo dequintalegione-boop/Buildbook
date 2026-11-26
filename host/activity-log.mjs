@@ -53,7 +53,8 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
           && typeof event.message === 'string').slice(-limit);
       }
     } catch (error) {
-      if (error?.code !== 'ENOENT') throw new Error('Не удалось прочитать журнал действий локального хоста.');
+      if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw new Error('Не удалось прочитать журнал действий локального хоста.');
+      // A damaged optional journal must not prevent the local host or Telegram UI from working.
     }
     loaded = true;
   }
