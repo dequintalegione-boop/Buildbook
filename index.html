@@ -3918,7 +3918,7 @@ async function refreshTelegramStatus(silent=false){
    localTelegramRequest('/api/diagnostics'),
    localTelegramRequest('/api/telegram/messages'),
    localTelegramRequest('/api/host/recovery'),
-   localTelegramRequest('/api/activity')
+   localTelegramRequest('/api/activity').catch(()=>({events:[]}))
   ]);
   if(!status||typeof status.enabled!=='boolean'||typeof status.configured!=='boolean'||typeof status.running!=='boolean')throw new Error('Некорректный статус локального сервиса.');
   if(!diagnostics||typeof diagnostics.ok!=='boolean')throw new Error('Не удалось получить диагностику локального хоста.');
