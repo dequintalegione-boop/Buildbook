@@ -151,3 +151,12 @@ test('first local-host launch replaces a copied public placeholder API secret', 
   assert.match(localHostStartup, /Секрет локального API автоматически создан/);
   assert.doesNotMatch(localHostStartup, /Read-Host/);
 });
+
+
+test('Telegram setup and command editor actions have concrete in-app implementations', () => {
+  assert.match(html, /async function telegramCommandsEditor\\(\\)/);
+  assert.match(html, /function telegramSetupWizard\\(\\)/);
+  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/bot\\/verify'/);
+  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/setup'/);
+  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/commands'/);
+});
