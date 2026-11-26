@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -957,4 +957,23 @@ test('diagnostics report host resources and distinguish a configured stopped bot
   assert.ok(body.host.uptimeSeconds >= 0);
   assert.ok(body.host.memoryRssBytes > 0);
   assert.ok(body.host.heapUsedBytes > 0);
+});
+
+
+test('local helper actions are added to the authenticated activity journal', async t => {
+  const events = [];
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => ({ ok: true, completed: true, message: 'Автозапуск установлен.' }),
+    recordActivity: async event => { events.push({ ...event, id: 'event-1', at: '2026-11-26T10:00:00.000Z' }); },
+    getActivityLog: async () => events,
+  });
+  const action = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(action.status, 200);
+  const journal = await request(base + '/api/activity');
+  assert.equal(journal.status, 200);
+  const body = await journal.json();
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].action, 'local_helper_host_autostart_install');
+  assert.equal(body.events[0].status, 'success');
+  assert.equal(body.events[0].message, 'Автозапуск установлен.');
 });
