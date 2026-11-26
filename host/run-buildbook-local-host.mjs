@@ -18,6 +18,12 @@ async function stop(signal) {
 
 process.once('SIGINT', () => { void stop('SIGINT'); });
 process.once('SIGTERM', () => { void stop('SIGTERM'); });
+// Covers ordinary fatal exits and explicit process.exit(). SIGKILL and power
+// loss cannot run exit hooks; those cases remain fail-closed rather than
+// deleting a lock whose owner has not been verified.
+process.once('exit', () => {
+  try { host?.releaseLocksOnExit?.(); } catch {}
+});
 
 try {
   host = createBuildbookLocalHost({
