@@ -84,6 +84,23 @@ if ([int]$Matches[1] -lt 22) {
   throw "Нужен Node.js 22 LTS или новее. Обнаружена версия $version."
 }
 
+$existingHost = $false
+$probe = New-Object System.Net.Sockets.TcpClient
+try {
+  $connect = $probe.BeginConnect('127.0.0.1', 43127, $null, $null)
+  $existingHost = $connect.AsyncWaitHandle.WaitOne(300)
+  if ($existingHost -and $probe.Connected) { }
+  else { $existingHost = $false }
+} catch {
+  $existingHost = $false
+} finally {
+  $probe.Close()
+}
+if ($existingHost) {
+  Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
+  throw 'Сначала остановите уже работающий локальный хост Buildbook, затем повторно запустите установщик. Это предотвращает копирование поверх активной версии.'
+}
+
 $startScript = Join-Path $installFull 'scripts\start-buildbook-local-host.ps1'
 if (-not (Test-Path -LiteralPath $startScript)) { throw 'В выбранной папке не найден штатный скрипт запуска Buildbook.' }
 $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $startScript + '"'
