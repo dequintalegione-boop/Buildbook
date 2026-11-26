@@ -741,7 +741,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 502, { error: 'Локальный хост вернул некорректный профиль бота.' });
           return;
         }
-        send(response, 200, { ok: true, configured: true, running: true, bot });
+        send(response, 200, { ok: true, configured: true, enabled: false, running: false, bot });
       } catch (error) {
         send(response, error?.code === 'BUILD_BOOK_PROFILE_NOT_READY' ? 409 : 400, {
           error: typeof error?.message === 'string' && error.message.length <= 200
