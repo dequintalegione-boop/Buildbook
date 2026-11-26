@@ -10,6 +10,7 @@ import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 import { configureTelegramHost } from './telegram-setup.mjs';
 import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 import { createTelegramAllowlistHandlers } from './telegram-allowlist-handlers.mjs';
+import { createActivityLog } from './activity-log.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -42,6 +43,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const normalizedProfilePaths = new Set([resolve(profilePath), profileLockPath].map(path => path.toLowerCase()));
   if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
+  const activityLog = createActivityLog({ path: resolve(dirname(profilePath), 'host-activity.json') });
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
@@ -103,6 +105,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return recoveryStatusCache;
     },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    getActivityLog: () => activityLog.recent(100),
+    recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
