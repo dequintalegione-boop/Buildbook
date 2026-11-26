@@ -4064,8 +4064,8 @@ async function telegramSetupWizard(){
  const clearDraft=()=>{try{localStorage.removeItem(draftKey)}catch{}};
  const showUserStep=(bot,verifiedToken='',needsToken=false)=>{
   const tokenField=needsToken?'<p>Для безопасного продолжения повторно введите токен бота. Он не сохранялся в браузере.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"'):'<p class="mu">Токен проверен на предыдущем шаге и временно хранится только в памяти этой вкладки. Если закрыть мастер, при продолжении его потребуется ввести повторно.</p>';
-  const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15}" autocomplete="off"')+tokenField+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
-  modal('Мастер подключения Telegram',userBody,userForm=>{
+  const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15}" autocomplete="off"')+tokenField+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p><div class="ac"><button type="button" class="btn" data-tg-setup-restart>Начать настройку заново</button></div>';
+  const userStepForm=modal('Мастер подключения Telegram',userBody,userForm=>{
    const userId=String(userForm.elements.userId.value||'').trim();
    if(!/^[1-9]\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
    const token=needsToken?String(userForm.elements.botToken.value||'').trim():verifiedToken;
@@ -4093,6 +4093,11 @@ async function telegramSetupWizard(){
    });
    return false;
   },false,'Сохранить и подключить');
+  userStepForm.querySelector('[data-tg-setup-restart]')?.addEventListener('click',()=>{
+   clearDraft();
+   userStepForm.closest('.ov')?.remove();
+   telegramSetupWizard();
+  });
  };
  const draft=readDraft();
  if(draft){showUserStep(draft.bot,'',true);return}
