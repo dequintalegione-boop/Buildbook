@@ -573,10 +573,11 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const seen = new Set();
         for (const user of body.users) {
           if (!user || typeof user !== 'object' || Array.isArray(user)
-            || Object.keys(user).some(key => !['id', 'comment', 'active'].includes(key))
+            || Object.keys(user).some(key => !['id', 'comment', 'active', 'addedAt'].includes(key))
             || typeof user.id !== 'string' || !/^[1-9]\d{0,15}$/.test(user.id)
             || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))
-            || (user.active !== undefined && typeof user.active !== 'boolean')) {
+            || (user.active !== undefined && typeof user.active !== 'boolean')
+            || (user.addedAt !== undefined && (typeof user.addedAt !== 'string' || user.addedAt.length > 40 || !Number.isFinite(Date.parse(user.addedAt))))) {
             send(response, 400, { error: 'Проверьте numeric user ID и комментарии (до 80 символов).' });
             return;
           }
@@ -585,7 +586,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
             return;
           }
           seen.add(user.id);
-          users.push({ id: user.id, comment: user.comment || '', active: user.active !== false });
+          users.push({ id: user.id, comment: user.comment || '', active: user.active !== false, ...(user.addedAt ? { addedAt: new Date(user.addedAt).toISOString() } : {}) });
         }
         const result = await setTelegramAllowlist(users);
         await logActivity('telegram_allowlist_update', 'success', 'Белый список пользователей обновлён.');
