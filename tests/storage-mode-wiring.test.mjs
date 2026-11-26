@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+const telegramOverrides = await readFile(new URL('../client/telegram-overrides.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
   assert.match(html, /const STORAGE_MODE_KEY='buildbook\.storage-mode'/);
@@ -103,4 +104,12 @@ test('canonical save recovery exposes 20 explicit safety contracts', async t => 
   await t.test("unknown result has its own user-facing copy", () => assert.match(html, /Результат сохранения неизвестен/));
   await t.test("storage switch remains explicit", () => assert.match(html, /data-a="storage-indexeddb"/));
   await t.test("canonical storage keeps host recovery guidance", () => assert.match(html, /проверьте локальный хост/));
+});
+
+
+test('Telegram UI overrides do not replace the single in-app local-host connection flow', () => {
+  assert.doesNotMatch(telegramOverrides, /function\\s+telegramConnectForm\\s*\\(/);
+  assert.match(telegramOverrides, /async function telegramAllowlistEditor\\s*\\(/);
+  assert.match(html, /function telegramConnectForm\\s*\\(/);
+  assert.match(html, /bootstrap-local/);
 });
