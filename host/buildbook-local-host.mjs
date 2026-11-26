@@ -89,7 +89,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return configured.bot;
     },
     getHostRecoveryStatus: async () => {
-      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 60_000) {
+      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 5_000) {
         recoveryStatusCache = await getWindowsRecoveryStatus();
         recoveryStatusAt = Date.now();
       }
