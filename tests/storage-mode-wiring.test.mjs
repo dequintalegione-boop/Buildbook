@@ -112,6 +112,10 @@ test('Telegram UI overrides do not replace the single in-app local-host connecti
   assert.doesNotMatch(telegramOverrides, /function telegramConnectForm/);
   assert.match(telegramOverrides, /async function telegramAllowlistEditor/);
   assert.match(telegramOverrides, /data-a="tgallowlist"/);
+  assert.match(telegramOverrides, /id="tg-allowlist-panel"/);
+  assert.match(telegramOverrides, /insertAdjacentHTML\('beforeend'/);
+  assert.match(telegramOverrides, /method:'PUT'/);
+  assert.doesNotMatch(telegramOverrides, /modal\('Белый список'/);
   assert.match(html, /function telegramConnectForm/);
   assert.match(html, /bootstrap-local/);
   assert.match(html, /Важное ограничение Windows/);
