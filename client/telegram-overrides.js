@@ -14,7 +14,7 @@ async function telegramAllowlistEditor(){
  const renderRows=users=>users.map((item,index)=>
   '<tr data-idx="'+index+'" data-added-at="'+esc(item.addedAt||'')+'"><td><input data-field="id" type="text" inputmode="numeric" maxlength="16" value="'+esc(item.id)+'" placeholder="123456789" aria-label="ID пользователя" style="width:100%" disabled></td>'+
   '<td><input data-field="comment" type="text" maxlength="80" value="'+esc(item.comment)+'" placeholder="Комментарий" aria-label="Комментарий" style="width:100%" disabled></td>'+
-  '<td><select data-field="active" aria-label="Состояние пользователя"><option value="true" '+(item.active?'selected':'')+'>Активен</option><option value="false" +(!item.active?'selected':'')+'>Отключён</option></select></td>'+
+  '<td><select data-field="active" aria-label="Состояние пользователя"><option value="true" '+(item.active?'selected':'')+'>Активен</option><option value="false" '+(!item.active?'selected':'')+'>Отключён</option></select></td>'+
   '<td>'+(item.addedAt?esc(stamp(item.addedAt)):'—')+'</td>'+
   '<td><div class="ac"><button type="button" class="btn" data-edit="'+index+'">Редактировать</button><button type="button" class="btn" data-rm="'+index+'">Удалить</button></div></td></tr>'
  ).join('');
