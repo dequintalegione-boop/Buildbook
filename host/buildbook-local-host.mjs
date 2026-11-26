@@ -85,9 +85,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
       telegramBotProfileAt = Date.now();
-      telegramEnabled = true;
-      telegramLoop = telegram.service.start();
-      telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+      telegramEnabled = false;
       return configured.bot;
     },
     getHostRecoveryStatus: async () => {
@@ -192,6 +190,6 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     start,
     stop,
     get running() { return address !== null; },
-    get telegramStatus() { return telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false }; },
+    get telegramStatus() { return telegram ? { ...telegram.getStatus(), enabled: telegramEnabled } : { enabled: false, running: false }; },
   });
 }
