@@ -504,7 +504,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         if ([...query.keys()].some(key => !['limit', 'offset', 'search', 'status', 'action'].includes(key))
           || !Number.isSafeInteger(limit) || limit < 1 || limit > 499
           || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000
-          || search.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(search)
+          || search.length > 200 || /[\u0000-\u001f\u007f]/.test(search)
           || !['all', 'success', 'error'].includes(status)
           || (action !== 'all' && !/^[a-z0-9._-]{1,64}$/i.test(action))) {
           send(response, 400, { error: 'Параметры журнала содержат недопустимые limit, offset или фильтры.' });
