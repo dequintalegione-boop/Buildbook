@@ -124,8 +124,8 @@ test('every static data-a action is wired to the dispatcher or the explicit allo
   const end = html.indexOf('A[a]&&A[a]()', start);
   assert.ok(start >= 0 && end > start);
   const dispatcher = html.slice(start, end);
-  const keys = new Set([...dispatcher.matchAll(/(?:'([^'\\n]{1,80})'|([A-Za-z_$][A-Za-z0-9_$-]*))\\s*:/g)].map(match => match[1] || match[2]));
-  const actions = [...html.matchAll(/\\bdata-a\\s*=\\s*["']([^"']+)["']/g)].map(match => match[1]).filter(action => !action.includes('${'));
+  const keys = new Set([...dispatcher.matchAll(/(?:'([^'\n]{1,80})'|([A-Za-z_$][A-Za-z0-9_$-]*))\s*:/g)].map(match => match[1] || match[2]));
+  const actions = [...html.matchAll(/\bdata-a\s*=\s*["']([^"']+)["']/g)].map(match => match[1]).filter(action => !action.includes('${'));
   const missing = [...new Set(actions)].filter(action => !keys.has(action) && action !== 'tgallowlist');
   assert.deepEqual(missing, []);
   assert.match(telegramOverrides, /data-a="tgallowlist"/);
@@ -136,13 +136,13 @@ test('local PWA pairing does not ask for a host key and explains the secret only
   const end = html.indexOf('async function closeTelegramSession()', start);
   const connector = html.slice(start, end);
   assert.match(connector, /const body=localOrigin/);
-  assert.doesNotMatch(connector, /fld\\('token'/);
+  assert.doesNotMatch(connector, /fld\('token'/);
   assert.match(connector, /BUILDBOOK_LOCAL_API_TOKEN/);
   assert.match(connector, /bootstrap-local/);
 });
 
 test('first local-host launch replaces a copied public placeholder API secret', () => {
   assert.match(localHostStartup, /REPLACE_/);
-  assert.match(localHostStartup, /randomBytes\\(32\\)/);
+  assert.match(localHostStartup, /randomBytes\(32\)/);
   assert.match(localHostStartup, /Секрет локального API автоматически создан/);
 });
