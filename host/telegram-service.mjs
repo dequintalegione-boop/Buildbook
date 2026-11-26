@@ -104,6 +104,14 @@ export function createTelegramService({
       controller.abort(new Error('Telegram service stopped.'));
       await loopPromise;
     },
+    // The process exit hook cannot await the loop. At that point Node is
+    // terminating, so synchronously release only this process' verified lock.
+    releaseInstanceLockOnExit() {
+      if (!releaseInstanceLock) return;
+      const release = releaseInstanceLock;
+      releaseInstanceLock = null;
+      release();
+    },
     get running() { return loopPromise !== null; },
   });
 }
