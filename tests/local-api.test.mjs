@@ -897,3 +897,23 @@ test('allows exactly one winner in 20 concurrent empty-profile import races', as
     });
   }
 });
+
+
+test('returns completed local helper output to the in-app client', async t => {
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async action => ({
+      ok: true,
+      completed: true,
+      message: 'Команда выполнена.',
+      output: 'Автозапуск Buildbook Local Host установлен.',
+    }),
+  });
+  const response = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    action: 'host-autostart-install',
+    message: 'Команда выполнена.',
+    output: 'Автозапуск Buildbook Local Host установлен.',
+  });
+});
