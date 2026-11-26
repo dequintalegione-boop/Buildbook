@@ -190,6 +190,7 @@ test('Telegram setup wizard checks canonical profile before asking for the bot t
 test('Windows local host startup restricts .env access to the current account', () => {
   assert.match(localHostStartup, /whoami\.exe/);
   assert.match(localHostStartup, /icacls\.exe/);
+  assert.match(localHostStartup, /\/reset/);
   assert.match(localHostStartup, /\/inheritance:r/);
   assert.match(localHostStartup, /\/grant:r/);
   assert.match(localHostStartup, /не будет запущен с небезопасными правами/);
