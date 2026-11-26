@@ -192,9 +192,6 @@ document.addEventListener('click',function(event){
  const exportButton=event.target&&event.target.closest&&event.target.closest('[data-tg-activity-export]');
  if(exportButton){event.preventDefault();exportTelegramActivity()}
 },true);
-document.addEventListener('input',function(event){
- if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-search]'))filterTelegramActivity();
-},true);
 document.addEventListener('change',function(event){
  if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status],[data-tg-activity-type]'))filterTelegramActivity(true);
 },true);
