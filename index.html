@@ -3886,7 +3886,7 @@ async function controlTelegramService(action){
 }
 async function launchTelegramLocalAction(action){
  if(!TELEGRAM_UI.connected||TELEGRAM_UI.busy){toast('Сначала подключите локальный хост Buildbook.');return}
- const allowed=['telegram-setup','telegram-manage','telegram-state','host-autostart-install','host-autostart-uninstall'];
+ const allowed=['host-autostart-install','host-autostart-uninstall'];
  if(!allowed.includes(action))return;
  try{
   const result=await localTelegramRequest('/api/local-actions/'+action,{method:'POST'});
