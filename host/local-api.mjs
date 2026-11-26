@@ -588,6 +588,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           seen.add(user.id);
           users.push({ id: user.id, comment: user.comment || '', active: user.active !== false, ...(user.addedAt ? { addedAt: new Date(user.addedAt).toISOString() } : {}) });
         }
+        if (!users.some(user => user.active)) {
+          send(response, 400, { error: 'Оставьте хотя бы одного активного пользователя в белом списке.' });
+          return;
+        }
         const result = await setTelegramAllowlist(users);
         await logActivity('telegram_allowlist_update', 'success', 'Белый список пользователей обновлён.');
         send(response, 200, { ok: true, users: Array.isArray(result?.users) ? result.users : users });
