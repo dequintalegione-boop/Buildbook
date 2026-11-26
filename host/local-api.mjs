@@ -352,7 +352,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     let pathname;
     try {
       const requestUrl = new URL(request.url || '/', 'http://localhost');
-      if (requestUrl.origin !== 'http://localhost' || requestUrl.search || requestUrl.hash) {
+      if (requestUrl.origin !== 'http://localhost' || requestUrl.hash
+        || (requestUrl.search && requestUrl.pathname !== '/api/activity')) {
         send(response, 400, { error: 'Некорректный адрес запроса.' });
         return;
       }
@@ -488,12 +489,26 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     }
     if (request.method === 'GET' && pathname === '/api/activity') {
       try {
-        const events = typeof getActivityLog === 'function' ? await getActivityLog() : [];
-        if (!Array.isArray(events) || events.length > 500) {
+        const query = new URL(request.url || '/', 'http://localhost').searchParams;
+        const limitRaw = query.get('limit');
+        const offsetRaw = query.get('offset');
+        const limit = limitRaw === null ? 100 : Number(limitRaw);
+        const offset = offsetRaw === null ? 0 : Number(offsetRaw);
+        if ([...query.keys()].some(key => !['limit', 'offset'].includes(key))
+          || !Number.isSafeInteger(limit) || limit < 1 || limit > 499
+          || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000) {
+          send(response, 400, { error: 'Параметры журнала должны содержать limit (1–499) и offset (неотрицательное целое число).' });
+          return;
+        }
+        const events = typeof getActivityLog === 'function'
+          ? await getActivityLog({ limit: limit + 1, offset })
+          : [];
+        if (!Array.isArray(events) || events.length > limit + 1) {
           send(response, 502, { error: 'Журнал действий локального хоста вернул некорректные данные.' });
           return;
         }
-        send(response, 200, { events });
+        const hasMore = events.length > limit;
+        send(response, 200, { events: hasMore ? events.slice(0, limit) : events, limit, offset, hasMore });
       } catch {
         send(response, 500, { error: 'Не удалось прочитать журнал действий локального хоста.' });
       }
