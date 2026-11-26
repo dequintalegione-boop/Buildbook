@@ -3938,7 +3938,9 @@ async function refreshTelegramStatus(silent=false){
  }
 }
 if(!TEST_MODE)setInterval(()=>{
- if(V.tab==='telegram'&&!document.hidden&&!TELEGRAM_UI.checking)refreshTelegramStatus(false);
+ if(V.tab!=='telegram'||document.hidden||TELEGRAM_UI.checking)return;
+ if(isLocalHostOrigin()&&!TELEGRAM_UI.connected)autoConnectLocalHost();
+ else refreshTelegramStatus(false);
 },15000);
 function isLocalHostOrigin(){return ['localhost','127.0.0.1','::1'].includes(location.hostname.replaceAll('[','').replaceAll(']',''))}
 async function autoConnectLocalHost(){
@@ -4720,6 +4722,7 @@ APP_READY=(async()=>{
   await initializeCanonicalStorage();
   await load();
   theme();render();
+  if(isLocalHostOrigin()&&STORAGE_MODE!=='canonical')void autoConnectLocalHost();
   if(navigator.storage&&navigator.storage.persist&&STORAGE_MODE==='indexeddb')navigator.storage.persist().catch(()=>{});
   return true;
  }catch(error){
