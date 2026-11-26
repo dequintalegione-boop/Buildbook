@@ -500,10 +500,13 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         });
       } catch (error) {
         const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
+        const details = [error?.stderr, error?.stdout, error?.message]
+          .map(value => String(value || '').replace(/[\\r\\n\\t]+/g, ' ').trim())
+          .filter(Boolean).join(' | ').slice(0, 800);
         send(response, unsupported ? 501 : 500, {
           error: unsupported
-            ? 'Эта команда доступна только в Windows. Скачайте BAT-файл и запустите его вручную.'
-            : 'Не удалось открыть локальный помощник. Проверьте наличие BAT-файла в папке scripts.',
+            ? 'Локальный помощник доступен только в Windows.'
+            : details || 'Локальный помощник завершился с ошибкой. Проверьте журнал локального хоста.',
           code: unsupported ? 'LOCAL_ACTION_UNSUPPORTED' : 'LOCAL_ACTION_FAILED',
         });
       }
