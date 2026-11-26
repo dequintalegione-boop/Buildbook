@@ -11,8 +11,14 @@ function normalizeEvent(input, now) {
   const action = String(input.action || '').trim();
   const status = input.status === 'error' ? 'error' : input.status === 'success' ? 'success' : '';
   const message = String(input.message || '').trim();
+  const telegramUserId = input.telegramUserId == null ? null : String(input.telegramUserId);
+  const updateId = input.updateId == null ? null : input.updateId;
+  const operationId = input.operationId == null ? null : String(input.operationId).trim();
   if (!/^[a-z0-9._-]{1,64}$/i.test(action) || !status || message.length > 200
-    || /[\u0000-\u001f\u007f]/.test(message)) {
+    || /[\u0000-\u001f\u007f]/.test(message)
+    || (telegramUserId !== null && (!/^[1-9]\\d{0,15}$/.test(telegramUserId) || !Number.isSafeInteger(Number(telegramUserId))))
+    || (updateId !== null && (!Number.isSafeInteger(updateId) || updateId < 0))
+    || (operationId !== null && (!operationId || operationId.length > 256 || /[\u0000-\u001f\u007f]/.test(operationId)))) {
     throw new TypeError('Activity event contains invalid fields.');
   }
   const date = now();
@@ -25,6 +31,9 @@ function normalizeEvent(input, now) {
     action,
     status,
     message,
+    ...(telegramUserId !== null ? { telegramUserId } : {}),
+    ...(updateId !== null ? { updateId } : {}),
+    ...(operationId !== null ? { operationId } : {}),
   });
 }
 
