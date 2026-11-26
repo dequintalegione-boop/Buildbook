@@ -88,9 +88,10 @@ $existingHost = $false
 $probe = New-Object System.Net.Sockets.TcpClient
 try {
   $connect = $probe.BeginConnect('127.0.0.1', 43127, $null, $null)
-  $existingHost = $connect.AsyncWaitHandle.WaitOne(300)
-  if ($existingHost -and $probe.Connected) { }
-  else { $existingHost = $false }
+  if ($connect.AsyncWaitHandle.WaitOne(500)) {
+    $probe.EndConnect($connect)
+    $existingHost = $true
+  }
 } catch {
   $existingHost = $false
 } finally {
