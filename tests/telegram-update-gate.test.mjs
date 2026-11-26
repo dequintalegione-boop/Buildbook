@@ -86,3 +86,22 @@ test('rejects malformed allowlist and invalid update IDs', async () => {
   await assert.rejects(gate.accept(privateMessage({ updateId: 'bad' })), /update_id/);
   assert.equal(inbox.items.length, 0);
 });
+
+test('emits safe accepted and rejected message events without logging message text', async () => {
+  const inbox = fakeInbox();
+  const events = [];
+  const gate = createTelegramUpdateGate({
+    inbox,
+    botId: '123456',
+    allowlist: ['1001'],
+    onEvent: event => events.push(event),
+  });
+  await gate.accept(privateMessage({ userId: 2002, updateId: 10, text: 'private-secret-text' }));
+  await gate.accept(privateMessage({ userId: 1001, updateId: 11, text: 'income 500' }));
+  assert.deepEqual(events.map(event => event.action), ['telegram_message_rejected', 'telegram_message_accepted']);
+  assert.equal(events[0].telegramUserId, '2002');
+  assert.equal(events[1].telegramUserId, '1001');
+  assert.equal(events[1].updateId, 11);
+  assert.equal(JSON.stringify(events).includes('private-secret-text'), false);
+  assert.equal(JSON.stringify(events).includes('income 500'), false);
+});
