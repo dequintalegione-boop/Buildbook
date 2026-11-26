@@ -47,9 +47,9 @@ async function telegramAllowlistEditor(){
  }catch(error){toast(error.message||'Не удалось загрузить белый список.');return}
  const entries=Array.isArray(current)?current.map(e=>typeof e==='object'&&e?{id:String(e.id||e.userId||''),comment:String(e.comment||'')}:{id:String(e),comment:''}):[];
  const rows=entries.map((e,idx)=>
-  '<tr data-idx="'+idx+'"><td><input name="id_'+idx+'" value="'+esc(e.id)+'" placeholder="123456789" style="width:100%"></td>'+
-  '<td><input name="comment_'+idx+'" value="'+esc(e.comment)+'" placeholder="Комментарий" style="width:100%"></td>'+
-  '<td><button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td></tr>'
+  ' <tr data-idx="'+idx+'"><td><input name="id_'+idx+'" value="'+esc(e.id)+'" placeholder="123456789" style="width:100%" disabled></td>'+
+  '<td><input name="comment_'+idx+'" value="'+esc(e.comment)+'" placeholder="Комментарий" style="width:100%" disabled></td>'+
+  '<td><button type="button" class="btn" data-edit="'+idx+'">Редактировать</button> <button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td></tr>'
  ).join('');
  const body=
   '<p class="mu">Список можно менять в любой момент, пока host запущен.</p>'+
@@ -77,10 +77,14 @@ async function telegramAllowlistEditor(){
   if(!tb)return;if(tb.querySelector('td[colspan]'))tb.innerHTML='';
   const idx=rowSeq++;
   const tr=document.createElement('tr');tr.dataset.idx=String(idx);
-  tr.innerHTML='<td><input name="id_'+idx+'" placeholder="123456789" style="width:100%"></td><td><input name="comment_'+idx+'" placeholder="Комментарий" style="width:100%"></td><td><button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td>';
+  tr.innerHTML='<td><input name="id_'+idx+'" placeholder="123456789" style="width:100%"></td><td><input name="comment_'+idx+'" placeholder="Комментарий" style="width:100%"></td><td><button type="button" class="btn" data-edit="'+idx+'">Готово</button> <button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td>';
   tb.appendChild(tr);
  });
- form.addEventListener('click',e=>{const btn=e.target.closest('[data-rm]');if(!btn)return;e.preventDefault();btn.closest('tr')?.remove();});
+ form.addEventListener('click',e=>{
+  const edit=e.target.closest('[data-edit]');
+  if(edit){e.preventDefault();const tr=edit.closest('tr');if(!tr)return;const fields=tr.querySelectorAll('input');const editing=edit.dataset.editing==='true';fields.forEach(field=>{field.disabled=editing;});edit.dataset.editing=editing?'false':'true';edit.textContent=editing?'Редактировать':'Готово';return}
+  const btn=e.target.closest('[data-rm]');if(!btn)return;e.preventDefault();btn.closest('tr')?.remove();
+ });
 }
 
 document.addEventListener('click',function(e){
