@@ -70,7 +70,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     for (const path of [config.inboxPath, config.offsetPath, config.instanceLockPath]) {
       if (normalizedProfilePaths.has(resolve(path).toLowerCase())) throw new TypeError('Telegram inbox/offset/lock paths must not overlap the canonical profile or its lock.');
     }
-    return createTelegramHostService({ config, profileStore, fetchImpl, onError, getCommandSettings: () => commandSettingsStore.read() });
+    return createTelegramHostService({ config, profileStore, fetchImpl, onError, onEvent: event => activityLog.record(event), getCommandSettings: () => commandSettingsStore.read() });
   }
   const api = createLocalApiServer({
     profileStore,
@@ -102,7 +102,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     },
     verifyTelegramBot: token => telegramBotApi.getMe(token),
     configureTelegram: async ({ token, userId }) => {
-      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError, getCommandSettings: () => commandSettingsStore.read() });
+      const configured = await configureTelegramHost({ token, userId, env, appRoot, profilePath, profileStore, fetchImpl, onError, onEvent: event => activityLog.record(event), getCommandSettings: () => commandSettingsStore.read() });
       if (telegram) await telegram.service.stop();
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
