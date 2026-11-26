@@ -50,6 +50,16 @@ if ($existingToken -match '^REPLACE_' -or $existingToken.Length -lt 32 -or $exis
   Write-Host 'Секрет локального API автоматически создан. Копировать его в приложение не нужно.'
 }
 
+# Keep the host API secret readable only by the current Windows account.
+$identity = (& whoami.exe).Trim()
+if (-not $identity -or $identity -match '[\r\n]') {
+  throw 'Не удалось определить текущую учётную запись Windows для защиты файла .env.'
+}
+& icacls.exe $envFile '/inheritance:r' '/grant:r' ($identity + ':(F)') | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw 'Не удалось ограничить доступ к .env. Локальный хост не будет запущен с небезопасными правами на секреты.'
+}
+
 Write-Host 'При открытии Buildbook через локальный хост подключение PWA выполняется автоматически.'
 Write-Host 'Токен Telegram и ваш user ID позже вводятся в мастере внутри приложения.'
 Write-Host 'Запускаю локальный хост...'
