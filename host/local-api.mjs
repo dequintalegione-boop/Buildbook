@@ -509,7 +509,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       try {
         const result = await (launchLocalAction || launchWindowsLocalAction)(action);
         const completed = result?.completed === true;
-        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'success', typeof result?.message === 'string' ? result.message.slice(0, 200) : 'Локальное действие выполнено.');
+        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'success', action === 'host-autostart-install' ? 'Установка автозапуска Windows выполнена.' : 'Автозапуск Windows удалён.');
         send(response, completed ? 200 : 202, {
           ok: true,
           action,
