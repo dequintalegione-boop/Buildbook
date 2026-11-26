@@ -306,7 +306,7 @@ html.transaction-screen,body.transaction-screen{overflow-x:hidden;overflow-y:hid
 <script src="./repository.js"></script>
 <script src="./client/profile-export.js"></script>
 <script src="./client/profile-import.js"></script>
-<script src="./client/telegram-overrides.js"></script>
+
 <script>
 const $=s=>document.querySelector(s),uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const R=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n||0)+' ₽',D=s=>s?s.split('-').reverse().join('.'):'',localDateISO=(date=new Date())=>[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-'),today=()=>localDateISO();
@@ -4717,4 +4717,5 @@ APP_READY=(async()=>{
 })();
 addEventListener('pagehide',()=>{flushSave().catch(reportStorageError)});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave().catch(reportStorageError)});
-</script></body></html>
+</script><script src="./client/telegram-overrides.js"></script>
+</body></html>
