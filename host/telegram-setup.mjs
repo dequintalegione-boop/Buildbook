@@ -5,7 +5,7 @@ import { createTelegramHostService } from './telegram-host-service.mjs';
 import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 
 export async function configureTelegramHost({
-  token, userId, env, appRoot, profilePath, profileStore, fetchImpl = globalThis.fetch, onError = () => {}, getCommandSettings = undefined,
+  token, userId, env, appRoot, profilePath, profileStore, fetchImpl = globalThis.fetch, onError = () => {}, onEvent = () => {}, getCommandSettings = undefined,
 } = {}) {
   if (typeof token !== 'string' || typeof userId !== 'string' || !/^[1-9]\d{0,15}$/.test(userId)) {
     throw new TypeError('A Telegram token and numeric user ID are required.');
@@ -64,6 +64,6 @@ export async function configureTelegramHost({
 
   return Object.freeze({
     bot,
-    telegram: createTelegramHostService({ config, profileStore, fetchImpl, onError, ...(typeof getCommandSettings === 'function' ? { getCommandSettings } : {}) }),
+    telegram: createTelegramHostService({ config, profileStore, fetchImpl, onError, onEvent, ...(typeof getCommandSettings === 'function' ? { getCommandSettings } : {}) }),
   });
 }
