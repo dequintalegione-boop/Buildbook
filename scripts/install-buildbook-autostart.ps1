@@ -1,3 +1,4 @@
+﻿param([switch]$NoStart)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
@@ -16,5 +17,9 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description 'Buildbook local API and optional Telegram host' -Force | Out-Null
-Start-ScheduledTask -TaskName $taskName
-Write-Host 'Автозапуск Buildbook Local Host установлен и запущен для текущего пользователя.'
+if (-not $NoStart) { Start-ScheduledTask -TaskName $taskName }
+if ($NoStart) {
+  Write-Host 'Автозапуск и восстановление Buildbook установлены для текущего пользователя.'
+} else {
+  Write-Host 'Автозапуск Buildbook Local Host установлен и запущен для текущего пользователя.'
+}

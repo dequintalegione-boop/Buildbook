@@ -17,34 +17,51 @@ const MAX_SESSIONS = 8;
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const execFileAsync = promisify(execFile);
 const LOCAL_ACTION_SCRIPTS = Object.freeze({
-  'telegram-setup': 'setup-buildbook-telegram.bat',
-  'telegram-manage': 'manage-buildbook-telegram.bat',
-  'telegram-state': 'set-buildbook-telegram-state.bat',
-  'host-autostart-install': 'install-buildbook-autostart.bat',
-  'host-autostart-uninstall': 'uninstall-buildbook-autostart.bat',
+  'host-autostart-install': Object.freeze({ file: 'install-buildbook-autostart.ps1', mode: 'run' }),
+  'host-autostart-uninstall': Object.freeze({ file: 'uninstall-buildbook-autostart.ps1', mode: 'run' }),
 });
 
 async function launchWindowsLocalAction(action) {
-  const script = LOCAL_ACTION_SCRIPTS[action];
-  if (!script) {
+  const definition = LOCAL_ACTION_SCRIPTS[action];
+  if (!definition) {
     const error = new Error('Неизвестное локальное действие.');
     error.code = 'LOCAL_ACTION_NOT_ALLOWED';
     throw error;
   }
   if (process.platform !== 'win32') {
-    const error = new Error('Запуск локальных BAT-файлов доступен только в Windows. Скачайте скрипт и запустите его вручную.');
+    const error = new Error('Локальные помощники Windows доступны только в Windows.');
     error.code = 'LOCAL_ACTION_UNSUPPORTED';
     throw error;
   }
-  // The command is assembled exclusively from a fixed allowlist. No request
-  // data is passed to cmd.exe, and the child opens in a separate console.
-  await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'start "" "scripts\\' + script + '"'], {
+
+  // Both the action and script path come from a fixed allowlist. No request
+  // data is ever passed to PowerShell or cmd.exe.
+  if (definition.mode === 'run') {
+    const scriptPath = resolve(APP_ROOT, 'scripts', definition.file);
+    const { stdout = '', stderr = '' } = await execFileAsync('powershell.exe', [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+    ], {
+      cwd: APP_ROOT,
+      windowsHide: true,
+      timeout: 30_000,
+      maxBuffer: 128 * 1024,
+    });
+    const output = [stdout, stderr].map(value => String(value || '').trim()).filter(Boolean).join(String.fromCharCode(10)).slice(0, 4000);
+    return {
+      ok: true,
+      completed: true,
+      message: 'Команда выполнена.',
+      output,
+    };
+  }
+
+  await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'start "" "scripts\\' + definition.file + '"'], {
     cwd: APP_ROOT,
     windowsHide: true,
     timeout: 5000,
     windowsVerbatimArguments: false,
   });
-  return { ok: true };
+  return { ok: true, completed: false, message: 'Интерактивный помощник открыт в отдельном окне.' };
 }
 const STATIC_ASSETS = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -52,6 +69,7 @@ const STATIC_ASSETS = new Map([
   ['/repository.js', ['repository.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-export.js', ['client/profile-export.js', 'text/javascript; charset=utf-8']],
   ['/client/profile-import.js', ['client/profile-import.js', 'text/javascript; charset=utf-8']],
+  ['/client/telegram-overrides.js', ['client/telegram-overrides.js', 'text/javascript; charset=utf-8']],
   ['/client/canonical-profile-runtime.mjs', ['client/canonical-profile-runtime.mjs', 'text/javascript; charset=utf-8']],
   ['/host/profile-repository-adapter.mjs', ['host/profile-repository-adapter.mjs', 'text/javascript; charset=utf-8']],
   ['/scripts/setup-buildbook-telegram.bat', ['scripts/setup-buildbook-telegram.bat', 'text/plain; charset=utf-8']],
@@ -250,7 +268,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -268,6 +286,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
+  if (getTelegramAllowlist !== null && typeof getTelegramAllowlist !== 'function') throw new TypeError('getTelegramAllowlist must be a function or null.');
+  if (setTelegramAllowlist !== null && typeof setTelegramAllowlist !== 'function') throw new TypeError('setTelegramAllowlist must be a function or null.');
   if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
     throw new TypeError('getTelegramMessages must be a function or null.');
   }
@@ -280,6 +300,13 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (!['127.0.0.1', '::1', 'localhost'].includes(host) || (isIP(host) === 0 && host !== 'localhost')) {
     throw new TypeError('Локальный API разрешено привязывать только к loopback-интерфейсу.');
   }
+
+  if (getActivityLog !== null && typeof getActivityLog !== 'function') throw new TypeError('getActivityLog must be a function or null.');
+  if (recordActivity !== null && typeof recordActivity !== 'function') throw new TypeError('recordActivity must be a function or null.');
+  const logActivity = async (action, status, message) => {
+    if (typeof recordActivity !== 'function') return;
+    try { await recordActivity({ action, status, message }); } catch { /* Audit failure must not break a user operation. */ }
+  };
 
   const sessions = new Map();
   const server = createServer({ maxHeaderSize: 8 * 1024 }, async (request, response) => {
@@ -359,6 +386,42 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     const supplied = Buffer.from(suppliedToken, 'utf8');
     const tokenMatches = supplied.length === expected.length && timingSafeEqual(supplied, expected);
 
+    // PWA/local-host pairing: when the UI is served by this very host,
+    // same-origin possession is sufficient to establish its browser session.
+    // This removes manual .env key copying without opening cross-origin access.
+    if (request.method === 'POST' && pathname === '/api/session/bootstrap-local') {
+      if (!staticRoot || !origin || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 403, { error: 'Автоподключение доступно только из интерфейса, который раздаёт локальный хост.' });
+        return;
+      }
+      try {
+        const body = await readJson(request, 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 0) {
+          send(response, 400, { error: 'Запрос подключения должен содержать пустой JSON-объект.' });
+          return;
+        }
+      } catch (error) {
+        send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос подключения.' });
+        return;
+      }
+      const previousCookie = readSessionCookie(request);
+      if (previousCookie.present && previousCookie.value === null) {
+        send(response, 400, { error: 'Заголовок браузерной сессии имеет неоднозначный формат.' });
+        return;
+      }
+      if (previousCookie.value) sessions.delete(previousCookie.value);
+      for (const [key, session] of sessions) if (session.expiresAt <= now()) sessions.delete(key);
+      if (sessions.size >= MAX_SESSIONS) {
+        send(response, 429, { error: 'Достигнут лимит активных браузерных подключений.' });
+        return;
+      }
+      const sessionId = randomBytes(32).toString('base64url');
+      sessions.set(sessionId, { expiresAt: now() + sessionTtlMs });
+      response.setHeader('set-cookie', SESSION_COOKIE + '=' + sessionId + '; HttpOnly; SameSite=Strict; Path=/api; Max-Age=' + Math.ceil(sessionTtlMs / 1000));
+      send(response, 200, { ok: true, expiresIn: sessionTtlMs, method: 'same-origin' });
+      return;
+    }
+
     // Exchange the host-only bootstrap secret for a short-lived HttpOnly
     // browser session. The session secret is never exposed to JavaScript or disk.
     if (request.method === 'POST' && pathname === '/api/session/bootstrap') {
@@ -422,6 +485,19 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
       return;
     }
+    if (request.method === 'GET' && pathname === '/api/activity') {
+      try {
+        const events = typeof getActivityLog === 'function' ? await getActivityLog() : [];
+        if (!Array.isArray(events) || events.length > 500) {
+          send(response, 502, { error: 'Журнал действий локального хоста вернул некорректные данные.' });
+          return;
+        }
+        send(response, 200, { events });
+      } catch {
+        send(response, 500, { error: 'Не удалось прочитать журнал действий локального хоста.' });
+      }
+      return;
+    }
     const localActionPrefix = '/api/local-actions/';
     const localAction = pathname.startsWith(localActionPrefix) ? pathname.slice(localActionPrefix.length) : '';
     if (request.method === 'POST' && localAction) {
@@ -431,16 +507,86 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       try {
-        await (launchLocalAction || launchWindowsLocalAction)(action);
-        send(response, 202, { ok: true, action, message: 'Локальный помощник открыт в отдельном окне.' });
+        const result = await (launchLocalAction || launchWindowsLocalAction)(action);
+        const completed = result?.completed === true;
+        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'success', action === 'host-autostart-install' ? 'Установка автозапуска Windows выполнена.' : 'Автозапуск Windows удалён.');
+        send(response, completed ? 200 : 202, {
+          ok: true,
+          action,
+          message: typeof result?.message === 'string' ? result.message : completed ? 'Команда выполнена.' : 'Локальный помощник открыт в отдельном окне.',
+          ...(typeof result?.output === 'string' && result.output ? { output: result.output.slice(0, 4000) } : {}),
+        });
       } catch (error) {
         const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
+        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'error', unsupported ? 'Действие недоступно на этой платформе.' : 'Локальное действие завершилось ошибкой.');
+        const details = [error?.stderr, error?.stdout, error?.message]
+          .map(value => String(value || '').replaceAll('\r', ' ').replaceAll('\n', ' ').replaceAll('\t', ' ').trim())
+          .filter(Boolean).join(' | ').slice(0, 800);
         send(response, unsupported ? 501 : 500, {
           error: unsupported
-            ? 'Эта команда доступна только в Windows. Скачайте BAT-файл и запустите его вручную.'
-            : 'Не удалось открыть локальный помощник. Проверьте наличие BAT-файла в папке scripts.',
+            ? 'Локальный помощник доступен только в Windows.'
+            : details || 'Локальный помощник завершился с ошибкой. Проверьте журнал локального хоста.',
           code: unsupported ? 'LOCAL_ACTION_UNSUPPORTED' : 'LOCAL_ACTION_FAILED',
         });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/allowlist') {
+      if (typeof getTelegramAllowlist !== 'function') {
+        send(response, 503, { error: 'Управление списком доступа Telegram не подключено к локальному хосту.' });
+        return;
+      }
+      try {
+        const result = await getTelegramAllowlist();
+        const users = Array.isArray(result?.users) ? result.users : [];
+        send(response, 200, { users: users.filter(user => user && /^[1-9]\d{0,15}$/.test(String(user.id)))
+          .map(user => ({ id: String(user.id), comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '' })) });
+      } catch {
+        send(response, 500, { error: 'Не удалось загрузить список разрешённых Telegram-пользователей.' });
+      }
+      return;
+    }
+    if (request.method === 'PUT' && pathname === '/api/telegram/allowlist') {
+      if (typeof setTelegramAllowlist !== 'function') {
+        send(response, 503, { error: 'Управление списком доступа Telegram не подключено к локальному хосту.' });
+        return;
+      }
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 16 * 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1
+          || !Array.isArray(body.users) || body.users.length < 1 || body.users.length > 100) {
+          send(response, 400, { error: 'Передайте от 1 до 100 разрешённых пользователей.' });
+          return;
+        }
+        const users = [];
+        const seen = new Set();
+        for (const user of body.users) {
+          if (!user || typeof user !== 'object' || Array.isArray(user)
+            || Object.keys(user).some(key => !['id', 'comment'].includes(key))
+            || typeof user.id !== 'string' || !/^[1-9]\d{0,15}$/.test(user.id)
+            || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))) {
+            send(response, 400, { error: 'Проверьте numeric user ID и комментарии (до 80 символов).' });
+            return;
+          }
+          if (seen.has(user.id)) {
+            send(response, 400, { error: 'В списке не должно быть повторяющихся Telegram user ID.' });
+            return;
+          }
+          seen.add(user.id);
+          users.push({ id: user.id, comment: user.comment || '' });
+        }
+        const result = await setTelegramAllowlist(users);
+        await logActivity('telegram_allowlist_update', 'success', 'Белый список пользователей обновлён.');
+        send(response, 200, { ok: true, users: Array.isArray(result?.users) ? result.users : users });
+      } catch (error) {
+        await logActivity('telegram_allowlist_update', 'error', 'Не удалось обновить белый список пользователей.');
+        send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200
+          ? error.message : 'Не удалось сохранить список доступа Telegram.' });
       }
       return;
     }
@@ -455,6 +601,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const stored = await profileStore.read();
         const rawTelegram = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
         const queue = rawTelegram?.queue && typeof rawTelegram.queue === 'object' ? rawTelegram.queue : null;
+        const memory = process.memoryUsage();
+        const hostUptimeSeconds = Math.max(0, Math.floor(process.uptime()));
         const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
         const lastCycleAt = timestamp(rawTelegram?.lastCycleAt);
@@ -462,19 +610,30 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           ? Math.max(0, Date.now() - Date.parse(lastCycleAt)) : null;
         send(response, 200, {
           ok: true,
-          host: { status: 'online', nodeMajor: Number(process.versions.node.split('.')[0]) || null },
+          host: {
+            status: 'online',
+            nodeMajor: Number(process.versions.node.split('.')[0]) || null,
+            uptimeSeconds: hostUptimeSeconds,
+            memoryRssBytes: count(memory.rss),
+            heapUsedBytes: count(memory.heapUsed),
+            heapTotalBytes: count(memory.heapTotal),
+          },
           profile: {
             status: stored?.profile && typeof stored.profile === 'object' ? 'ready' : 'empty',
             revision: Number.isSafeInteger(stored?.revision) && stored.revision >= 0 ? stored.revision : null,
           },
           telegram: {
-            configured: rawTelegram?.enabled === true,
+            configured: rawTelegram?.configured === true,
             running: rawTelegram?.running === true,
             lastCycleAt,
             lastCycleAgeMs,
+            startedAt: timestamp(rawTelegram?.startedAt),
             consecutiveFailures: count(rawTelegram?.consecutiveFailures),
+            lastProcessed: count(rawTelegram?.lastProcessed),
+            total: count(queue?.total),
             pending: count(queue?.pending),
             processing: count(queue?.processing),
+            completed: count(queue?.completed),
             rejected: count(queue?.rejected),
             lastError: rawTelegram?.lastError ? {
               code: 'TELEGRAM_SERVICE_ERROR',
@@ -496,9 +655,11 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       try {
         await action();
+        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'success', pathname.endsWith('/start') ? 'Telegram запущен.' : 'Telegram остановлен.');
         const raw = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
         send(response, 200, { ok: true, running: raw?.running === true });
       } catch (error) {
+        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'error', 'Не удалось изменить состояние Telegram.');
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
       }
       return;
@@ -561,8 +722,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           return;
         }
         await setTelegramCommands(body.commands);
+        await logActivity('telegram_commands_update', 'success', 'Команды Telegram обновлены.');
         send(response, 200, { ok: true });
       } catch (error) {
+        await logActivity('telegram_commands_update', 'error', 'Не удалось обновить команды Telegram.');
         send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200 ? error.message : 'Не удалось сохранить команды бота.' });
       }
       return;
@@ -645,8 +808,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 502, { error: 'Локальный хост вернул некорректный профиль бота.' });
           return;
         }
-        send(response, 200, { ok: true, configured: true, running: true, bot });
+        await logActivity('telegram_setup', 'success', 'Настройки Telegram-бота сохранены.');
+        send(response, 200, { ok: true, configured: true, enabled: false, running: false, bot });
       } catch (error) {
+        await logActivity('telegram_setup', 'error', 'Не удалось сохранить настройки Telegram-бота.');
         send(response, error?.code === 'BUILD_BOOK_PROFILE_NOT_READY' ? 409 : 400, {
           error: typeof error?.message === 'string' && error.message.length <= 200
             ? error.message : 'Не удалось сохранить настройки Telegram.',
@@ -681,8 +846,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 502, { error: 'Telegram вернул некорректный профиль бота.' });
           return;
         }
+        await logActivity('telegram_bot_verify', 'success', 'Токен Telegram-бота успешно проверен.');
         send(response, 200, { ok: true, bot });
       } catch (error) {
+        await logActivity('telegram_bot_verify', 'error', 'Проверка токена Telegram-бота завершилась ошибкой.');
         send(response, 400, {
           error: typeof error?.message === 'string' && error.message.length <= 200
             ? error.message : 'Не удалось проверить токен Telegram.',

@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -102,22 +102,16 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal((await fetch(base + '/api/profile')).status, 401);
 });
 
-test('launches only explicitly allowlisted local helper actions', async t => {
+test('rejects legacy detached Telegram helpers; Telegram setup is available through in-app API routes', async t => {
   const launched = [];
   const { base, request } = await fixture(t, {
     launchLocalAction: async action => { launched.push(action); },
   });
-  const opened = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
-  assert.equal(opened.status, 202);
-  assert.deepEqual(await opened.json(), {
-    ok: true,
-    action: 'telegram-manage',
-    message: 'Локальный помощник открыт в отдельном окне.',
-  });
-  assert.deepEqual(launched, ['telegram-manage']);
+  const legacy = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
+  assert.equal(legacy.status, 404);
   const denied = await request(base + '/api/local-actions/run-arbitrary-command', { method: 'POST' });
   assert.equal(denied.status, 404);
-  assert.deepEqual(launched, ['telegram-manage']);
+  assert.deepEqual(launched, []);
 });
 
 test('rejects requests without a browser session', async (t) => {
@@ -132,6 +126,48 @@ test('bootstrap bearer cannot authorize profile or status requests after exchang
   assert.equal((await fetch(base + '/api/health', { headers })).status, 401);
   assert.equal((await fetch(base + '/api/profile', { headers })).status, 401);
   assert.equal((await fetch(base + '/api/telegram/status', { headers })).status, 401);
+});
+
+test('allows same-origin PWA bootstrap only when the local host serves the UI', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-pwa-bootstrap-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(join(dir, 'index.html'), '<!doctype html><title>Buildbook</title>');
+  const api = createLocalApiServer({
+    profileStore: createProfileStore(join(dir, 'profile.json')),
+    accessToken: 'test-local-api-token-0123456789abcdef',
+    staticRoot: dir,
+  });
+  const address = await api.listen();
+  t.after(() => api.close());
+  const base = 'http://127.0.0.1:' + address.port;
+
+  const paired = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: base, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(paired.status, 200);
+  assert.deepEqual(await paired.json(), { ok: true, expiresIn: 12 * 60 * 60 * 1000, method: 'same-origin' });
+  const cookie = paired.headers.get('set-cookie');
+  assert.match(cookie, /^buildbook_local_session=[A-Za-z0-9_-]{40,}; HttpOnly; SameSite=Strict; Path=\/api; Max-Age=43200$/);
+  assert.equal((await fetch(base + '/api/health', { headers: { cookie: cookie.split(';')[0] } })).status, 200);
+
+  const wrongOrigin = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: 'http://localhost:9999', 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(wrongOrigin.status, 403);
+});
+
+test('does not allow local PWA bootstrap when the API does not serve the UI', async t => {
+  const { base } = await fixture(t);
+  const response = await fetch(base + '/api/session/bootstrap-local', {
+    method: 'POST',
+    headers: { origin: base, 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 403);
 });
 
 test('exchanges the bootstrap bearer for an HttpOnly browser session', async (t) => {
@@ -854,4 +890,102 @@ test('allows exactly one winner in 20 concurrent empty-profile import races', as
       assert.deepEqual(final.profile.state.tx, [{ id: 'import-' + round, amount: round }]);
     });
   }
+});
+
+
+test('returns completed local helper output to the in-app client', async t => {
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async action => ({
+      ok: true,
+      completed: true,
+      message: 'Команда выполнена.',
+      output: 'Автозапуск Buildbook Local Host установлен.',
+    }),
+  });
+  const response = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    action: 'host-autostart-install',
+    message: 'Команда выполнена.',
+    output: 'Автозапуск Buildbook Local Host установлен.',
+  });
+});
+
+
+test('returns local helper failures to the in-app client', async t => {
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => {
+      const error = new Error('Task Scheduler rejected the registration request.');
+      error.stderr = 'Access is denied.';
+      throw error;
+    },
+  });
+  const response = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.code, 'LOCAL_ACTION_FAILED');
+  assert.match(body.error, /Access is denied/);
+});
+
+
+test('diagnostics report host resources and distinguish a configured stopped bot', async t => {
+  const { base, request } = await fixture(t, {
+    getTelegramStatus: () => ({
+      configured: true,
+      enabled: false,
+      running: false,
+      startedAt: '2026-11-26T08:00:00.000Z',
+      lastProcessed: 4,
+      queue: { total: 10, pending: 1, processing: 0, completed: 8, rejected: 1 },
+    }),
+  });
+  const response = await request(base + '/api/diagnostics');
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.telegram.configured, true);
+  assert.equal(body.telegram.running, false);
+  assert.equal(body.telegram.completed, 8);
+  assert.equal(body.telegram.total, 10);
+  assert.equal(body.telegram.lastProcessed, 4);
+  assert.ok(body.host.uptimeSeconds >= 0);
+  assert.ok(body.host.memoryRssBytes > 0);
+  assert.ok(body.host.heapUsedBytes > 0);
+});
+
+
+test('local helper actions are added to the authenticated activity journal', async t => {
+  const events = [];
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => ({ ok: true, completed: true, message: 'Автозапуск установлен.' }),
+    recordActivity: async event => { events.push({ ...event, id: 'event-1', at: '2026-11-26T10:00:00.000Z' }); },
+    getActivityLog: async () => events,
+  });
+  const action = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(action.status, 200);
+  const journal = await request(base + '/api/activity');
+  assert.equal(journal.status, 200);
+  const body = await journal.json();
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].action, 'local_helper_host_autostart_install');
+  assert.equal(body.events[0].status, 'success');
+  assert.equal(body.events[0].message, 'Установка автозапуска Windows выполнена.');
+});
+
+
+test('local helper activity journal never stores helper-provided output or secrets', async t => {
+  const events = [];
+  const secret = 'SHOULD_NOT_APPEAR_IN_ACTIVITY_LOG';
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => ({ ok: true, completed: true, message: secret, output: secret }),
+    recordActivity: async event => { events.push({ ...event, id: 'event-2', at: '2026-11-26T10:00:00.000Z' }); },
+    getActivityLog: async () => events,
+  });
+  const action = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(action.status, 200);
+  const journal = await request(base + '/api/activity');
+  const body = await journal.json();
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].message.includes(secret), false);
+  assert.equal(JSON.stringify(body.events).includes(secret), false);
 });

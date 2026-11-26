@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidateSet('enable','disable')][string]$Mode
 )
 $ErrorActionPreference = 'Stop'

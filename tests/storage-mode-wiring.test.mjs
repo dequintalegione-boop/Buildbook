@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+const localHostStartup = await readFile(new URL('../scripts/start-buildbook-local-host.ps1', import.meta.url), 'utf8');
+const telegramOverrides = await readFile(new URL('../client/telegram-overrides.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
   assert.match(html, /const STORAGE_MODE_KEY='buildbook\.storage-mode'/);
@@ -51,7 +53,7 @@ test('closing the session is blocked while canonical profile is active', () => {
 });
 
 test('service worker precaches the canonical runtime dependency chain and rotates its cache', () => {
-  assert.match(serviceWorker, /const C = 'buildbook-54'/);
+  assert.match(serviceWorker, /const C = 'buildbook-\d+'/);
   assert.match(serviceWorker, /\.\/client\/canonical-profile-runtime\.mjs/);
   assert.match(serviceWorker, /\.\/host\/profile-repository-adapter\.mjs/);
   assert.match(serviceWorker, /keys\.filter\(\(?\w+\)?\s*=>\s*\w+\s*!==\s*C\)/);
@@ -71,8 +73,8 @@ test('canonical revision conflicts lock the UI and preserve a backup path', () =
 
 
 test('expired canonical sessions can be reconnected without accepting stale in-memory state', () => {
-  assert.match(html, /function telegramConnectForm\(\)/);
-  assert.match(html, /base!==location\.origin/);
+  assert.match(html, /function telegramConnectForm/);
+  assert.match(html, /const base=location\.origin/);
   assert.match(html, /const latest=await runtime\.client\.readProfile\(\)/);
   assert.match(html, /canonicalReconnectReady=true/);
   assert.match(html, /data-a="tgconnect">Повторно подключить хост/);
@@ -103,4 +105,93 @@ test('canonical save recovery exposes 20 explicit safety contracts', async t => 
   await t.test("unknown result has its own user-facing copy", () => assert.match(html, /Результат сохранения неизвестен/));
   await t.test("storage switch remains explicit", () => assert.match(html, /data-a="storage-indexeddb"/));
   await t.test("canonical storage keeps host recovery guidance", () => assert.match(html, /проверьте локальный хост/));
+});
+
+
+test('Telegram UI overrides do not replace the single in-app local-host connection flow', () => {
+  assert.doesNotMatch(telegramOverrides, /function telegramConnectForm/);
+  assert.match(telegramOverrides, /async function telegramAllowlistEditor/);
+  assert.match(telegramOverrides, /data-a="tgallowlist"/);
+  assert.match(telegramOverrides, /id="tg-allowlist-panel"/);
+  assert.match(telegramOverrides, /insertAdjacentHTML\('beforeend'/);
+  assert.match(telegramOverrides, /method:'PUT'/);
+  assert.doesNotMatch(telegramOverrides, /modal\('Белый список'/);
+  assert.match(html, /function telegramConnectForm/);
+  assert.match(html, /bootstrap-local/);
+  assert.match(html, /Важное ограничение Windows/);
+  assert.equal(html.includes('github.com/dequintalegione-boop/Buildbook/blob/main/scripts'), false);
+});
+
+
+test('every static data-a action is wired to the dispatcher or the explicit allowlist handler', () => {
+  const start = html.indexOf('function act(a,id){const A={');
+  const end = html.indexOf('A[a]&&A[a]()', start);
+  assert.ok(start >= 0 && end > start);
+  const dispatcher = html.slice(start, end);
+  const keys = new Set([...dispatcher.matchAll(/(?:'([^'\n]{1,80})'|([A-Za-z_$][A-Za-z0-9_$-]*))\s*:/g)].map(match => match[1] || match[2]));
+  const actions = [...html.matchAll(/\bdata-a\s*=\s*["']([^"']+)["']/g)].map(match => match[1]).filter(action => !action.includes('${'));
+  const missing = [...new Set(actions)].filter(action => !keys.has(action) && action !== 'tgallowlist');
+  assert.deepEqual(missing, []);
+  assert.match(telegramOverrides, /data-a="tgallowlist"/);
+});
+
+test('local PWA pairing does not ask for a host key and explains the secret only for troubleshooting', () => {
+  const start = html.indexOf('function telegramConnectForm()');
+  const end = html.indexOf('async function closeTelegramSession()', start);
+  const connector = html.slice(start, end);
+  assert.match(connector, /const body=localOrigin/);
+  assert.doesNotMatch(connector, /fld\('token'/);
+  assert.match(connector, /BUILDBOOK_LOCAL_API_TOKEN/);
+  assert.match(connector, /bootstrap-local/);
+});
+
+test('first local-host launch replaces a copied public placeholder API secret', () => {
+  assert.match(localHostStartup, /REPLACE_/);
+  assert.match(localHostStartup, /randomBytes\(32\)/);
+  assert.match(localHostStartup, /Секрет локального API автоматически создан/);
+  assert.doesNotMatch(localHostStartup, /Read-Host/);
+});
+
+
+test('Telegram setup and command editor actions have concrete in-app implementations', () => {
+  assert.ok(html.includes('async function telegramCommandsEditor()'));
+  assert.ok(html.includes('function telegramSetupWizard()'));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/bot/verify'"));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/setup'"));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/commands'"));
+});
+
+
+test('Telegram dashboard loads the persistent action journal with status and safe event text', () => {
+  assert.ok(html.includes("localTelegramRequest('/api/activity')"));
+  assert.ok(html.includes('const actionEvents=Array.isArray(TELEGRAM_UI.activity)'));
+  assert.ok(html.includes('Журнал действий'));
+  assert.ok(html.includes('actionEvents.map'));
+});
+
+
+test('production Telegram UI does not display a developer revision marker', () => {
+  assert.equal(telegramOverrides.includes('UI-rev 54'), false);
+  assert.equal(telegramOverrides.includes('bb-ui-rev'), false);
+});
+
+
+test('Telegram setup wizard checks canonical profile before asking for the bot token', () => {
+  const start = html.indexOf('async function telegramSetupWizard()');
+  const end = html.indexOf('async function closeTelegramSession()', start);
+  const wizard = html.slice(start, end);
+  assert.match(wizard, /STORAGE_MODE!=='canonical'/);
+  assert.match(wizard, /localTelegramRequest\('\/api\/profile'\)/);
+  assert.match(wizard, /Локальный файловый профиль пока пуст/);
+  assert.ok(wizard.indexOf('/api/profile') < wizard.indexOf('const tokenBody='));
+});
+
+
+test('Windows local host startup restricts .env access to the current account', () => {
+  assert.match(localHostStartup, /whoami\.exe/);
+  assert.match(localHostStartup, /icacls\.exe/);
+  assert.match(localHostStartup, /\/reset/);
+  assert.match(localHostStartup, /\/inheritancelevel:r/);
+  assert.match(localHostStartup, /\/grant:r/);
+  assert.match(localHostStartup, /не будет запущен с небезопасными правами/);
 });

@@ -36,3 +36,31 @@ test('combined local host keeps Telegram disabled until the shared UI profile is
 test('combined local host rejects an ambiguous Telegram enable flag', () => {
   assert.throws(() => createBuildbookLocalHost({ env: { BUILDBOOK_PROFILE_PATH: '/tmp/buildbook-profile.json', BUILDBOOK_LOCAL_API_TOKEN: token, BUILDBOOK_TELEGRAM_ENABLED: 'sometimes' } }), /BUILDBOOK_TELEGRAM_ENABLED must be true or false/);
 });
+
+
+test('combined local host starts with example Telegram placeholders so setup can happen in the app', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-placeholder-telegram-'));
+  const host = createBuildbookLocalHost({ env: {
+    BUILDBOOK_PROFILE_PATH: join(dir, 'profile.json'),
+    BUILDBOOK_LOCAL_API_TOKEN: token,
+    BUILDBOOK_LOCAL_API_PORT: '0',
+    BUILDBOOK_TELEGRAM_ENABLED: 'false',
+    BUILDBOOK_TELEGRAM_BOT_TOKEN: 'REPLACE_WITH_BOTFATHER_TOKEN',
+    BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: 'REPLACE_WITH_NUMERIC_TELEGRAM_USER_ID',
+  } });
+  t.after(() => host.stop());
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  assert.deepEqual(host.telegramStatus, { enabled: false, running: false });
+  const address = await host.start();
+  assert.ok(address.port > 0);
+});
+
+test('combined local host refuses to start Telegram with example placeholder credentials', () => {
+  assert.throws(() => createBuildbookLocalHost({ env: {
+    BUILDBOOK_PROFILE_PATH: '/tmp/buildbook-placeholder-profile.json',
+    BUILDBOOK_LOCAL_API_TOKEN: token,
+    BUILDBOOK_TELEGRAM_ENABLED: 'true',
+    BUILDBOOK_TELEGRAM_BOT_TOKEN: 'REPLACE_WITH_BOTFATHER_TOKEN',
+    BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS: 'REPLACE_WITH_NUMERIC_TELEGRAM_USER_ID',
+  } }), /Telegram включён, но токен бота или белый список не настроены/);
+});

@@ -1,82 +1,93 @@
-/* Buildbook Telegram UI overrides rev 53 */
-function telegramConnectForm(){
- if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
- const remembered=(()=>{try{return localStorage.getItem('buildbook_local_api_token')||''}catch{return ''}})();
- const body=
-  '<p class="mu"><b>Что такое этот ключ?</b> Это не токен Telegram-бота. Это пароль локального host: <code>BUILDBOOK_LOCAL_API_TOKEN</code> из файла <code>.env</code> в папке Buildbook.</p>'+
-  '<pre style="white-space:pre-wrap;font-size:12px;background:var(--s2);padding:8px;border-radius:8px;border:1px solid var(--b)">BUILDBOOK_LOCAL_API_TOKEN=длинная_строка</pre>'+
-  '<p class="mu">Токен бота от BotFather в это поле <b>не</b> вводится — он задаётся кнопкой «Настроить бота».</p>'+
-  '<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ BUILDBOOK_LOCAL_API_TOKEN','password',remembered,'required autocomplete="off"')+'</div>'+
-  '<label class="mu" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" name="remember" value="1"'+(remembered?' checked':'')+'> Запомнить ключ на этом компьютере</label>';
- modal('Подключение локального хоста',body,form=>{
-  const base=normalizeLocalTelegramBase(form.elements.apiUrl.value);
-  if(!base)return showModalError(form,'Укажите HTTP-адрес localhost или 127.0.0.1.');
-  if(STORAGE_MODE==='canonical'&&base!==location.origin)return showModalError(form,'Для канонического профиля используйте: '+location.origin);
-  const token=String(form.elements.token.value||'').trim();
-  if(token.length<32)return showModalError(form,'Скопируйте BUILDBOOK_LOCAL_API_TOKEN из .env (не короче 32 символов).');
-  const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
-  TELEGRAM_UI.baseUrl=base;
-  if(STORAGE_MODE!=='canonical'){S.set.localApiUrl=base;save.skip=1;save()}
-  TELEGRAM_UI.busy=true;if(submit)submit.disabled=true;
-  form.elements.token.value='';
-  localTelegramRequest('/api/session/bootstrap',{baseUrl:base,method:'POST',token,body:'{}'})
-   .then(async()=>{
-    try{if(form.elements.remember&&form.elements.remember.checked)localStorage.setItem('buildbook_local_api_token',token);else localStorage.removeItem('buildbook_local_api_token')}catch{}
-    if(STORAGE_MODE==='canonical'){
-     const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
-     const runtime=runtimeModule.createCanonicalProfileRuntime({baseUrl:location.origin});
-     const latest=await runtime.client.readProfile();
-     if(!latest||!latest.profile||!latest.profile.state)throw new Error('Сессия восстановлена, но канонический профиль пуст.');
-     canonicalReconnectReady=true;TELEGRAM_UI.connected=true;TELEGRAM_UI.checked=true;TELEGRAM_UI.status=null;
-     TELEGRAM_UI.error='Сессия восстановлена.';
-    }else await refreshTelegramStatus(true);
-    overlay.remove();render();
-   })
-   .catch(error=>{canonicalReconnectReady=false;showModalError(form,error.status===401?'Ключ не принят. Проверьте BUILDBOOK_LOCAL_API_TOKEN в .env.':(error.message||'Не удалось подключить host.'));if(submit)submit.disabled=false})
-   .finally(()=>{TELEGRAM_UI.busy=false});
-  return false;
- },false,'Подключить');
-}
-
-function telegramAllowlistEditor(){
+/* Buildbook Telegram allowlist UI. Local-host connection is implemented once in index.html. */
+async function telegramAllowlistEditor(){
  if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост.');telegramConnectForm();return}
- const current=(TELEGRAM_UI.status&&TELEGRAM_UI.status.allowlistEntries)||(TELEGRAM_UI.status&&TELEGRAM_UI.status.allowedUserIds)||[];
- const entries=Array.isArray(current)?current.map(e=>typeof e==='object'&&e?{id:String(e.id||e.userId||''),comment:String(e.comment||'')}:{id:String(e),comment:''}):[];
- const rows=entries.map((e,idx)=>
-  '<tr data-idx="'+idx+'"><td><input name="id_'+idx+'" value="'+esc(e.id)+'" placeholder="123456789" style="width:100%"></td>'+
-  '<td><input name="comment_'+idx+'" value="'+esc(e.comment)+'" placeholder="Комментарий" style="width:100%"></td>'+
-  '<td><button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td></tr>'
+ const dashboard=document.querySelector('.tg-dashboard');
+ if(!dashboard)return;
+ const existing=document.getElementById('tg-allowlist-panel');
+ if(existing){existing.scrollIntoView({behavior:'smooth',block:'center'});return}
+ let current=[];
+ try{
+  const response=await localTelegramRequest('/api/telegram/allowlist',{method:'GET'});
+  current=Array.isArray(response?.users)?response.users:[];
+ }catch(error){toast(error.message||'Не удалось загрузить белый список.');return}
+ const entries=current.map(item=>({id:String(item?.id||item?.userId||''),comment:String(item?.comment||'')}));
+ const renderRows=users=>users.map((item,index)=>
+  '<tr data-idx="'+index+'"><td><input data-field="id" type="text" inputmode="numeric" maxlength="16" value="'+esc(item.id)+'" placeholder="123456789" aria-label="ID пользователя" style="width:100%" disabled></td>'+
+  '<td><input data-field="comment" type="text" maxlength="80" value="'+esc(item.comment)+'" placeholder="Комментарий" aria-label="Комментарий" style="width:100%" disabled></td>'+
+  '<td><div class="ac"><button type="button" class="btn" data-edit="'+index+'">Редактировать</button><button type="button" class="btn" data-rm="'+index+'">Удалить</button></div></td></tr>'
  ).join('');
- const body=
-  '<p class="mu">Список можно менять в любой момент, пока host запущен.</p>'+
-  '<div style="overflow:auto"><table id="tg-allow-table"><thead><tr><th>User ID</th><th>Комментарий</th><th></th></tr></thead><tbody>'+
-  (rows||'<tr><td colspan="3" class="mu">Список пуст</td></tr>')+'</tbody></table></div>'+
-  '<div class="ac" style="margin-top:8px"><button type="button" class="btn" id="tg-allow-add">+ Добавить</button></div>';
- const form=modal('Белый список',body,async form=>{
+ const panelHtml='<section id="tg-allowlist-panel"><div class="hd"><h2>Белый список пользователей</h2><div class="ac"><span class="mu" data-tg-allow-count>Пользователей: '+entries.length+'</span><button type="button" class="btn" data-tg-allow-close>Скрыть</button></div></div>'+
+  '<p class="mu">Разрешённые пользователи могут отправлять команды боту. Комментарий нужен только для удобства. Изменения применяются сразу, перезапуск Telegram не требуется.</p>'+
+  '<div style="overflow:auto"><table id="tg-allow-table"><thead><tr><th>ID пользователя</th><th>Комментарий</th><th>Действия</th></tr></thead><tbody>'+
+  (renderRows(entries)||'<tr data-empty="true"><td colspan="3" class="mu">Список пуст. Добавьте первого пользователя.</td></tr>')+
+  '</tbody></table></div><div class="ac" style="margin-top:10px"><button type="button" class="btn" data-tg-allow-add>+ Добавить пользователя</button><button type="button" class="btn p" data-tg-allow-save>Сохранить изменения</button></div></section>';
+ dashboard.insertAdjacentHTML('beforeend',panelHtml);
+ const panel=document.getElementById('tg-allowlist-panel');
+ if(!panel)return;
+ let rowSeq=entries.length;
+ panel.addEventListener('click',async event=>{
+  const close=event.target.closest('[data-tg-allow-close]');
+  if(close){panel.remove();return}
+  const add=event.target.closest('[data-tg-allow-add]');
+  if(add){
+   const body=panel.querySelector('#tg-allow-table tbody');
+   if(!body)return;
+   body.querySelector('[data-empty]')?.remove();
+   const index=rowSeq++;
+   const row=document.createElement('tr');
+   row.dataset.idx=String(index);
+   row.innerHTML='<td><input data-field="id" type="text" inputmode="numeric" maxlength="16" placeholder="123456789" aria-label="ID пользователя" style="width:100%"></td>'+
+    '<td><input data-field="comment" type="text" maxlength="80" placeholder="Комментарий" aria-label="Комментарий" style="width:100%"></td>'+
+    '<td><div class="ac"><button type="button" class="btn" data-edit="'+index+'" data-editing="true">Готово</button><button type="button" class="btn" data-rm="'+index+'">Удалить</button></div></td>';
+   body.appendChild(row);
+   row.querySelector('[data-field="id"]')?.focus();
+   return;
+  }
+  const edit=event.target.closest('[data-edit]');
+  if(edit){
+   const row=edit.closest('tr');
+   if(!row)return;
+   const editing=edit.dataset.editing==='true';
+   row.querySelectorAll('input').forEach(input=>{input.disabled=editing});
+   edit.dataset.editing=editing?'false':'true';
+   edit.textContent=editing?'Редактировать':'Готово';
+   return;
+  }
+  const remove=event.target.closest('[data-rm]');
+  if(remove){
+   remove.closest('tr')?.remove();
+   const body=panel.querySelector('#tg-allow-table tbody');
+   if(body&&!body.querySelector('tr[data-idx]'))body.innerHTML='<tr data-empty="true"><td colspan="3" class="mu">Список пуст. Добавьте пользователя.</td></tr>';
+   const count=panel.querySelector('[data-tg-allow-count]');
+   if(count)count.textContent='Пользователей: '+(body?.querySelectorAll('tr[data-idx]').length||0);
+   return;
+  }
+  const save=event.target.closest('[data-tg-allow-save]');
+  if(!save)return;
   const users=[];
-  form.querySelectorAll('#tg-allow-table tbody tr[data-idx]').forEach(tr=>{
-   const id=String(tr.querySelector('input[name^="id_"]')?.value||'').trim();
-   const comment=String(tr.querySelector('input[name^="comment_"]')?.value||'').trim();
+  panel.querySelectorAll('#tg-allow-table tbody tr[data-idx]').forEach(row=>{
+   const id=String(row.querySelector('[data-field="id"]')?.value||'').trim();
+   const comment=String(row.querySelector('[data-field="comment"]')?.value||'').trim();
    if(id)users.push({id,comment});
   });
-  if(!users.length)return showModalError(form,'Добавьте хотя бы один ID.');
+  if(!users.length){toast('Добавьте хотя бы один числовой Telegram user ID.');return}
+  save.disabled=true;save.textContent='Сохраняем…';
   try{
-   await localTelegramRequest('/api/telegram/allowlist',{method:'POST',body:JSON.stringify({users})});
-   TELEGRAM_UI.checked=false;await refreshTelegramStatus(true);
-   toast('Белый список обновлён');form.closest('.ov')?.remove();render();
-  }catch(error){return showModalError(form,error.message||'Ошибка сохранения')}
-  return false;
- },true,'Сохранить');
- let rowSeq=entries.length;
- form.querySelector('#tg-allow-add')?.addEventListener('click',()=>{
-  const tb=form.querySelector('#tg-allow-table tbody');
-  if(!tb)return;if(tb.querySelector('td[colspan]'))tb.innerHTML='';
-  const idx=rowSeq++;
-  const tr=document.createElement('tr');tr.dataset.idx=String(idx);
-  tr.innerHTML='<td><input name="id_'+idx+'" placeholder="123456789" style="width:100%"></td><td><input name="comment_'+idx+'" placeholder="Комментарий" style="width:100%"></td><td><button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td>';
-  tb.appendChild(tr);
+   const result=await localTelegramRequest('/api/telegram/allowlist',{method:'PUT',body:JSON.stringify({users})});
+   const savedUsers=Array.isArray(result?.users)?result.users:users;
+   const body=panel.querySelector('#tg-allow-table tbody');
+   if(body)body.innerHTML=renderRows(savedUsers)||'<tr data-empty="true"><td colspan="3" class="mu">Список пуст.</td></tr>';
+   const count=panel.querySelector('[data-tg-allow-count]');
+   if(count)count.textContent='Пользователей: '+savedUsers.length;
+   toast('Белый список обновлён. Изменения применены без перезапуска бота.');
+   await refreshTelegramStatus(true);
+  }catch(error){
+   toast(error.message||'Не удалось сохранить белый список.');
+  }finally{
+   if(save.isConnected){save.disabled=false;save.textContent='Сохранить изменения'}
+  }
  });
- form.addEventListener('click',e=>{const btn=e.target.closest('[data-rm]');if(!btn)return;e.preventDefault();btn.closest('tr')?.remove();});
+ panel.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 document.addEventListener('click',function(e){
@@ -86,12 +97,3 @@ document.addEventListener('click',function(e){
  if(typeof telegramAllowlistEditor==='function')telegramAllowlistEditor();
 },true);
 
-document.addEventListener('DOMContentLoaded',function(){
- try{
-  const mark=document.createElement('div');
-  mark.id='bb-ui-rev';
-  mark.style.cssText='position:fixed;right:8px;bottom:8px;z-index:9999;font:12px monospace;opacity:.55;pointer-events:none';
-  mark.textContent='UI-rev 53';
-  document.body.appendChild(mark);
- }catch{}
-});

@@ -10,6 +10,7 @@ import { updateTelegramEnvFile } from './telegram-env-store.mjs';
 import { configureTelegramHost } from './telegram-setup.mjs';
 import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 import { createTelegramAllowlistHandlers } from './telegram-allowlist-handlers.mjs';
+import { createActivityLog } from './activity-log.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -42,11 +43,19 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const normalizedProfilePaths = new Set([resolve(profilePath), profileLockPath].map(path => path.toLowerCase()));
   if (normalizedProfilePaths.size !== 2) throw new TypeError('The profile file and its lock path must be distinct.');
   const profileStore = createProfileStore(profilePath);
+  const activityLog = createActivityLog({ path: resolve(dirname(profilePath), 'host-activity.json') });
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   let telegramEnabled = telegramEnabledRaw === 'true';
-  const telegramConfigured = Boolean(String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim() && String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim());
+  const telegramBotToken = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim();
+  const telegramAllowedUserIds = String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim().split(/[\s,]+/).filter(Boolean);
+  const telegramConfigured = /^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(telegramBotToken)
+    && telegramAllowedUserIds.length >= 1 && telegramAllowedUserIds.length <= 100
+    && telegramAllowedUserIds.every(id => /^[1-9]\d{0,15}$/.test(id) && Number.isSafeInteger(Number(id)));
+  if (telegramEnabled && !telegramConfigured) {
+    throw new TypeError('Telegram включён, но токен бота или белый список не настроены. Завершите мастер настройки Telegram.');
+  }
   let telegram = null;
   let telegramBotProfile = null;
   let telegramBotProfileAt = 0;
@@ -85,19 +94,19 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
       telegramBotProfileAt = Date.now();
-      telegramEnabled = true;
-      telegramLoop = telegram.service.start();
-      telegramLoop.catch(error => { try { onError(error, { phase: 'telegram-loop' }); } catch {} });
+      telegramEnabled = false;
       return configured.bot;
     },
     getHostRecoveryStatus: async () => {
-      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 60_000) {
+      if (!recoveryStatusCache || Date.now() - recoveryStatusAt > 5_000) {
         recoveryStatusCache = await getWindowsRecoveryStatus();
         recoveryStatusAt = Date.now();
       }
       return recoveryStatusCache;
     },
-    getTelegramMessages: () => telegram ? telegram.inbox.recent(30) : [],
+    getTelegramMessages: () => telegram ? telegram.inbox.recent(50) : [],
+    getActivityLog: () => activityLog.recent(100),
+    recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
@@ -155,6 +164,19 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
           releaseProfileLock();
           releaseProfileLock = null;
         }
+        if (error?.code === 'EADDRINUSE') {
+          const conflict = new Error(`Порт локального хоста ${parsePort(env)} занят другим приложением. Закройте программу, использующую этот порт, или измените BUILDBOOK_LOCAL_API_PORT в .env. Buildbook не завершает сторонние процессы автоматически.`);
+          conflict.code = 'BUILDBOOK_PORT_IN_USE';
+          conflict.port = parsePort(env);
+          conflict.cause = error;
+          throw conflict;
+        }
+        if (error?.code === 'EACCES') {
+          const conflict = new Error('Windows или другая служба запретила открыть порт локального хоста. Выберите свободный порт выше 1024 в BUILDBOOK_LOCAL_API_PORT.');
+          conflict.code = 'BUILDBOOK_PORT_ACCESS_DENIED';
+          conflict.cause = error;
+          throw conflict;
+        }
         throw error;
       }
     })().finally(() => { startPromise = null; });
@@ -188,10 +210,22 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     return stopPromise;
   }
 
+  function releaseLocksOnExit() {
+    // Exit handlers are synchronous. Do not start new work here: the process
+    // is already terminating and only verified, process-owned locks are freed.
+    try { telegram?.service.releaseInstanceLockOnExit?.(); } catch {}
+    if (releaseProfileLock) {
+      const release = releaseProfileLock;
+      releaseProfileLock = null;
+      try { release(); } catch {}
+    }
+  }
+
   return Object.freeze({
     start,
     stop,
+    releaseLocksOnExit,
     get running() { return address !== null; },
-    get telegramStatus() { return telegram ? { ...telegram.getStatus(), enabled: true } : { enabled: false, running: false }; },
+    get telegramStatus() { return telegram ? { ...telegram.getStatus(), enabled: telegramEnabled } : { enabled: false, running: false }; },
   });
 }
