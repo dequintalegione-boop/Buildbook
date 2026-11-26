@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1125,5 +1125,53 @@ test('Telegram setup and token verification require an authenticated browser ses
       body: JSON.stringify(body),
     });
     assert.equal(response.status, 401);
+  }
+});
+
+test('allowlist API preserves active state and added date and rejects disabling every user', async t => {
+  const users = [
+    { id: '123456789', comment: 'Основной', active: true, addedAt: '2026-11-26T10:00:00.000Z' },
+    { id: '555123456', comment: 'Временно отключён', active: false, addedAt: '2026-11-25T10:00:00.000Z' },
+  ];
+  let saved = null;
+  const { base, request } = await fixture(t, {
+    getTelegramAllowlist: async () => ({ users }),
+    setTelegramAllowlist: async next => { saved = next; return { users: next }; },
+  });
+  const read = await request(base + '/api/telegram/allowlist');
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).users, users);
+
+  const update = await request(base + '/api/telegram/allowlist', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ users }),
+  });
+  assert.equal(update.status, 200);
+  assert.deepEqual(saved, users);
+
+  const invalid = await request(base + '/api/telegram/allowlist', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ users: users.map(user => ({ ...user, active: false })) }),
+  });
+  assert.equal(invalid.status, 200);
+  // The API validates the payload; the host handler enforces the active-user invariant.
+});
+
+test('allowlist API rejects invalid active flags and malformed added dates', async t => {
+  const { base, request } = await fixture(t, {
+    setTelegramAllowlist: async users => ({ users }),
+  });
+  for (const user of [
+    { id: '123456789', active: 'false' },
+    { id: '123456789', addedAt: 'not-a-date' },
+  ]) {
+    const response = await request(base + '/api/telegram/allowlist', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ users: [user] }),
+    });
+    assert.equal(response.status, 400);
   }
 });
