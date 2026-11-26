@@ -115,7 +115,7 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
       const search = String(filters.search || '').trim().toLocaleLowerCase();
       const status = filters.status || 'all';
       const action = filters.action || 'all';
-      if (search.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(search)
+      if (search.length > 200 || /[\u0000-\u001f\u007f]/.test(search)
         || !['all', 'success', 'error'].includes(status)
         || (action !== 'all' && !/^[a-z0-9._-]{1,64}$/i.test(action))) {
         throw new TypeError('Activity log filters are invalid.');
