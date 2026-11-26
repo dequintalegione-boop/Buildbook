@@ -17,34 +17,54 @@ const MAX_SESSIONS = 8;
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const execFileAsync = promisify(execFile);
 const LOCAL_ACTION_SCRIPTS = Object.freeze({
-  'telegram-setup': 'setup-buildbook-telegram.bat',
-  'telegram-manage': 'manage-buildbook-telegram.bat',
-  'telegram-state': 'set-buildbook-telegram-state.bat',
-  'host-autostart-install': 'install-buildbook-autostart.bat',
-  'host-autostart-uninstall': 'uninstall-buildbook-autostart.bat',
+  'telegram-setup': Object.freeze({ file: 'setup-buildbook-telegram.bat', mode: 'detached' }),
+  'telegram-manage': Object.freeze({ file: 'manage-buildbook-telegram.bat', mode: 'detached' }),
+  'telegram-state': Object.freeze({ file: 'set-buildbook-telegram-state.bat', mode: 'detached' }),
+  'host-autostart-install': Object.freeze({ file: 'install-buildbook-autostart.ps1', mode: 'run' }),
+  'host-autostart-uninstall': Object.freeze({ file: 'uninstall-buildbook-autostart.ps1', mode: 'run' }),
 });
 
 async function launchWindowsLocalAction(action) {
-  const script = LOCAL_ACTION_SCRIPTS[action];
-  if (!script) {
+  const definition = LOCAL_ACTION_SCRIPTS[action];
+  if (!definition) {
     const error = new Error('Неизвестное локальное действие.');
     error.code = 'LOCAL_ACTION_NOT_ALLOWED';
     throw error;
   }
   if (process.platform !== 'win32') {
-    const error = new Error('Запуск локальных BAT-файлов доступен только в Windows. Скачайте скрипт и запустите его вручную.');
+    const error = new Error('Локальные помощники Windows доступны только в Windows.');
     error.code = 'LOCAL_ACTION_UNSUPPORTED';
     throw error;
   }
-  // The command is assembled exclusively from a fixed allowlist. No request
-  // data is passed to cmd.exe, and the child opens in a separate console.
-  await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'start "" "scripts\\' + script + '"'], {
+
+  // Both the action and script path come from a fixed allowlist. No request
+  // data is ever passed to PowerShell or cmd.exe.
+  if (definition.mode === 'run') {
+    const scriptPath = resolve(APP_ROOT, 'scripts', definition.file);
+    const { stdout = '', stderr = '' } = await execFileAsync('powershell.exe', [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+    ], {
+      cwd: APP_ROOT,
+      windowsHide: true,
+      timeout: 30_000,
+      maxBuffer: 128 * 1024,
+    });
+    const output = [stdout, stderr].map(value => String(value || '').trim()).filter(Boolean).join('\\n').slice(0, 4000);
+    return {
+      ok: true,
+      completed: true,
+      message: 'Команда выполнена.',
+      output,
+    };
+  }
+
+  await execFileAsync('cmd.exe', ['/d', '/s', '/c', 'start "" "scripts\\' + definition.file + '"'], {
     cwd: APP_ROOT,
     windowsHide: true,
     timeout: 5000,
     windowsVerbatimArguments: false,
   });
-  return { ok: true };
+  return { ok: true, completed: false, message: 'Интерактивный помощник открыт в отдельном окне.' };
 }
 const STATIC_ASSETS = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -470,8 +490,14 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         return;
       }
       try {
-        await (launchLocalAction || launchWindowsLocalAction)(action);
-        send(response, 202, { ok: true, action, message: 'Локальный помощник открыт в отдельном окне.' });
+        const result = await (launchLocalAction || launchWindowsLocalAction)(action);
+        const completed = result?.completed === true;
+        send(response, completed ? 200 : 202, {
+          ok: true,
+          action,
+          message: typeof result?.message === 'string' ? result.message : 'Локальный помощник запущен.',
+          ...(typeof result?.output === 'string' && result.output ? { output: result.output.slice(0, 4000) } : {}),
+        });
       } catch (error) {
         const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
         send(response, unsupported ? 501 : 500, {
