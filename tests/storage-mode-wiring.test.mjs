@@ -168,3 +168,9 @@ test('Telegram dashboard loads the persistent action journal with status and saf
   assert.ok(html.includes('Журнал действий'));
   assert.ok(html.includes('actionEvents.map'));
 });
+
+
+test('production Telegram UI does not display a developer revision marker', () => {
+  assert.equal(telegramOverrides.includes('UI-rev 54'), false);
+  assert.equal(telegramOverrides.includes('bb-ui-rev'), false);
+});
