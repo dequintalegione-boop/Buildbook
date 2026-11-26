@@ -3895,7 +3895,8 @@ async function launchTelegramLocalAction(action){
  if(!allowed.includes(action))return;
  try{
   const result=await localTelegramRequest('/api/local-actions/'+action,{method:'POST'});
-  toast(result.message||'Локальный помощник открыт.');
+  const helperOutput=String(result.output||'').trim();
+  toast(helperOutput?helperOutput.slice(0,180):(result.message||'Локальный помощник выполнен.'));
   if(action==='host-autostart-install'||action==='host-autostart-uninstall'){
    for(let attempt=0;attempt<8;attempt++){
     await new Promise(resolve=>setTimeout(resolve,1000));
