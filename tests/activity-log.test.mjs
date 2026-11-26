@@ -128,5 +128,5 @@ test('activity journal filters across the complete history and searches safe ide
   assert.equal(rejected[0].action, 'telegram_message_rejected');
   const page = await log.recent(1, 0, { action: 'telegram_message_accepted' });
   assert.equal(page[0].updateId, 1);
-  await assert.rejects(log.recent(10, 0, { status: 'pending' }), /filters are invalid/i);
+  assert.throws(() => log.recent(10, 0, { status: 'pending' }), /filters are invalid/i);
 });
