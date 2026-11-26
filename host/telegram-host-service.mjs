@@ -20,6 +20,7 @@ export function createTelegramHostService({
   fetchImpl = globalThis.fetch,
   onCycle = () => {},
   onError = () => {},
+  getCommandSettings = undefined,
 } = {}) {
   if (!config || typeof config !== 'object') throw new TypeError('Validated Telegram host config is required.');
   const hasInjectedAdapter = typeof applyUpdate === 'function';
