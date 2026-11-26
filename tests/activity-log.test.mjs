@@ -20,6 +20,25 @@ test('activity log persists safe operational events and returns newest first', a
   assert.equal(JSON.parse(await readFile(path, 'utf8')).version, 1);
 });
 
+test('activity log keeps the complete history by default', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-unlimited-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, 'activity.json');
+  const log = createActivityLog({ path });
+  await Promise.all(Array.from({ length: 520 }, (_, index) => log.record({
+    action: 'telegram_event',
+    status: 'success',
+    message: 'Событие ' + index,
+  })));
+  const stored = JSON.parse(await readFile(path, 'utf8'));
+  assert.equal(stored.events.length, 520);
+  const reopened = createActivityLog({ path });
+  const latest = await reopened.recent(500);
+  assert.equal(latest.length, 500);
+  assert.equal(latest[0].message, 'Событие 519');
+  assert.equal(latest[499].message, 'Событие 20');
+});
+
 test('activity log serializes concurrent writes and applies bounded retention', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-limit-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -53,4 +72,42 @@ test('corrupt optional activity journal does not prevent new events from being r
   const log = createActivityLog({ path });
   await log.record({ action: 'telegram_start', status: 'success', message: 'Telegram запущен.' });
   assert.equal((await log.recent(10)).length, 1);
+});
+
+test('activity journal supports offset pagination without losing chronological ordering', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-pages-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = createActivityLog({ path: join(dir, 'activity.json') });
+  for (let index = 0; index < 7; index += 1) {
+    await log.record({ action: 'page_test', status: 'success', message: 'Event ' + index });
+  }
+  const first = await log.recent(3, 0);
+  const second = await log.recent(3, 3);
+  const third = await log.recent(3, 6);
+  assert.deepEqual(first.map(event => event.message), ['Event 6', 'Event 5', 'Event 4']);
+  assert.deepEqual(second.map(event => event.message), ['Event 3', 'Event 2', 'Event 1']);
+  assert.deepEqual(third.map(event => event.message), ['Event 0']);
+});
+
+test('activity journal stores safe Telegram identifiers without storing message text', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-telegram-meta-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = createActivityLog({ path: join(dir, 'activity.json') });
+  const event = await log.record({
+    action: 'telegram_operation_committed',
+    status: 'success',
+    message: 'Финансовая операция успешно сохранена в Buildbook.',
+    telegramUserId: '123456789',
+    updateId: 77,
+    operationId: 'transaction-77',
+  });
+  assert.equal(event.telegramUserId, '123456789');
+  assert.equal(event.updateId, 77);
+  assert.equal(event.operationId, 'transaction-77');
+  await assert.rejects(log.record({
+    action: 'telegram_message_accepted',
+    status: 'success',
+    message: 'Принято',
+    telegramUserId: 'not-an-id',
+  }), /invalid fields/i);
 });

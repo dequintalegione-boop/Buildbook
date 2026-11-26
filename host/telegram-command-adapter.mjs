@@ -1,3 +1,4 @@
+import { DEFAULT_TELEGRAM_COMMAND_SETTINGS } from './telegram-command-settings.mjs';
 import { createProfileFinanceAdapter } from './profile-finance-adapter.mjs';
 import {
   TELEGRAM_HELP_TEXT,
@@ -21,17 +22,20 @@ export function createTelegramCommandAdapter({
   profileStore,
   buildTransaction,
   now = () => new Date(),
+  getCommandSettings = async () => DEFAULT_TELEGRAM_COMMAND_SETTINGS,
 } = {}) {
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('A canonical profile store with read/write methods is required.');
   }
   if (typeof now !== 'function') throw new TypeError('A command clock function is required.');
+  if (typeof getCommandSettings !== 'function') throw new TypeError('getCommandSettings must be a function.');
   const applyFinance = createProfileFinanceAdapter({
     profileStore,
     buildTransaction: buildTransaction || buildTelegramFinanceTransactionFromUpdate,
   });
 
   return async function applyTelegramCommand({ update, idempotencyKey } = {}) {
+    const settings = await getCommandSettings();
     let command;
     try {
       command = classifyTelegramCommand(update?.message?.text);
@@ -50,9 +54,11 @@ export function createTelegramCommandAdapter({
       throw error;
     }
     if (command.type === 'help') {
+      if (settings?.help === false) return { operationId: 'disabled:help:' + idempotencyKey, reply: 'Команда помощи отключена в настройках Buildbook.' };
       return { operationId: 'help:' + idempotencyKey, reply: TELEGRAM_HELP_TEXT };
     }
     if (command.type === 'stats') {
+      if (settings?.stats !== true) return { operationId: 'disabled:stats:' + idempotencyKey, reply: 'Команда статистики отключена в настройках Buildbook.' };
       const current = await profileStore.read();
       if (!current || !isRecord(current.profile)) {
         const error = new Error('Canonical Buildbook profile is not initialized.');
@@ -78,6 +84,11 @@ export function createTelegramCommandAdapter({
       error.permanent = true;
       error.reply = TELEGRAM_HELP_TEXT;
       throw error;
+    }
+    const enabled = parsed.kind === 'i' ? settings?.income === true : settings?.expense === true;
+    if (!enabled) {
+      const label = parsed.kind === 'i' ? 'доходов' : 'расходов';
+      return { operationId: 'disabled:' + (parsed.kind === 'i' ? 'income:' : 'expense:') + idempotencyKey, reply: 'Добавление ' + label + ' отключено в настройках Buildbook.' };
     }
     const result = await applyFinance({ update, idempotencyKey });
     const label = parsed.kind === 'i' ? 'Доход' : 'Расход';

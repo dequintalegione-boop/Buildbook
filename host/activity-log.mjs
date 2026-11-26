@@ -2,7 +2,7 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const DEFAULT_LIMIT = 500;
+const DEFAULT_LIMIT = null; // No automatic retention: the plan requires preserving the full event history.
 
 function normalizeEvent(input, now) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -11,8 +11,14 @@ function normalizeEvent(input, now) {
   const action = String(input.action || '').trim();
   const status = input.status === 'error' ? 'error' : input.status === 'success' ? 'success' : '';
   const message = String(input.message || '').trim();
+  const telegramUserId = input.telegramUserId == null ? null : String(input.telegramUserId);
+  const updateId = input.updateId == null ? null : input.updateId;
+  const operationId = input.operationId == null ? null : String(input.operationId).trim();
   if (!/^[a-z0-9._-]{1,64}$/i.test(action) || !status || message.length > 200
-    || /[\u0000-\u001f\u007f]/.test(message)) {
+    || /[\u0000-\u001f\u007f]/.test(message)
+    || (telegramUserId !== null && (!/^[1-9]\d{0,15}$/.test(telegramUserId) || !Number.isSafeInteger(Number(telegramUserId))))
+    || (updateId !== null && (!Number.isSafeInteger(updateId) || updateId < 0))
+    || (operationId !== null && (!operationId || operationId.length > 256 || /[\u0000-\u001f\u007f]/.test(operationId)))) {
     throw new TypeError('Activity event contains invalid fields.');
   }
   const date = now();
@@ -25,6 +31,9 @@ function normalizeEvent(input, now) {
     action,
     status,
     message,
+    ...(telegramUserId !== null ? { telegramUserId } : {}),
+    ...(updateId !== null ? { updateId } : {}),
+    ...(operationId !== null ? { operationId } : {}),
   });
 }
 
@@ -35,7 +44,7 @@ function normalizeEvent(input, now) {
  */
 export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new Date() } = {}) {
   if (typeof path !== 'string' || !isAbsolute(path)) throw new TypeError('Activity log path must be absolute.');
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5000) throw new RangeError('Activity log limit must be between 1 and 5000.');
+  if (limit !== null && (!Number.isSafeInteger(limit) || limit < 1 || limit > 5000)) throw new RangeError('Activity log limit must be null (unlimited) or between 1 and 5000.');
   if (typeof now !== 'function') throw new TypeError('Activity clock must be a function.');
   const filePath = resolve(path);
   let events = [];
@@ -50,7 +59,8 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
         events = parsed.events.filter(event => event && typeof event.id === 'string'
           && typeof event.at === 'string' && typeof event.action === 'string'
           && (event.status === 'success' || event.status === 'error')
-          && typeof event.message === 'string').slice(-limit);
+          && typeof event.message === 'string');
+        if (limit !== null) events = events.slice(-limit);
       }
     } catch (error) {
       if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw new Error('Не удалось прочитать журнал действий локального хоста.');
@@ -88,18 +98,19 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
       return serialize(async () => {
         await load();
         const event = normalizeEvent(input, now);
-        events = [...events, event].slice(-limit);
+        events = [...events, event];
+        if (limit !== null) events = events.slice(-limit);
         await persist();
         return event;
       });
     },
-    recent(count = 100) {
-      if (!Number.isSafeInteger(count) || count < 1 || count > 500) {
+    recent(count = 100, offset = 0) {
+      if (!Number.isSafeInteger(count) || count < 1 || count > 500 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000) {
         throw new RangeError('Activity log read limit must be between 1 and 500.');
       }
       return serialize(async () => {
         await load();
-        return events.slice(-count).reverse().map(event => ({ ...event }));
+        return events.slice().reverse().slice(offset, offset + count).map(event => ({ ...event }));
       });
     },
   });

@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1126,4 +1126,136 @@ test('Telegram setup and token verification require an authenticated browser ses
     });
     assert.equal(response.status, 401);
   }
+});
+
+test('allowlist API preserves active state and added date and rejects disabling every user', async t => {
+  const users = [
+    { id: '123456789', comment: 'Основной', active: true, addedAt: '2026-11-26T10:00:00.000Z' },
+    { id: '555123456', comment: 'Временно отключён', active: false, addedAt: '2026-11-25T10:00:00.000Z' },
+  ];
+  let saved = null;
+  const { base, request } = await fixture(t, {
+    getTelegramAllowlist: async () => ({ users }),
+    setTelegramAllowlist: async next => { saved = next; return { users: next }; },
+  });
+  const read = await request(base + '/api/telegram/allowlist');
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).users, users);
+
+  const update = await request(base + '/api/telegram/allowlist', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ users }),
+  });
+  assert.equal(update.status, 200);
+  assert.deepEqual(saved, users);
+
+  const invalid = await request(base + '/api/telegram/allowlist', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ users: users.map(user => ({ ...user, active: false })) }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).error, /хотя бы одного активного пользователя/);
+});
+
+test('allowlist API rejects invalid active flags and malformed added dates', async t => {
+  const { base, request } = await fixture(t, {
+    setTelegramAllowlist: async users => ({ users }),
+  });
+  for (const user of [
+    { id: '123456789', active: 'false' },
+    { id: '123456789', addedAt: 'not-a-date' },
+  ]) {
+    const response = await request(base + '/api/telegram/allowlist', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ users: [user] }),
+    });
+    assert.equal(response.status, 400);
+  }
+});
+
+test('activity API paginates history and rejects unsupported query parameters', async t => {
+  const events = Array.from({ length: 5 }, (_, index) => ({
+    id: 'event-' + index,
+    at: '2026-11-26T10:00:0' + index + '.000Z',
+    action: 'telegram_event',
+    status: 'success',
+    message: 'Event ' + index,
+  }));
+  const { base, request } = await fixture(t, {
+    getActivityLog: async ({ limit = 100, offset = 0 } = {}) => events.slice().reverse().slice(offset, offset + limit),
+  });
+  const first = await request(base + '/api/activity?limit=2&offset=0');
+  assert.equal(first.status, 200);
+  const firstBody = await first.json();
+  assert.deepEqual(firstBody.events.map(event => event.message), ['Event 4', 'Event 3']);
+  assert.equal(firstBody.hasMore, true);
+  const second = await request(base + '/api/activity?limit=2&offset=2');
+  const secondBody = await second.json();
+  assert.deepEqual(secondBody.events.map(event => event.message), ['Event 2', 'Event 1']);
+  assert.equal(secondBody.hasMore, true);
+  const last = await request(base + '/api/activity?limit=2&offset=4');
+  const lastBody = await last.json();
+  assert.deepEqual(lastBody.events.map(event => event.message), ['Event 0']);
+  assert.equal(lastBody.hasMore, false);
+  assert.equal((await request(base + '/api/activity?limit=2&other=1')).status, 400);
+});
+
+test('Telegram latency API returns only a bounded timing sample and a checked timestamp', async t => {
+  const { base, request } = await fixture(t, {
+    getTelegramLatency: async () => ({ available: true, latencyMs: 42.6, checkedAt: '2026-11-26T17:00:00.000Z' }),
+  });
+  const response = await request(base + '/api/telegram/latency');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    available: true,
+    latencyMs: 43,
+    checkedAt: '2026-11-26T17:00:00.000Z',
+  });
+});
+
+test('Telegram latency API handles unconfigured and failed checks without exposing errors', async t => {
+  const unconfigured = await fixture(t, {
+    getTelegramLatency: async () => ({ available: false, latencyMs: null, checkedAt: null }),
+  });
+  const unavailable = await unconfigured.request(unconfigured.base + '/api/telegram/latency');
+  assert.equal(unavailable.status, 200);
+  assert.deepEqual(await unavailable.json(), { available: false, latencyMs: null, checkedAt: null });
+
+  const failed = await fixture(t, {
+    getTelegramLatency: async () => { throw new Error('secret token and internal URL'); },
+  });
+  const response = await failed.request(failed.base + '/api/telegram/latency');
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.available, false);
+  assert.equal(JSON.stringify(body).includes('secret token'), false);
+});
+
+test('command settings API reads and persists strict boolean execution switches', async t => {
+  let settings = { income: false, expense: true, stats: false, help: true };
+  const { base, request } = await fixture(t, {
+    getTelegramCommandSettings: async () => ({ ...settings }),
+    setTelegramCommandSettings: async next => { settings = { ...next }; return { ...settings }; },
+  });
+  const read = await request(base + '/api/telegram/command-settings');
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).commands, settings);
+
+  const update = await request(base + '/api/telegram/command-settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commands: { income: true, expense: false, stats: true, help: true } }),
+  });
+  assert.equal(update.status, 200);
+  assert.deepEqual((await update.json()).commands, { income: true, expense: false, stats: true, help: true });
+
+  const invalid = await request(base + '/api/telegram/command-settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commands: { income: 'yes', expense: false, stats: true, help: true } }),
+  });
+  assert.equal(invalid.status, 400);
 });

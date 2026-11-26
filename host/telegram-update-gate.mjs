@@ -55,14 +55,16 @@ function privateTextEnvelope(update, userId) {
  * @param {{ inbox: { enqueue: Function }, botId: string, allowlist: string[] }} options
  * @param {object} update Raw Telegram update received from getUpdates.
  */
-export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
+export function createTelegramUpdateGate({ inbox, botId, allowlist, onEvent = () => {} } = {}) {
   if (!inbox || typeof inbox.enqueue !== 'function') throw new TypeError('A durable inbox is required.');
+  if (typeof onEvent !== 'function') throw new TypeError('onEvent must be a function.');
   if (typeof botId !== 'string' || !/^\d{1,16}$/.test(botId)
     || !Number.isSafeInteger(Number(botId)) || Number(botId) <= 0) {
     throw new TypeError('A valid numeric Telegram bot identity is required.');
   }
   botId = String(Number(botId));
   let allowed = normalizeAllowlist(allowlist);
+  async function emit(event) { try { await onEvent(event); } catch {} }
 
   return Object.freeze({
     getAllowlist() {
@@ -75,11 +77,13 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
     async accept(update) {
       const userId = numericId(update?.message?.from?.id);
       if (!userId || !allowed.has(userId)) {
+        await emit({ action: 'telegram_message_rejected', status: 'error', message: 'Входящее сообщение отклонено: отправитель не в активном белом списке.', ...(userId ? { telegramUserId: userId } : {}), ...(Number.isSafeInteger(update?.update_id) && update.update_id >= 0 ? { updateId: update.update_id } : {}) });
         return { accepted: false, reason: 'not_allowed' };
       }
 
       const sanitizedUpdate = privateTextEnvelope(update, userId);
       if (!sanitizedUpdate) {
+        await emit({ action: 'telegram_message_ignored', status: 'error', message: 'Входящее сообщение отклонено: поддерживаются только личные текстовые сообщения.', telegramUserId: userId, ...(Number.isSafeInteger(update?.update_id) && update.update_id >= 0 ? { updateId: update.update_id } : {}) });
         return { accepted: false, reason: 'unsupported_update' };
       }
       if (!Number.isSafeInteger(update?.update_id) || update.update_id < 0
@@ -93,6 +97,7 @@ export function createTelegramUpdateGate({ inbox, botId, allowlist } = {}) {
         userId,
         update: sanitizedUpdate,
       });
+      await emit({ action: 'telegram_message_accepted', status: 'success', message: 'Личное сообщение доверенного пользователя принято в очередь обработки.', telegramUserId: userId, updateId: update.update_id });
       return { accepted: true, ...result };
     },
   });
