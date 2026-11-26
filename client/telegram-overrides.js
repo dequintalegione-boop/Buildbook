@@ -38,9 +38,13 @@ function telegramConnectForm(){
  },false,'Подключить');
 }
 
-function telegramAllowlistEditor(){
+async function telegramAllowlistEditor(){
  if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост.');telegramConnectForm();return}
- const current=(TELEGRAM_UI.status&&TELEGRAM_UI.status.allowlistEntries)||(TELEGRAM_UI.status&&TELEGRAM_UI.status.allowedUserIds)||[];
+ let current=[];
+ try{
+  const response=await localTelegramRequest('/api/telegram/allowlist',{method:'GET'});
+  current=Array.isArray(response?.users)?response.users:[];
+ }catch(error){toast(error.message||'Не удалось загрузить белый список.');return}
  const entries=Array.isArray(current)?current.map(e=>typeof e==='object'&&e?{id:String(e.id||e.userId||''),comment:String(e.comment||'')}:{id:String(e),comment:''}):[];
  const rows=entries.map((e,idx)=>
   '<tr data-idx="'+idx+'"><td><input name="id_'+idx+'" value="'+esc(e.id)+'" placeholder="123456789" style="width:100%"></td>'+
@@ -61,7 +65,7 @@ function telegramAllowlistEditor(){
   });
   if(!users.length)return showModalError(form,'Добавьте хотя бы один ID.');
   try{
-   await localTelegramRequest('/api/telegram/allowlist',{method:'POST',body:JSON.stringify({users})});
+   await localTelegramRequest('/api/telegram/allowlist',{method:'PUT',body:JSON.stringify({users})});
    TELEGRAM_UI.checked=false;await refreshTelegramStatus(true);
    toast('Белый список обновлён');form.closest('.ov')?.remove();render();
   }catch(error){return showModalError(form,error.message||'Ошибка сохранения')}
