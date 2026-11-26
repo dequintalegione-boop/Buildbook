@@ -4047,7 +4047,7 @@ async function telegramSetupWizard(){
   alert(error.message||'Не удалось проверить локальный файловый профиль. Обновите подключение и повторите попытку.');
   return;
  }
- const tokenBody='<p class="mu">Шаг 1 из 2 · Проверка бота</p><p>Создайте бота через <b>@BotFather</b> в Telegram и вставьте выданный токен. Токен отправляется только локальному хосту для проверки через Telegram Bot API.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"');
+ const tokenBody='<p class="mu">Шаг 1 из 2 · Проверка бота</p><p class="mu">Если локальный компонент ещё не установлен в постоянную папку, <a href="/scripts/install-buildbook.ps1" download>скачайте установщик Buildbook</a>, закройте текущий локальный хост, запустите установщик и затем снова откройте приложение.</p><p>Создайте бота через <b>@BotFather</b> в Telegram и вставьте выданный токен. Токен отправляется только локальному хосту для проверки через Telegram Bot API.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"');
  modal('Мастер подключения Telegram',tokenBody,form=>{
   const token=String(form.elements.botToken.value||'').trim();
   if(!/^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
