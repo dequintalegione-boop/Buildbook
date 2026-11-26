@@ -11,7 +11,7 @@ export function createTelegramAllowlistHandlers({ env, appRoot, getTelegram }) {
     getTelegramAllowlist: async () => {
       const telegram = getTelegram();
       const envIds = String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '')
-        .split(/[\\s,]+/).map(s => s.trim()).filter(Boolean);
+        .split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
       const liveIds = telegram && typeof telegram.getAllowlist === 'function'
         ? telegram.getAllowlist().map(String)
         : envIds;
