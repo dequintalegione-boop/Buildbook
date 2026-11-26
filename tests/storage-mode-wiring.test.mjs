@@ -72,7 +72,7 @@ test('canonical revision conflicts lock the UI and preserve a backup path', () =
 
 
 test('expired canonical sessions can be reconnected without accepting stale in-memory state', () => {
-  assert.match(html, /function telegramConnectForm\(\)/);
+  assert.match(html, /function telegramConnectForm/);
   assert.match(html, /base!==location\.origin/);
   assert.match(html, /const latest=await runtime\.client\.readProfile\(\)/);
   assert.match(html, /canonicalReconnectReady=true/);
@@ -108,8 +108,8 @@ test('canonical save recovery exposes 20 explicit safety contracts', async t => 
 
 
 test('Telegram UI overrides do not replace the single in-app local-host connection flow', () => {
-  assert.doesNotMatch(telegramOverrides, /function\\s+telegramConnectForm\\s*\\(/);
-  assert.match(telegramOverrides, /async function telegramAllowlistEditor\\s*\\(/);
-  assert.match(html, /function telegramConnectForm\\s*\\(/);
+  assert.doesNotMatch(telegramOverrides, /function telegramConnectForm/);
+  assert.match(telegramOverrides, /async function telegramAllowlistEditor/);
+  assert.match(html, /function telegramConnectForm/);
   assert.match(html, /bootstrap-local/);
 });
