@@ -4012,30 +4012,40 @@ async function telegramCommandsEditor(){
 }
 function telegramSetupWizard(){
  if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост Buildbook.');return}
- const body='<p class="mu">Настройка подключения. Токен и ваш числовой Telegram ID будут проверены и сохранены только локальным хостом.</p><div class="g2">'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"')+fld('userId','Ваш числовой Telegram user ID','text','','required inputmode="numeric" pattern="[0-9]{1,16}"')+'</div><p class="mu">Ваш user ID нужен, чтобы бот принимал личные сообщения только от вас. Username вместо числового ID не подходит.</p>';
- modal('Мастер подключения Telegram',body,form=>{
+ const tokenBody='<p class="mu">Шаг 1 из 2 · Проверка бота</p><p>Создайте бота через <b>@BotFather</b> в Telegram и вставьте выданный токен. Токен отправляется только локальному хосту для проверки через Telegram Bot API.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"');
+ modal('Мастер подключения Telegram',tokenBody,form=>{
   const token=String(form.elements.botToken.value||'').trim();
-  const userId=String(form.elements.userId.value||'').trim();
-  if(!/^[1-9]\d{0,15}$/.test(userId))return showModalError(form,'Введите положительный числовой Telegram user ID.');
-  if(!/^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
+  if(!/^[1-9]\\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
-  if(submit){submit.disabled=true;submit.textContent='Проверяем…'}
+  if(submit){submit.disabled=true;submit.textContent='Проверяем токен…'}
   form.elements.botToken.value='';
-  localTelegramRequest('/api/telegram/setup',{method:'POST',body:JSON.stringify({token,userId}),timeoutMs:30000})
-   .then(async result=>{
-    if(!result.bot||!result.bot.id)throw new Error('Локальный хост вернул неполный профиль бота.');
-    TELEGRAM_UI.botProfile=result.bot;
-    TELEGRAM_UI.checked=false;
-    await refreshTelegramStatus(true);
+  localTelegramRequest('/api/telegram/bot/verify',{method:'POST',body:JSON.stringify({token}),timeoutMs:30000})
+   .then(result=>{
+    if(!result.bot||!result.bot.id||!result.bot.firstName)throw new Error('Telegram вернул неполный профиль бота.');
     overlay.remove();
-    modal('Бот подключён','<p><b>'+esc(result.bot.firstName)+'</b>'+(result.bot.username?' · @'+esc(result.bot.username):'')+'</p><p class="mu">ID бота: '+esc(result.bot.id)+'</p><p class="ok">Токен проверен, настройки сохранены локально, Telegram-сервис запущен.</p><p class="mu">Секрет находится только в локальном .env. В интерфейсе он не отображается.</p>',()=>true,true,'Готово');
+    const bot=result.bot;
+    const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15} autocomplete="off"')+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
+    modal('Мастер подключения Telegram',userBody,userForm=>{
+     const userId=String(userForm.elements.userId.value||'').trim();
+     if(!/^[1-9]\\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
+     const secondOverlay=userForm.closest('.ov'),saveButton=userForm.querySelector('button[type="submit"]');
+     if(saveButton){saveButton.disabled=true;saveButton.textContent='Сохраняем настройки…'}
+     localTelegramRequest('/api/telegram/setup',{method:'POST',body:JSON.stringify({token,userId}),timeoutMs:30000})
+      .then(async saved=>{
+       if(!saved.bot||String(saved.bot.id)!==String(bot.id))throw new Error('Сохранённый профиль бота не совпал с проверенным. Проверьте настройки и повторите попытку.');
+       TELEGRAM_UI.botProfile=saved.bot;
+       TELEGRAM_UI.checked=false;
+       await refreshTelegramStatus(true);
+       secondOverlay.remove();
+       modal('Бот подключён','<p><b>'+esc(saved.bot.firstName)+'</b>'+(saved.bot.username?' · @'+esc(saved.bot.username):'')+'</p><p class="mu">ID бота: '+esc(saved.bot.id)+'</p><p class="ok">Токен проверен, пользователь добавлен в список доступа, настройки сохранены локально.</p><p class="mu">Токен хранится только в локальном .env и не отображается в интерфейсе. Polling включается отдельно после подготовки канонического профиля.</p>',()=>true,true,'Готово');
+      })
+      .catch(error=>{showModalError(userForm,error.message||'Не удалось сохранить настройки Telegram.');if(saveButton){saveButton.disabled=false;saveButton.textContent='Сохранить и подключить'}})
+     return false;
+    },false,'Сохранить и подключить');
    })
-   .catch(error=>{
-    showModalError(form,error.message||'Не удалось проверить токен Telegram.');
-    if(submit){submit.disabled=false;submit.textContent='Повторить подключение'}
-   });
+   .catch(error=>{showModalError(form,error.message||'Не удалось проверить токен Telegram.');if(submit){submit.disabled=false;submit.textContent='Проверить токен'}});
   return false;
- },false,'Подключить бота');
+ },false,'Проверить токен');
 }
 async function closeTelegramSession(){
  if(STORAGE_MODE==='canonical'){
