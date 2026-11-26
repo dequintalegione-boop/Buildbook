@@ -77,7 +77,7 @@ async function telegramAllowlistEditor(){
   if(!tb)return;if(tb.querySelector('td[colspan]'))tb.innerHTML='';
   const idx=rowSeq++;
   const tr=document.createElement('tr');tr.dataset.idx=String(idx);
-  tr.innerHTML='<td><input name="id_'+idx+'" placeholder="123456789" style="width:100%"></td><td><input name="comment_'+idx+'" placeholder="Комментарий" style="width:100%"></td><td><button type="button" class="btn" data-edit="'+idx+'">Готово</button> <button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td>';
+  tr.innerHTML='<td><input name="id_'+idx+'" placeholder="123456789" style="width:100%"></td><td><input name="comment_'+idx+'" placeholder="Комментарий" style="width:100%"></td><td><button type="button" class="btn" data-edit="'+idx+'" data-editing="true">Готово</button> <button type="button" class="btn" data-rm="'+idx+'">Удалить</button></td>';
   tb.appendChild(tr);
  });
  form.addEventListener('click',e=>{
