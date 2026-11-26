@@ -540,8 +540,13 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       try {
         const result = await getTelegramAllowlist();
         const users = Array.isArray(result?.users) ? result.users : [];
-        send(response, 200, { users: users.filter(user => user && /^[1-9]\d{0,15}$/.test(String(user.id)))
-          .map(user => ({ id: String(user.id), comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '' })) });
+        send(response, 200, { users: users.filter(user => user && /^[1-9]\\d{0,15}$/.test(String(user.id)))
+          .map(user => ({
+            id: String(user.id),
+            comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '',
+            active: user.active !== false,
+            addedAt: typeof user.addedAt === 'string' && Number.isFinite(Date.parse(user.addedAt)) ? new Date(user.addedAt).toISOString() : null,
+          })) });
       } catch {
         send(response, 500, { error: 'Не удалось загрузить список разрешённых Telegram-пользователей.' });
       }
@@ -568,9 +573,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const seen = new Set();
         for (const user of body.users) {
           if (!user || typeof user !== 'object' || Array.isArray(user)
-            || Object.keys(user).some(key => !['id', 'comment'].includes(key))
+            || Object.keys(user).some(key => !['id', 'comment', 'active'].includes(key))
             || typeof user.id !== 'string' || !/^[1-9]\d{0,15}$/.test(user.id)
-            || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))) {
+            || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))
+            || (user.active !== undefined && typeof user.active !== 'boolean')) {
             send(response, 400, { error: 'Проверьте numeric user ID и комментарии (до 80 символов).' });
             return;
           }
@@ -579,7 +585,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
             return;
           }
           seen.add(user.id);
-          users.push({ id: user.id, comment: user.comment || '' });
+          users.push({ id: user.id, comment: user.comment || '', active: user.active !== false });
         }
         const result = await setTelegramAllowlist(users);
         await logActivity('telegram_allowlist_update', 'success', 'Белый список пользователей обновлён.');
