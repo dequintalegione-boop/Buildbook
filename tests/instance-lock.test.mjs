@@ -9,13 +9,13 @@ test('instance lock rejects a second owner and can be reacquired after release',
   const root = mkdtempSync(join(tmpdir(), 'buildbook-lock-'));
   const path = join(root, 'service.lock');
   try {
-    const release = acquireInstanceLock(path, { pid: 1234, isProcessAlive: () => true });
+    const release = acquireInstanceLock(path);
     assert.throws(() => acquireInstanceLock(path, { pid: 5678, isProcessAlive: () => true }), error => {
       assert.equal(error.code, 'BUILDBOOK_INSTANCE_LOCKED');
       return true;
     });
     release();
-    const releaseAgain = acquireInstanceLock(path, { pid: 5678 });
+    const releaseAgain = acquireInstanceLock(path);
     releaseAgain();
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -31,7 +31,7 @@ test('does not release a lock whose ownership marker changed', () => {
   const root = mkdtempSync(join(tmpdir(), 'buildbook-lock-'));
   const path = join(root, 'service.lock');
   try {
-    const release = acquireInstanceLock(path, { pid: 1234 });
+    const release = acquireInstanceLock(path);
     const ownerPath = join(path, 'owner.json');
     const owner = JSON.parse(readFileSync(ownerPath, 'utf8'));
     const originalOwnerToken = owner.ownerToken;
