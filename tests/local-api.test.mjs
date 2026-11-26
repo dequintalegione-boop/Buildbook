@@ -1155,8 +1155,8 @@ test('allowlist API preserves active state and added date and rejects disabling 
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ users: users.map(user => ({ ...user, active: false })) }),
   });
-  assert.equal(invalid.status, 200);
-  // The API validates the payload; the host handler enforces the active-user invariant.
+  assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).error, /хотя бы одного активного пользователя/);
 });
 
 test('allowlist API rejects invalid active flags and malformed added dates', async t => {
