@@ -403,3 +403,22 @@ test('quarantines inbox records with non-canonical bot IDs instead of retrying t
   assert.equal(called, false);
   assert.equal(inbox.state.status, 'rejected');
 });
+
+test('logs a committed operation with safe Telegram and operation identifiers', async () => {
+  const inbox = makeInbox(sample);
+  const events = [];
+  const processor = createTelegramInboxProcessor({
+    inbox,
+    async applyUpdate() { return { operationId: 'operation-7' }; },
+    onEvent: event => events.push(event),
+  });
+  await processor.processOne();
+  assert.deepEqual(events, [{
+    action: 'telegram_operation_committed',
+    status: 'success',
+    message: 'Финансовая операция успешно сохранена в Buildbook.',
+    telegramUserId: '1001',
+    updateId: 44,
+    operationId: 'operation-7',
+  }]);
+});
