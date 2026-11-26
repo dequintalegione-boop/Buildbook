@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -988,4 +988,30 @@ test('local helper activity journal never stores helper-provided output or secre
   assert.equal(body.events.length, 1);
   assert.equal(body.events[0].message.includes(secret), false);
   assert.equal(JSON.stringify(body.events).includes(secret), false);
+});
+
+
+test('restarts Telegram through the authenticated local API and records the action', async t => {
+  const events = [];
+  let restartCalls = 0;
+  const { base, request } = await fixture(t, {
+    restartTelegram: async () => { restartCalls += 1; },
+    getTelegramStatus: () => ({ configured: true, enabled: true, running: true }),
+    recordActivity: async event => { events.push(event); },
+  });
+  const response = await request(base + '/api/telegram/restart', { method: 'POST' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, action: 'restart', running: true });
+  assert.equal(restartCalls, 1);
+  assert.deepEqual(events, [{
+    action: 'telegram_restart',
+    status: 'success',
+    message: 'Telegram перезапущен.',
+  }]);
+});
+
+test('rejects Telegram restart when the host has no restart handler', async t => {
+  const { base, request } = await fixture(t);
+  const response = await request(base + '/api/telegram/restart', { method: 'POST' });
+  assert.equal(response.status, 409);
 });
