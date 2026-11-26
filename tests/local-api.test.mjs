@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -932,4 +932,29 @@ test('returns local helper failures to the in-app client', async t => {
   const body = await response.json();
   assert.equal(body.code, 'LOCAL_ACTION_FAILED');
   assert.match(body.error, /Access is denied/);
+});
+
+
+test('diagnostics report host resources and distinguish a configured stopped bot', async t => {
+  const { base, request } = await fixture(t, {
+    getTelegramStatus: () => ({
+      configured: true,
+      enabled: false,
+      running: false,
+      startedAt: '2026-11-26T08:00:00.000Z',
+      lastProcessed: 4,
+      queue: { total: 10, pending: 1, processing: 0, completed: 8, rejected: 1 },
+    }),
+  });
+  const response = await request(base + '/api/diagnostics');
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.telegram.configured, true);
+  assert.equal(body.telegram.running, false);
+  assert.equal(body.telegram.completed, 8);
+  assert.equal(body.telegram.total, 10);
+  assert.equal(body.telegram.lastProcessed, 4);
+  assert.ok(body.host.uptimeSeconds >= 0);
+  assert.ok(body.host.memoryRssBytes > 0);
+  assert.ok(body.host.heapUsedBytes > 0);
 });
