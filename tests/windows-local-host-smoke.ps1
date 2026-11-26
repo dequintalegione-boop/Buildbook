@@ -1,13 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $startupScript = Join-Path $root 'scripts\start-buildbook-local-host.ps1'
+$installerScript = Join-Path $root 'scripts\install-buildbook.ps1'
 $installScript = Join-Path $root 'scripts\install-buildbook-autostart.ps1'
 $uninstallScript = Join-Path $root 'scripts\uninstall-buildbook-autostart.ps1'
 $taskName = 'Buildbook Local Host'
 $launcher = $null
 $nodeProcessId = $null
 
-foreach ($path in @($startupScript, $installScript, $uninstallScript)) {
+foreach ($path in @($startupScript, $installerScript, $installScript, $uninstallScript)) {
   $tokens = $null
   $parseErrors = $null
   [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
