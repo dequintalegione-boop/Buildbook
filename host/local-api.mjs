@@ -849,8 +849,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 502, { error: 'Telegram вернул некорректный профиль бота.' });
           return;
         }
+        await logActivity('telegram_bot_verify', 'success', 'Токен Telegram-бота успешно проверен.');
         send(response, 200, { ok: true, bot });
       } catch (error) {
+        await logActivity('telegram_bot_verify', 'error', 'Проверка токена Telegram-бота завершилась ошибкой.');
         send(response, 400, {
           error: typeof error?.message === 'string' && error.message.length <= 200
             ? error.message : 'Не удалось проверить токен Telegram.',
