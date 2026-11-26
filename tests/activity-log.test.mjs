@@ -20,6 +20,25 @@ test('activity log persists safe operational events and returns newest first', a
   assert.equal(JSON.parse(await readFile(path, 'utf8')).version, 1);
 });
 
+test('activity log keeps the complete history by default', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-unlimited-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, 'activity.json');
+  const log = createActivityLog({ path });
+  await Promise.all(Array.from({ length: 520 }, (_, index) => log.record({
+    action: 'telegram_event',
+    status: 'success',
+    message: 'Событие ' + index,
+  })));
+  const stored = JSON.parse(await readFile(path, 'utf8'));
+  assert.equal(stored.events.length, 520);
+  const reopened = createActivityLog({ path });
+  const latest = await reopened.recent(500);
+  assert.equal(latest.length, 500);
+  assert.equal(latest[0].message, 'Событие 519');
+  assert.equal(latest[499].message, 'Событие 20');
+});
+
 test('activity log serializes concurrent writes and applies bounded retention', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-limit-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
