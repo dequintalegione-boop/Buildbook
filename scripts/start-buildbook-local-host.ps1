@@ -55,7 +55,7 @@ $identity = (& whoami.exe).Trim()
 if (-not $identity -or $identity -match '[\r\n]') {
   throw 'Не удалось определить текущую учётную запись Windows для защиты файла .env.'
 }
-& icacls.exe $envFile '/inheritance:r' '/grant:r' ($identity + ':(F)') | Out-Null
+& icacls.exe $envFile '/reset' '/inheritance:r' '/grant:r' ($identity + ':(F)') | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw 'Не удалось ограничить доступ к .env. Локальный хост не будет запущен с небезопасными правами на секреты.'
 }
