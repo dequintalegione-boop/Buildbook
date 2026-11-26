@@ -48,17 +48,39 @@ export function createCanonicalProfileRuntime({
         reject(cause);
       }, requestTimeoutMs);
     });
+    const requestOptions = {
+      method,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: controller.signal,
+      credentials: 'include',
+      redirect: 'error',
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer',
+      headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    };
     const operation = (async () => {
-      const response = await fetchImpl(base + path, {
-        method,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: controller.signal,
-        credentials: 'include',
-        redirect: 'error',
-        cache: 'no-store',
-        referrerPolicy: 'no-referrer',
-        headers: body === undefined ? {} : { 'content-type': 'application/json' },
-      });
+      let response = await fetchImpl(base + path, requestOptions);
+      // A host restart clears its in-memory session registry while the browser
+      // may still hold the old HttpOnly cookie. Re-pair only through the
+      // same-origin endpoint, then retry the original request exactly once.
+      if (response.status === 401 && path !== '/api/session/bootstrap-local') {
+        try {
+          const bootstrap = await fetchImpl(base + '/api/session/bootstrap-local', {
+            method: 'POST',
+            body: '{}',
+            signal: controller.signal,
+            credentials: 'include',
+            redirect: 'error',
+            cache: 'no-store',
+            referrerPolicy: 'no-referrer',
+            headers: { 'content-type': 'application/json' },
+          });
+          if (bootstrap.ok) response = await fetchImpl(base + path, requestOptions);
+        } catch (cause) {
+          if (controller.signal.aborted) throw cause;
+          // Preserve the original 401 so callers can still offer manual pairing.
+        }
+      }
       let payload = null;
       try {
         payload = await response.json();
