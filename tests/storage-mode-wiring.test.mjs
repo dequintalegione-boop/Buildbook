@@ -145,4 +145,5 @@ test('first local-host launch replaces a copied public placeholder API secret', 
   assert.match(localHostStartup, /REPLACE_/);
   assert.match(localHostStartup, /randomBytes\(32\)/);
   assert.match(localHostStartup, /Секрет локального API автоматически создан/);
+  assert.doesNotMatch(localHostStartup, /Read-Host/);
 });
