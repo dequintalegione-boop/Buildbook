@@ -154,9 +154,9 @@ test('first local-host launch replaces a copied public placeholder API secret', 
 
 
 test('Telegram setup and command editor actions have concrete in-app implementations', () => {
-  assert.match(html, /async function telegramCommandsEditor\\(\\)/);
-  assert.match(html, /function telegramSetupWizard\\(\\)/);
-  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/bot\\/verify'/);
-  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/setup'/);
-  assert.match(html, /localTelegramRequest\\('\\/api\\/telegram\\/commands'/);
+  assert.ok(html.includes('async function telegramCommandsEditor()'));
+  assert.ok(html.includes('function telegramSetupWizard()'));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/bot/verify'"));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/setup'"));
+  assert.ok(html.includes("localTelegramRequest('/api/telegram/commands'"));
 });
