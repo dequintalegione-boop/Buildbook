@@ -5,6 +5,7 @@ $downloadRoot = Join-Path $env:TEMP ('Buildbook-package-' + [guid]::NewGuid().To
 $archivePath = Join-Path $downloadRoot 'buildbook.zip'
 New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
 $archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/refs/heads/main.zip'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try {
   Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
   Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadRoot -Force
