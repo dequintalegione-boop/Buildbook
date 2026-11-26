@@ -47,7 +47,7 @@ function validateInboxCommand(item) {
   };
 }
 
-export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply } = {}) {
+export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply, onEvent = () => {} } = {}) {
   if (!inbox || typeof inbox.nextPending !== 'function'
     || typeof inbox.markProcessing !== 'function'
     || typeof inbox.markPending !== 'function'
@@ -56,6 +56,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
     throw new TypeError('A compatible durable Telegram inbox is required.');
   }
   if (typeof applyUpdate !== 'function') throw new TypeError('A canonical domain update adapter is required.');
+  if (typeof onEvent !== 'function') throw new TypeError('onEvent must be a function.');
   if (deliverReply !== undefined && typeof deliverReply !== 'function') {
     throw new TypeError('deliverReply must be a function when supplied.');
   }
@@ -64,6 +65,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
   }
 
   let active = false;
+  async function emit(event) { try { await onEvent(event); } catch {} }
 
   function requireTransition(result, transition) {
     if (result === false) {
@@ -110,6 +112,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
           item.validatedUpdate = validateInboxCommand(item);
         } catch (error) {
           requireTransition(await inbox.markRejected(item.id, error?.message || 'Invalid inbox item'), 'rejected');
+          await emit({ action: 'telegram_inbox_rejected', status: 'error', message: 'Запись входящего сообщения отклонена: нарушена проверка целостности.', telegramUserId: item.userId, updateId: item.updateId });
           // The malformed record is now terminal and its payload has been
           // purged. Treat it as consumed work so one corrupt item cannot stall
           // the remaining durable queue or prevent the next poll cycle.
@@ -141,6 +144,16 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
         if (completed === false) {
           throw new Error('Telegram inbox item could not be marked completed; retry requires an idempotent domain adapter.');
         }
+        const disabled = normalizedOperationId.startsWith('disabled:');
+        const readOnly = normalizedOperationId.startsWith('stats:') || normalizedOperationId.startsWith('help:');
+        await emit({
+          action: disabled ? 'telegram_command_disabled' : readOnly ? 'telegram_command_processed' : 'telegram_operation_committed',
+          status: disabled ? 'error' : 'success',
+          message: disabled ? 'Команда отключена настройками; финансовые данные не изменены.' : readOnly ? 'Команда выполнена без изменения финансовых данных.' : 'Финансовая операция успешно сохранена в Buildbook.',
+          telegramUserId: item.userId,
+          updateId: item.updateId,
+          operationId: normalizedOperationId,
+        });
         return { processed: true, itemId: item.id, operationId: normalizedOperationId };
       } catch (error) {
         if (!permanentFailureHandled && error?.code !== 'INVALID_TELEGRAM_INBOX_ITEM') {
@@ -157,6 +170,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
             // Unsupported or malformed user commands are terminal; retrying them
             // forever would block every later item in the ordered inbox.
             requireTransition(await inbox.markRejected(item.id, 'Telegram command is unsupported or invalid.'), 'rejected');
+            await emit({ action: 'telegram_command_rejected', status: 'error', message: 'Команда отклонена: неизвестная команда или неверный формат.', telegramUserId: item.userId, updateId: item.updateId });
             permanentFailureHandled = true;
             // A user-level terminal rejection is not a service failure. Report
             // it as consumed work so the runtime can continue draining the inbox.
@@ -166,6 +180,7 @@ export function createTelegramInboxProcessor({ inbox, applyUpdate, deliverReply 
             // Do not persist arbitrary exception text: adapters may include user data,
             // request bodies, filesystem paths, or credentials in error messages.
             requireTransition(await inbox.markPending(item.id, safeMessage), 'pending');
+            await emit({ action: 'telegram_processing_error', status: 'error', message: 'Ошибка обработки сообщения; задача возвращена в очередь.', telegramUserId: item.userId, updateId: item.updateId });
           }
         }
         throw error;
