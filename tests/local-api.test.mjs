@@ -969,5 +969,23 @@ test('local helper actions are added to the authenticated activity journal', asy
   assert.equal(body.events.length, 1);
   assert.equal(body.events[0].action, 'local_helper_host_autostart_install');
   assert.equal(body.events[0].status, 'success');
-  assert.equal(body.events[0].message, 'Автозапуск установлен.');
+  assert.equal(body.events[0].message, 'Установка автозапуска Windows выполнена.');
+});
+
+
+test('local helper activity journal never stores helper-provided output or secrets', async t => {
+  const events = [];
+  const secret = 'SHOULD_NOT_APPEAR_IN_ACTIVITY_LOG';
+  const { base, request } = await fixture(t, {
+    launchLocalAction: async () => ({ ok: true, completed: true, message: secret, output: secret }),
+    recordActivity: async event => { events.push({ ...event, id: 'event-2', at: '2026-11-26T10:00:00.000Z' }); },
+    getActivityLog: async () => events,
+  });
+  const action = await request(base + '/api/local-actions/host-autostart-install', { method: 'POST' });
+  assert.equal(action.status, 200);
+  const journal = await request(base + '/api/activity');
+  const body = await journal.json();
+  assert.equal(body.events.length, 1);
+  assert.equal(body.events[0].message.includes(secret), false);
+  assert.equal(JSON.stringify(body.events).includes(secret), false);
 });
