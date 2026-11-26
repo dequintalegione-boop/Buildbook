@@ -1,43 +1,4 @@
-/* Buildbook Telegram UI overrides rev 53 */
-function telegramConnectForm(){
- if(STORAGE_MODE==='canonical')TELEGRAM_UI.baseUrl=location.origin;
- const remembered=(()=>{try{return localStorage.getItem('buildbook_local_api_token')||''}catch{return ''}})();
- const body=
-  '<p class="mu"><b>Что такое этот ключ?</b> Это не токен Telegram-бота. Это пароль локального host: <code>BUILDBOOK_LOCAL_API_TOKEN</code> из файла <code>.env</code> в папке Buildbook.</p>'+
-  '<pre style="white-space:pre-wrap;font-size:12px;background:var(--s2);padding:8px;border-radius:8px;border:1px solid var(--b)">BUILDBOOK_LOCAL_API_TOKEN=длинная_строка</pre>'+
-  '<p class="mu">Токен бота от BotFather в это поле <b>не</b> вводится — он задаётся кнопкой «Настроить бота».</p>'+
-  '<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ BUILDBOOK_LOCAL_API_TOKEN','password',remembered,'required autocomplete="off"')+'</div>'+
-  '<label class="mu" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" name="remember" value="1"'+(remembered?' checked':'')+'> Запомнить ключ на этом компьютере</label>';
- modal('Подключение локального хоста',body,form=>{
-  const base=normalizeLocalTelegramBase(form.elements.apiUrl.value);
-  if(!base)return showModalError(form,'Укажите HTTP-адрес localhost или 127.0.0.1.');
-  if(STORAGE_MODE==='canonical'&&base!==location.origin)return showModalError(form,'Для канонического профиля используйте: '+location.origin);
-  const token=String(form.elements.token.value||'').trim();
-  if(token.length<32)return showModalError(form,'Скопируйте BUILDBOOK_LOCAL_API_TOKEN из .env (не короче 32 символов).');
-  const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
-  TELEGRAM_UI.baseUrl=base;
-  if(STORAGE_MODE!=='canonical'){S.set.localApiUrl=base;save.skip=1;save()}
-  TELEGRAM_UI.busy=true;if(submit)submit.disabled=true;
-  form.elements.token.value='';
-  localTelegramRequest('/api/session/bootstrap',{baseUrl:base,method:'POST',token,body:'{}'})
-   .then(async()=>{
-    try{if(form.elements.remember&&form.elements.remember.checked)localStorage.setItem('buildbook_local_api_token',token);else localStorage.removeItem('buildbook_local_api_token')}catch{}
-    if(STORAGE_MODE==='canonical'){
-     const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
-     const runtime=runtimeModule.createCanonicalProfileRuntime({baseUrl:location.origin});
-     const latest=await runtime.client.readProfile();
-     if(!latest||!latest.profile||!latest.profile.state)throw new Error('Сессия восстановлена, но канонический профиль пуст.');
-     canonicalReconnectReady=true;TELEGRAM_UI.connected=true;TELEGRAM_UI.checked=true;TELEGRAM_UI.status=null;
-     TELEGRAM_UI.error='Сессия восстановлена.';
-    }else await refreshTelegramStatus(true);
-    overlay.remove();render();
-   })
-   .catch(error=>{canonicalReconnectReady=false;showModalError(form,error.status===401?'Ключ не принят. Проверьте BUILDBOOK_LOCAL_API_TOKEN в .env.':(error.message||'Не удалось подключить host.'));if(submit)submit.disabled=false})
-   .finally(()=>{TELEGRAM_UI.busy=false});
-  return false;
- },false,'Подключить');
-}
-
+/* Buildbook Telegram allowlist UI. Local-host connection is implemented once in index.html. */
 async function telegramAllowlistEditor(){
  if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост.');telegramConnectForm();return}
  let current=[];
