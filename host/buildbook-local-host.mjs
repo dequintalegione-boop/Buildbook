@@ -186,9 +186,21 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     return stopPromise;
   }
 
+  function releaseLocksOnExit() {
+    // Exit handlers are synchronous. Do not start new work here: the process
+    // is already terminating and only verified, process-owned locks are freed.
+    try { telegram?.service.releaseInstanceLockOnExit?.(); } catch {}
+    if (releaseProfileLock) {
+      const release = releaseProfileLock;
+      releaseProfileLock = null;
+      try { release(); } catch {}
+    }
+  }
+
   return Object.freeze({
     start,
     stop,
+    releaseLocksOnExit,
     get running() { return address !== null; },
     get telegramStatus() { return telegram ? { ...telegram.getStatus(), enabled: telegramEnabled } : { enabled: false, running: false }; },
   });
