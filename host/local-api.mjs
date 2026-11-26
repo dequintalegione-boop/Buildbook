@@ -580,6 +580,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const stored = await profileStore.read();
         const rawTelegram = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
         const queue = rawTelegram?.queue && typeof rawTelegram.queue === 'object' ? rawTelegram.queue : null;
+        const memory = process.memoryUsage();
+        const hostUptimeSeconds = Math.max(0, Math.floor(process.uptime()));
         const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
         const timestamp = value => typeof value === 'string' && value.length <= 40 ? value : null;
         const lastCycleAt = timestamp(rawTelegram?.lastCycleAt);
@@ -587,19 +589,30 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           ? Math.max(0, Date.now() - Date.parse(lastCycleAt)) : null;
         send(response, 200, {
           ok: true,
-          host: { status: 'online', nodeMajor: Number(process.versions.node.split('.')[0]) || null },
+          host: {
+            status: 'online',
+            nodeMajor: Number(process.versions.node.split('.')[0]) || null,
+            uptimeSeconds: hostUptimeSeconds,
+            memoryRssBytes: count(memory.rss),
+            heapUsedBytes: count(memory.heapUsed),
+            heapTotalBytes: count(memory.heapTotal),
+          },
           profile: {
             status: stored?.profile && typeof stored.profile === 'object' ? 'ready' : 'empty',
             revision: Number.isSafeInteger(stored?.revision) && stored.revision >= 0 ? stored.revision : null,
           },
           telegram: {
-            configured: rawTelegram?.enabled === true,
+            configured: rawTelegram?.configured === true,
             running: rawTelegram?.running === true,
             lastCycleAt,
             lastCycleAgeMs,
+            startedAt: timestamp(rawTelegram?.startedAt),
             consecutiveFailures: count(rawTelegram?.consecutiveFailures),
+            lastProcessed: count(rawTelegram?.lastProcessed),
+            total: count(queue?.total),
             pending: count(queue?.pending),
             processing: count(queue?.processing),
+            completed: count(queue?.completed),
             rejected: count(queue?.rejected),
             lastError: rawTelegram?.lastError ? {
               code: 'TELEGRAM_SERVICE_ERROR',
