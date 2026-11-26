@@ -114,5 +114,5 @@ test('Telegram UI overrides do not replace the single in-app local-host connecti
   assert.match(html, /function telegramConnectForm/);
   assert.match(html, /bootstrap-local/);
   assert.match(html, /Важное ограничение Windows/);
-  assert.doesNotMatch(html, /github\\.com\\/dequintalegione-boop\\/Buildbook\\/blob\\/main\\/scripts/);
+  assert.equal(html.includes('github.com/dequintalegione-boop/Buildbook/blob/main/scripts'), false);
 });
