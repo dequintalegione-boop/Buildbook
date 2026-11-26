@@ -97,12 +97,3 @@ document.addEventListener('click',function(e){
  if(typeof telegramAllowlistEditor==='function')telegramAllowlistEditor();
 },true);
 
-document.addEventListener('DOMContentLoaded',function(){
- try{
-  const mark=document.createElement('div');
-  mark.id='bb-ui-rev';
-  mark.style.cssText='position:fixed;right:8px;bottom:8px;z-index:9999;font:12px monospace;opacity:.55;pointer-events:none';
-  mark.textContent='UI-rev 54';
-  document.body.appendChild(mark);
- }catch{}
-});
