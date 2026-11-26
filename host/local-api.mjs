@@ -502,6 +502,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
         const details = [error?.stderr, error?.stdout, error?.message]
           .map(value => String(value || '').replaceAll('\r', ' ').replaceAll('\n', ' ').replaceAll('\t', ' ').trim())
+          .filter(Boolean).join(' | ').slice(0, 800);
         send(response, unsupported ? 501 : 500, {
           error: unsupported
             ? 'Локальный помощник доступен только в Windows.'
