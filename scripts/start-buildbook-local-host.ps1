@@ -42,6 +42,80 @@ if (-not (Test-Path $envFile)) {
   Write-Host ''
 }
 
+
+# A copied .env.example contains a public placeholder. Never use it as the
+# local API secret: generate a fresh random key even when .env already exists.
+$existingEnv = Get-Content -LiteralPath $envFile -Raw
+$tokenMatch = [regex]::Match($existingEnv, '(?m)^BUILDBOOK_LOCAL_API_TOKEN=(.*)
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if (-not $existingTask -and [Environment]::UserInteractive) {
+  Write-Host ''
+  $answer = Read-Host 'Установить автоматический запуск хоста при входе в Windows и восстановление после сбоя? (Д/н)'
+  if ($answer -match '^(д|да|y|yes)$') {
+    try {
+      & (Join-Path $PSScriptRoot 'install-buildbook-autostart.ps1') -NoStart
+    } catch {
+      Write-Warning ('Не удалось установить автозапуск: ' + $_.Exception.Message)
+      Write-Warning 'Хост всё равно будет запущен. Автозапуск можно включить позже во вкладке Telegram.'
+    }
+  }
+}
+
+$logDir = Join-Path $root 'data'
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$logFile = Join-Path $logDir 'local-host.log'
+if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 5MB) {
+  $previousLog = "$logFile.1"
+  if (Test-Path $previousLog) { Remove-Item $previousLog -Force }
+  Move-Item $logFile $previousLog -Force
+}
+
+& node --env-file="$envFile" .\host\run-buildbook-local-host.mjs 2>&1 | Tee-Object -FilePath $logFile -Append
+$exitCode = $LASTEXITCODE
+exit $exitCode
+)
+$existingToken = if ($tokenMatch.Success) { $tokenMatch.Groups[1].Value.Trim() } else { '' }
+if ($existingToken -match '^REPLACE_' -or $existingToken.Length -lt 32 -or $existingToken.Length -gt 4096) {
+  $generatedToken = & $nodeCommand.Source -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+  if (-not $generatedToken -or $generatedToken.Length -lt 32) {
+    throw 'Не удалось автоматически создать секрет локального API.'
+  }
+  if ($tokenMatch.Success) {
+    $existingEnv = [regex]::Replace($existingEnv, '(?m)^BUILDBOOK_LOCAL_API_TOKEN=.*
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if (-not $existingTask -and [Environment]::UserInteractive) {
+  Write-Host ''
+  $answer = Read-Host 'Установить автоматический запуск хоста при входе в Windows и восстановление после сбоя? (Д/н)'
+  if ($answer -match '^(д|да|y|yes)$') {
+    try {
+      & (Join-Path $PSScriptRoot 'install-buildbook-autostart.ps1') -NoStart
+    } catch {
+      Write-Warning ('Не удалось установить автозапуск: ' + $_.Exception.Message)
+      Write-Warning 'Хост всё равно будет запущен. Автозапуск можно включить позже во вкладке Telegram.'
+    }
+  }
+}
+
+$logDir = Join-Path $root 'data'
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$logFile = Join-Path $logDir 'local-host.log'
+if ((Test-Path $logFile) -and (Get-Item $logFile).Length -gt 5MB) {
+  $previousLog = "$logFile.1"
+  if (Test-Path $previousLog) { Remove-Item $previousLog -Force }
+  Move-Item $logFile $previousLog -Force
+}
+
+& node --env-file="$envFile" .\host\run-buildbook-local-host.mjs 2>&1 | Tee-Object -FilePath $logFile -Append
+$exitCode = $LASTEXITCODE
+exit $exitCode
+, "BUILDBOOK_LOCAL_API_TOKEN=$generatedToken")
+  } else {
+    $existingEnv = $existingEnv.TrimEnd() + [Environment]::NewLine + "BUILDBOOK_LOCAL_API_TOKEN=$generatedToken" + [Environment]::NewLine
+  }
+  Set-Content -LiteralPath $envFile -Value $existingEnv -Encoding utf8 -NoNewline
+  Write-Host 'Секрет локального API автоматически создан. Копировать его в приложение не нужно.'
+}
+
 $taskName = 'Buildbook Local Host'
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if (-not $existingTask -and [Environment]::UserInteractive) {
