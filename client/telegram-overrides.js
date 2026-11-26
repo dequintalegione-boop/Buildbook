@@ -150,10 +150,12 @@ function filterTelegramActivity(){
  if(!list)return;
  const query=String(document.querySelector('[data-tg-activity-search]')?.value||'').trim().toLowerCase();
  const status=String(document.querySelector('[data-tg-activity-status]')?.value||'all');
+ const type=String(document.querySelector('[data-tg-activity-type]')?.value||'all');
  list.querySelectorAll('[data-activity-status]').forEach(row=>{
   const matchesStatus=status==='all'||row.dataset.activityStatus===status;
   const matchesQuery=!query||String(row.dataset.activityText||'').toLowerCase().includes(query);
-  row.hidden=!(matchesStatus&&matchesQuery);
+  const matchesType=type==='all'||row.dataset.activityAction===type;
+  row.hidden=!(matchesStatus&&matchesQuery&&matchesType);
  });
 }
 
@@ -167,5 +169,5 @@ document.addEventListener('input',function(event){
  if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-search]'))filterTelegramActivity();
 },true);
 document.addEventListener('change',function(event){
- if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status]'))filterTelegramActivity();
+ if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status],[data-tg-activity-type]'))filterTelegramActivity();
 },true);
