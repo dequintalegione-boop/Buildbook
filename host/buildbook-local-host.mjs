@@ -153,6 +153,19 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
           releaseProfileLock();
           releaseProfileLock = null;
         }
+        if (error?.code === 'EADDRINUSE') {
+          const conflict = new Error(`Порт локального хоста ${parsePort(env)} занят другим приложением. Закройте программу, использующую этот порт, или измените BUILDBOOK_LOCAL_API_PORT в .env. Buildbook не завершает сторонние процессы автоматически.`);
+          conflict.code = 'BUILDBOOK_PORT_IN_USE';
+          conflict.port = parsePort(env);
+          conflict.cause = error;
+          throw conflict;
+        }
+        if (error?.code === 'EACCES') {
+          const conflict = new Error('Windows или другая служба запретила открыть порт локального хоста. Выберите свободный порт выше 1024 в BUILDBOOK_LOCAL_API_PORT.');
+          conflict.code = 'BUILDBOOK_PORT_ACCESS_DENIED';
+          conflict.cause = error;
+          throw conflict;
+        }
         throw error;
       }
     })().finally(() => { startPromise = null; });
