@@ -3965,20 +3965,17 @@ async function autoConnectLocalHost(){
 function telegramConnectForm(){
  const localOrigin=isLocalHostOrigin();
  if(STORAGE_MODE==='canonical'||localOrigin)TELEGRAM_UI.baseUrl=location.origin;
- const body='<div class="g2">'+fld('apiUrl','Адрес локального API','url',TELEGRAM_UI.baseUrl,'required')+fld('token','Ключ (не нужен при запуске через PWA)','password','','autocomplete="off"')+'</div><p class="mu">Если Buildbook открыт с локального хоста, подключение выполнится автоматически — ключ из .env вводить не потребуется. При подключении к отдельному хосту можно использовать ключ первоначального подключения. Токен Telegram-бота сюда вводить не нужно.</p>';
+ const body=localOrigin
+  ? '<p class="ok">Buildbook открыт через локальный хост. Нажмите «Подключить» — защищённая браузерная сессия создастся автоматически. Ключ хоста вводить не нужно.</p>'
+  : '<p class="mu"><b>Почему подключение недоступно с этой страницы?</b> Из соображений безопасности локальный сервер принимает запросы только от страницы, которую он сам раздаёт. Откройте локальную версию Buildbook по адресу <code>http://127.0.0.1:43127</code>.</p><p class="mu"><b>Что такое BUILDBOOK_LOCAL_API_TOKEN?</b> Это внутренний секрет локального хоста, который генерируется при первом запуске и хранится в файле <code>.env</code>. Это <b>не</b> токен Telegram от BotFather. При штатном запуске PWA этот ключ автоматически обменивается на защищённую сессию и вручную не вводится.</p>';
  modal('Подключение локального хоста',body,form=>{
-  const base=normalizeLocalTelegramBase(form.elements.apiUrl.value);
-  if(!base)return showModalError(form,'Укажите HTTP-адрес localhost, 127.0.0.1 или ::1.');
-  if(STORAGE_MODE==='canonical'&&base!==location.origin)return showModalError(form,'Для канонического профиля используйте текущий адрес Buildbook: '+location.origin);
-  const token=String(form.elements.token.value||'').trim();
-  if(token&&token.length<32)return showModalError(form,'Ключ локального API должен содержать не менее 32 символов.');
-  if(!token&&base!==location.origin)return showModalError(form,'Автоподключение доступно только к текущему локальному хосту. Для другого адреса укажите ключ подключения.');
+  if(!localOrigin)return showModalError(form,'Сначала откройте Buildbook через локальный хост Windows: http://127.0.0.1:43127.');
+  const base=location.origin;
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
   TELEGRAM_UI.baseUrl=base;
   if(STORAGE_MODE!=='canonical'){S.set.localApiUrl=base;save.skip=1;save()}
   TELEGRAM_UI.busy=true;if(submit)submit.disabled=true;
-  form.elements.token.value='';
-  localTelegramRequest(token?'/api/session/bootstrap':'/api/session/bootstrap-local',{baseUrl:base,method:'POST',token:token||undefined,body:'{}'})
+  localTelegramRequest('/api/session/bootstrap-local',{baseUrl:base,method:'POST',body:'{}'})
    .then(async()=>{
     if(STORAGE_MODE==='canonical'){
      const runtimeModule=await import('./client/canonical-profile-runtime.mjs');
@@ -3991,79 +3988,10 @@ function telegramConnectForm(){
     }else await refreshTelegramStatus(true);
     overlay.remove();render();
    })
-   .catch(error=>{canonicalReconnectReady=false;showModalError(form,error.status===401?'Ключ подключения не принят. Проверьте BUILDBOOK_LOCAL_API_TOKEN.':(error.message||'Не удалось подключить локальный хост. Проверьте адрес, Origin и состояние сервиса.'));if(submit)submit.disabled=false})
+   .catch(error=>{canonicalReconnectReady=false;showModalError(form,error.message||'Не удалось подключить локальный хост. Проверьте, что он запущен и Buildbook открыт с его адреса.');if(submit)submit.disabled=false})
    .finally(()=>{TELEGRAM_UI.busy=false});
   return false;
  },false,'Подключить');
-}
-async function telegramCommandsEditor(){
- if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост.');return}
- let commands;
- try{
-  const result=await localTelegramRequest('/api/telegram/commands');
-  commands=Array.isArray(result.commands)?result.commands:[];
- }catch(error){alert(error.message||'Не удалось загрузить команды Telegram.');return}
- if(!commands.length)commands=[
-  {command:'income',description:'Добавить доход'},
-  {command:'expense',description:'Добавить расход'},
-  {command:'stats',description:'Статистика за месяц'},
-  {command:'help',description:'Список команд Buildbook'}
- ];
- const row=item=>'<div class="tg-command-editor-row"><input name="command" aria-label="Команда" maxlength="32" value="'+esc(item.command||'')+'" placeholder="command"><input name="description" aria-label="Описание команды" maxlength="256" value="'+esc(item.description||'')+'" placeholder="Описание команды"><button type="button" class="btn" data-tg-remove>Удалить</button></div>';
- const body='<p class="mu">Команды появятся в меню Telegram рядом с полем ввода. Названия — латиницей, строчными буквами; описание — до 256 символов.</p><div class="tg-command-editor">'+commands.map(row).join('')+'</div><button type="button" class="btn" data-tg-add>+ Добавить команду</button><p class="mu">Обработчик Buildbook поддерживает /income, /expense, /stats и /help (также русские варианты). Новые команды можно добавить в меню, но для выполнения нового действия потребуется отдельно добавить обработчик.</p>';
- const form=modal('Команды Telegram',body,f=>{
-  const list=Array.from(f.querySelectorAll('.tg-command-editor-row')).map(item=>({
-   command:String(item.querySelector('[name="command"]').value||'').trim().replace(/^\//,''),
-   description:String(item.querySelector('[name="description"]').value||'').trim()
-  })).filter(item=>item.command||item.description);
-  if(!list.length)return showModalError(f,'Добавьте хотя бы одну команду.');
-  const submit=f.querySelector('button[type="submit"]');if(submit){submit.disabled=true;submit.textContent='Сохраняем…'}
-  localTelegramRequest('/api/telegram/commands',{method:'POST',body:JSON.stringify({commands:list}),timeoutMs:20000})
-   .then(()=>{f.closest('.ov').remove();toast('Команды синхронизированы с Telegram.')})
-   .catch(error=>{showModalError(f,error.message||'Не удалось сохранить команды.');if(submit){submit.disabled=false;submit.textContent='Сохранить в Telegram'}});
-  return false;
- },true,'Сохранить в Telegram');
- form.addEventListener('click',event=>{
-  if(event.target.closest('[data-tg-add]')){form.querySelector('.tg-command-editor').insertAdjacentHTML('beforeend',row({command:'',description:''}));return}
-  if(event.target.closest('[data-tg-remove]')){event.target.closest('.tg-command-editor-row').remove()}
- });
-}
-function telegramSetupWizard(){
- if(!TELEGRAM_UI.connected){toast('Сначала подключите локальный хост Buildbook.');return}
- const tokenBody='<p class="mu">Шаг 1 из 2 · Проверка бота</p><p>Создайте бота через <b>@BotFather</b> в Telegram и вставьте выданный токен. Токен отправляется только локальному хосту для проверки через Telegram Bot API.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"');
- modal('Мастер подключения Telegram',tokenBody,form=>{
-  const token=String(form.elements.botToken.value||'').trim();
-  if(!/^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
-  const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
-  if(submit){submit.disabled=true;submit.textContent='Проверяем токен…'}
-  form.elements.botToken.value='';
-  localTelegramRequest('/api/telegram/bot/verify',{method:'POST',body:JSON.stringify({token}),timeoutMs:30000})
-   .then(result=>{
-    if(!result.bot||!result.bot.id||!result.bot.firstName)throw new Error('Telegram вернул неполный профиль бота.');
-    overlay.remove();
-    const bot=result.bot;
-    const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15}" autocomplete="off"')+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
-    modal('Мастер подключения Telegram',userBody,userForm=>{
-     const userId=String(userForm.elements.userId.value||'').trim();
-     if(!/^[1-9]\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
-     const secondOverlay=userForm.closest('.ov'),saveButton=userForm.querySelector('button[type="submit"]');
-     if(saveButton){saveButton.disabled=true;saveButton.textContent='Сохраняем настройки…'}
-     localTelegramRequest('/api/telegram/setup',{method:'POST',body:JSON.stringify({token,userId}),timeoutMs:30000})
-      .then(async saved=>{
-       if(!saved.bot||String(saved.bot.id)!==String(bot.id))throw new Error('Сохранённый профиль бота не совпал с проверенным. Проверьте настройки и повторите попытку.');
-       TELEGRAM_UI.botProfile=saved.bot;
-       TELEGRAM_UI.checked=false;
-       await refreshTelegramStatus(true);
-       secondOverlay.remove();
-       modal('Бот подключён','<p><b>'+esc(saved.bot.firstName)+'</b>'+(saved.bot.username?' · @'+esc(saved.bot.username):'')+'</p><p class="mu">ID бота: '+esc(saved.bot.id)+'</p><p class="ok">Токен проверен, пользователь добавлен в список доступа, настройки сохранены локально.</p><p class="mu">Токен хранится только в локальном .env и не отображается в интерфейсе. Обработка сообщений пока выключена. Переключите приложение на канонический файловый профиль, затем отдельно нажмите «Запустить Telegram».</p>',()=>true,true,'Готово');
-      })
-      .catch(error=>{showModalError(userForm,error.message||'Не удалось сохранить настройки Telegram.');if(saveButton){saveButton.disabled=false;saveButton.textContent='Сохранить и подключить'}})
-     return false;
-    },false,'Сохранить и подключить');
-   })
-   .catch(error=>{showModalError(form,error.message||'Не удалось проверить токен Telegram.');if(submit){submit.disabled=false;submit.textContent='Проверить токен'}});
-  return false;
- },false,'Проверить токен');
 }
 async function closeTelegramSession(){
  if(STORAGE_MODE==='canonical'){
