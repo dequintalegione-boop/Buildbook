@@ -80,6 +80,7 @@ test('finance command commits once and returns a confirmation reply', async () =
   const apply = createTelegramCommandAdapter({
     profileStore: store,
     now: () => new Date(2026, 10, 24, 9, 0, 0),
+    getCommandSettings: async () => ({ income: true, expense: true, stats: true, help: true }),
   });
   const update = { update_id: 8, message: { text: '/расход 40 Обед' } };
   const first = await apply({ update, idempotencyKey: '123456:8' });
@@ -97,6 +98,7 @@ test('month statistics read the canonical profile and do not write it', async ()
   const apply = createTelegramCommandAdapter({
     profileStore: store,
     now: () => new Date(2026, 10, 24, 9, 0, 0),
+    getCommandSettings: async () => ({ income: true, expense: true, stats: true, help: true }),
   });
   const current = await apply({ update: { update_id: 9, message: { text: '/статистика' } }, idempotencyKey: '123456:9' });
   const selected = await apply({ update: { update_id: 10, message: { text: '/месяц 2026-10' } }, idempotencyKey: '123456:10' });
@@ -115,7 +117,7 @@ test('month statistics read the canonical profile and do not write it', async ()
 
 test('help does not write, plain text has no reply, and bad syntax does', async () => {
   const store = makeStore(profile);
-  const apply = createTelegramCommandAdapter({ profileStore: store, now: () => new Date(2026, 10, 24) });
+  const apply = createTelegramCommandAdapter({ profileStore: store, now: () => new Date(2026, 10, 24), getCommandSettings: async () => ({ income: true, expense: true, stats: true, help: true }) });
   const help = await apply({ update: { update_id: 11, message: { text: '/start' } }, idempotencyKey: '123456:11' });
   assert.equal(help.reply, TELEGRAM_HELP_TEXT);
   assert.match(help.reply, /\/месяц 2026-11/);
@@ -234,4 +236,29 @@ test('monthly stats reject invalid dates, unsafe totals and nonnumeric amounts',
     { kind: 'i', date: '2026-11-02', amount: 1 },
   ] } };
   assert.throws(() => formatTelegramMonthSummary(tooLarge, '2026-11'), /safe integer cents/);
+});
+
+test('finance and stats commands are disabled by default and can be enabled independently', async () => {
+  const store = makeStore(profile);
+  const settings = { income: false, expense: false, stats: false, help: true };
+  const apply = createTelegramCommandAdapter({
+    profileStore: store,
+    getCommandSettings: async () => ({ ...settings }),
+  });
+  const expenseUpdate = { update_id: 50, message: { text: '/расход 40 Обед' } };
+  const disabledExpense = await apply({ update: expenseUpdate, idempotencyKey: '123456:50' });
+  assert.match(disabledExpense.reply, /Добавление расходов отключено/);
+  assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length);
+
+  settings.expense = true;
+  const enabledExpense = await apply({ update: expenseUpdate, idempotencyKey: '123456:51' });
+  assert.match(enabledExpense.reply, /Расход 40,00 ₽ записан/);
+  assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length + 1);
+
+  const statsUpdate = { update_id: 52, message: { text: '/stats' } };
+  const disabledStats = await apply({ update: statsUpdate, idempotencyKey: '123456:52' });
+  assert.match(disabledStats.reply, /статистики отключена/);
+  settings.stats = true;
+  const enabledStats = await apply({ update: statsUpdate, idempotencyKey: '123456:53' });
+  assert.match(enabledStats.reply, /Ноябрь 2026/);
 });
