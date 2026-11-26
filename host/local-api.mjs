@@ -268,7 +268,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -279,6 +279,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (!profileStore || typeof profileStore.read !== 'function' || typeof profileStore.write !== 'function') {
     throw new TypeError('Для локального API требуется profileStore.');
   }
+  if (restartTelegram !== null && typeof restartTelegram !== 'function') throw new TypeError('restartTelegram must be a function or null.');
   if (configureTelegram !== null && typeof configureTelegram !== 'function') {
     throw new TypeError('configureTelegram must be a function or null.');
   }
@@ -647,19 +648,22 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       return;
     }
-    if (request.method === 'POST' && (pathname === '/api/telegram/start' || pathname === '/api/telegram/stop')) {
-      const action = pathname.endsWith('/start') ? startTelegram : stopTelegram;
+    if (request.method === 'POST' && ['/api/telegram/start', '/api/telegram/stop', '/api/telegram/restart'].includes(pathname)) {
+      const actionName = pathname.slice('/api/telegram/'.length);
+      const action = actionName === 'start' ? startTelegram : actionName === 'stop' ? stopTelegram : restartTelegram;
+      const activityAction = 'telegram_' + actionName;
+      const successMessage = actionName === 'start' ? 'Telegram запущен.' : actionName === 'stop' ? 'Telegram остановлен.' : 'Telegram перезапущен.';
       if (typeof action !== 'function') {
         send(response, 409, { error: 'Управление Telegram недоступно: сервис не настроен при запуске хоста.' });
         return;
       }
       try {
         await action();
-        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'success', pathname.endsWith('/start') ? 'Telegram запущен.' : 'Telegram остановлен.');
+        await logActivity(activityAction, 'success', successMessage);
         const raw = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
-        send(response, 200, { ok: true, running: raw?.running === true });
+        send(response, 200, { ok: true, action: actionName, running: raw?.running === true });
       } catch (error) {
-        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'error', 'Не удалось изменить состояние Telegram.');
+        await logActivity(activityAction, 'error', 'Не удалось изменить состояние Telegram.');
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
       }
       return;
