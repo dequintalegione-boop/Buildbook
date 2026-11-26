@@ -43,3 +43,14 @@ test('activity log rejects credentials, multiline messages and invalid action na
   await assert.rejects(log.record({ action: 'telegram_setup', status: 'success', message: 'token\nsecret' }), /invalid fields/i);
   await assert.rejects(log.record({ action: 'telegram_setup', status: 'error', message: 'x'.repeat(201) }), /invalid fields/i);
 });
+
+
+test('corrupt optional activity journal does not prevent new events from being recorded', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-corrupt-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, 'activity.json');
+  await (await import('node:fs/promises')).writeFile(path, '{broken');
+  const log = createActivityLog({ path });
+  await log.record({ action: 'telegram_start', status: 'success', message: 'Telegram запущен.' });
+  assert.equal((await log.recent(10)).length, 1);
+});
