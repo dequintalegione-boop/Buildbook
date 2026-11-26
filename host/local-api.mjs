@@ -250,7 +250,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -268,6 +268,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
+  if (getTelegramAllowlist !== null && typeof getTelegramAllowlist !== 'function') throw new TypeError('getTelegramAllowlist must be a function or null.');
+  if (setTelegramAllowlist !== null && typeof setTelegramAllowlist !== 'function') throw new TypeError('setTelegramAllowlist must be a function or null.');
   if (getTelegramMessages !== null && typeof getTelegramMessages !== 'function') {
     throw new TypeError('getTelegramMessages must be a function or null.');
   }
@@ -477,6 +479,63 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
             : 'Не удалось открыть локальный помощник. Проверьте наличие BAT-файла в папке scripts.',
           code: unsupported ? 'LOCAL_ACTION_UNSUPPORTED' : 'LOCAL_ACTION_FAILED',
         });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/allowlist') {
+      if (typeof getTelegramAllowlist !== 'function') {
+        send(response, 503, { error: 'Управление списком доступа Telegram не подключено к локальному хосту.' });
+        return;
+      }
+      try {
+        const result = await getTelegramAllowlist();
+        const users = Array.isArray(result?.users) ? result.users : [];
+        send(response, 200, { users: users.filter(user => user && /^[1-9]\\d{0,15}$/.test(String(user.id)))
+          .map(user => ({ id: String(user.id), comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '' })) });
+      } catch {
+        send(response, 500, { error: 'Не удалось загрузить список разрешённых Telegram-пользователей.' });
+      }
+      return;
+    }
+    if (request.method === 'PUT' && pathname === '/api/telegram/allowlist') {
+      if (typeof setTelegramAllowlist !== 'function') {
+        send(response, 503, { error: 'Управление списком доступа Telegram не подключено к локальному хосту.' });
+        return;
+      }
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 16 * 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1
+          || !Array.isArray(body.users) || body.users.length < 1 || body.users.length > 100) {
+          send(response, 400, { error: 'Передайте от 1 до 100 разрешённых пользователей.' });
+          return;
+        }
+        const users = [];
+        const seen = new Set();
+        for (const user of body.users) {
+          if (!user || typeof user !== 'object' || Array.isArray(user)
+            || Object.keys(user).some(key => !['id', 'comment'].includes(key))
+            || typeof user.id !== 'string' || !/^[1-9]\\d{0,15}$/.test(user.id)
+            || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))) {
+            send(response, 400, { error: 'Проверьте numeric user ID и комментарии (до 80 символов).' });
+            return;
+          }
+          if (seen.has(user.id)) {
+            send(response, 400, { error: 'В списке не должно быть повторяющихся Telegram user ID.' });
+            return;
+          }
+          seen.add(user.id);
+          users.push({ id: user.id, comment: user.comment || '' });
+        }
+        const result = await setTelegramAllowlist(users);
+        send(response, 200, { ok: true, users: Array.isArray(result?.users) ? result.users : users });
+      } catch (error) {
+        send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200
+          ? error.message : 'Не удалось сохранить список доступа Telegram.' });
       }
       return;
     }
