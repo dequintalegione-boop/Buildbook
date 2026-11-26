@@ -3904,6 +3904,7 @@ async function launchTelegramLocalAction(action){
     if(action==='host-autostart-install'&&recovery?.installed&&recovery.actionValid===true&&recovery.restartCount>0&&recovery.state!=='Disabled')break;
     if(action==='host-autostart-uninstall'&&recovery?.supported&&!recovery.installed)break;
    }
+   if(V.tab==='telegram')render();
   }
  }catch(error){toast(error.message||'Не удалось открыть локальный помощник.')}
 }
