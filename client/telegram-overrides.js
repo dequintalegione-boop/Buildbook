@@ -18,7 +18,7 @@ async function telegramAllowlistEditor(){
   '<td>'+(item.addedAt?esc(stamp(item.addedAt)):'—')+'</td>'+
   '<td><div class="ac"><button type="button" class="btn" data-edit="'+index+'">Редактировать</button><button type="button" class="btn" data-rm="'+index+'">Удалить</button></div></td></tr>'
  ).join('');
- const panelHtml='<section id="tg-allowlist-panel"><div class="hd"><h2>Белый список пользователей</h2><div class="ac"><span class="mu" data-tg-allow-count>Пользователей: '+entries.length+'</span><button type="button" class="btn" data-tg-allow-close>Скрыть</button></div></div>'+
+ const panelHtml='<section id="tg-allowlist-panel"><div class="hd"><h2>Белый список пользователей</h2><div class="ac"><span class="mu" data-tg-allow-count>Пользователей: '+entries.length+' · активных: '+entries.filter(item=>item.active!==false).length+'</span><button type="button" class="btn" data-tg-allow-close>Скрыть</button></div></div>'+
   '<p class="mu">Активные пользователи могут отправлять команды боту. Отключённые сохраняются в списке, но их сообщения не обрабатываются. Изменения применяются сразу, перезапуск Telegram не требуется.</p>'+
   '<div style="overflow:auto"><table id="tg-allow-table"><thead><tr><th>ID пользователя</th><th>Комментарий</th><th>Состояние</th><th>Добавлен</th><th>Действия</th></tr></thead><tbody>'+
   (renderRows(entries)||'<tr data-empty="true"><td colspan="5" class="mu">Список пуст. Добавьте первого пользователя.</td></tr>')+
@@ -58,7 +58,10 @@ async function telegramAllowlistEditor(){
   }
   const remove=event.target.closest('[data-rm]');
   if(remove){
-   remove.closest('tr')?.remove();
+   const row=remove.closest('tr');
+   const id=String(row?.querySelector('[data-field="id"]')?.value||'').trim();
+   if(!confirm('Удалить пользователя '+(id||'из списка')+' из белого списка?'))return;
+   row?.remove();
    const body=panel.querySelector('#tg-allow-table tbody');
    if(body&&!body.querySelector('tr[data-idx]'))body.innerHTML='<tr data-empty="true"><td colspan="5" class="mu">Список пуст. Добавьте пользователя.</td></tr>';
    const count=panel.querySelector('[data-tg-allow-count]');
