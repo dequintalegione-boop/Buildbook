@@ -495,7 +495,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, completed ? 200 : 202, {
           ok: true,
           action,
-          message: typeof result?.message === 'string' ? result.message : 'Локальный помощник запущен.',
+          message: typeof result?.message === 'string' ? result.message : completed ? 'Команда выполнена.' : 'Локальный помощник открыт в отдельном окне.',
           ...(typeof result?.output === 'string' && result.output ? { output: result.output.slice(0, 4000) } : {}),
         });
       } catch (error) {
