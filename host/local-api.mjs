@@ -17,9 +17,6 @@ const MAX_SESSIONS = 8;
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const execFileAsync = promisify(execFile);
 const LOCAL_ACTION_SCRIPTS = Object.freeze({
-  'telegram-setup': Object.freeze({ file: 'setup-buildbook-telegram.bat', mode: 'detached' }),
-  'telegram-manage': Object.freeze({ file: 'manage-buildbook-telegram.bat', mode: 'detached' }),
-  'telegram-state': Object.freeze({ file: 'set-buildbook-telegram-state.bat', mode: 'detached' }),
   'host-autostart-install': Object.freeze({ file: 'install-buildbook-autostart.ps1', mode: 'run' }),
   'host-autostart-uninstall': Object.freeze({ file: 'uninstall-buildbook-autostart.ps1', mode: 'run' }),
 });
