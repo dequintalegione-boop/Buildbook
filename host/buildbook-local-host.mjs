@@ -123,11 +123,11 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramLatency: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
-      if (!token) return { latencyMs: null, checkedAt: null };
+      if (!token) return { available: false, latencyMs: null, checkedAt: null };
       if (!telegramLatencyCache || Date.now() - telegramLatencyAt > 30_000) {
         const startedAt = Date.now();
         await telegramBotApi.getMe(token);
-        telegramLatencyCache = { latencyMs: Math.max(0, Date.now() - startedAt), checkedAt: new Date().toISOString() };
+        telegramLatencyCache = { available: true, latencyMs: Math.max(0, Date.now() - startedAt), checkedAt: new Date().toISOString() };
         telegramLatencyAt = Date.now();
       }
       return { ...telegramLatencyCache };
