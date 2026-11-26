@@ -251,7 +251,7 @@ test('finance and stats commands are disabled by default and can be enabled inde
   assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length);
 
   settings.expense = true;
-  const enabledExpense = await apply({ update: expenseUpdate, idempotencyKey: '123456:51' });
+  const enabledExpense = await apply({ update: { update_id: 51, message: { text: '/расход 40 Обед' } }, idempotencyKey: '123456:51' });
   assert.match(enabledExpense.reply, /Расход 40,00 ₽ записан/);
   assert.equal(store.snapshot().profile.state.tx.length, profile.state.tx.length + 1);
 
@@ -259,6 +259,6 @@ test('finance and stats commands are disabled by default and can be enabled inde
   const disabledStats = await apply({ update: statsUpdate, idempotencyKey: '123456:52' });
   assert.match(disabledStats.reply, /статистики отключена/);
   settings.stats = true;
-  const enabledStats = await apply({ update: statsUpdate, idempotencyKey: '123456:53' });
+  const enabledStats = await apply({ update: { update_id: 53, message: { text: '/stats' } }, idempotencyKey: '123456:53' });
   assert.match(enabledStats.reply, /Ноябрь 2026/);
 });
