@@ -160,3 +160,11 @@ test('Telegram setup and command editor actions have concrete in-app implementat
   assert.ok(html.includes("localTelegramRequest('/api/telegram/setup'"));
   assert.ok(html.includes("localTelegramRequest('/api/telegram/commands'"));
 });
+
+
+test('Telegram dashboard loads the persistent action journal with status and safe event text', () => {
+  assert.ok(html.includes("localTelegramRequest('/api/activity')"));
+  assert.ok(html.includes('const actionEvents=Array.isArray(TELEGRAM_UI.activity)'));
+  assert.ok(html.includes('Журнал действий'));
+  assert.ok(html.includes('actionEvents.map'));
+});
