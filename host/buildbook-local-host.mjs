@@ -59,6 +59,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   let telegram = null;
   let telegramBotProfile = null;
   let telegramBotProfileAt = 0;
+  let telegramLatencyCache = null;
+  let telegramLatencyAt = 0;
   let recoveryStatusCache = null;
   let recoveryStatusAt = 0;
   const telegramBotApi = createTelegramBotApi({ fetchImpl });
@@ -103,6 +105,8 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       telegram = configured.telegram;
       telegramBotProfile = configured.bot;
       telegramBotProfileAt = Date.now();
+      telegramLatencyCache = null;
+      telegramLatencyAt = 0;
       telegramEnabled = false;
       return configured.bot;
     },
@@ -117,6 +121,17 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     getActivityLog: ({ limit = 100, offset = 0 } = {}) => activityLog.recent(limit, offset),
     recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
+    getTelegramLatency: async () => {
+      const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
+      if (!token) return { latencyMs: null, checkedAt: null };
+      if (!telegramLatencyCache || Date.now() - telegramLatencyAt > 30_000) {
+        const startedAt = Date.now();
+        await telegramBotApi.getMe(token);
+        telegramLatencyCache = { latencyMs: Math.max(0, Date.now() - startedAt), checkedAt: new Date().toISOString() };
+        telegramLatencyAt = Date.now();
+      }
+      return { ...telegramLatencyCache };
+    },
     getTelegramBotProfile: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
       if (!token) return null;
