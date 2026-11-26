@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1201,4 +1201,35 @@ test('activity API paginates history and rejects unsupported query parameters', 
   assert.deepEqual(lastBody.events.map(event => event.message), ['Event 0']);
   assert.equal(lastBody.hasMore, false);
   assert.equal((await request(base + '/api/activity?limit=2&other=1')).status, 400);
+});
+
+test('Telegram latency API returns only a bounded timing sample and a checked timestamp', async t => {
+  const { base, request } = await fixture(t, {
+    getTelegramLatency: async () => ({ available: true, latencyMs: 42.6, checkedAt: '2026-11-26T17:00:00.000Z' }),
+  });
+  const response = await request(base + '/api/telegram/latency');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    available: true,
+    latencyMs: 43,
+    checkedAt: '2026-11-26T17:00:00.000Z',
+  });
+});
+
+test('Telegram latency API handles unconfigured and failed checks without exposing errors', async t => {
+  const unconfigured = await fixture(t, {
+    getTelegramLatency: async () => ({ available: false, latencyMs: null, checkedAt: null }),
+  });
+  const unavailable = await unconfigured.request(unconfigured.base + '/api/telegram/latency');
+  assert.equal(unavailable.status, 200);
+  assert.deepEqual(await unavailable.json(), { available: false, latencyMs: null, checkedAt: null });
+
+  const failed = await fixture(t, {
+    getTelegramLatency: async () => { throw new Error('secret token and internal URL'); },
+  });
+  const response = await failed.request(failed.base + '/api/telegram/latency');
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.available, false);
+  assert.equal(JSON.stringify(body).includes('secret token'), false);
 });
