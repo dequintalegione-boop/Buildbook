@@ -47,12 +47,13 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   let telegramEnabled = telegramEnabledRaw === 'true';
   const telegramBotToken = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '').trim();
-  const telegramAllowedUserIds = String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim().split(/[\\s,]+/).filter(Boolean);
-  const telegramConfigured = /^[1-9]\\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(telegramBotToken)
+  const telegramAllowedUserIds = String(env.BUILDBOOK_TELEGRAM_ALLOWED_USER_IDS || '').trim().split(/[\s,]+/).filter(Boolean);
+  const telegramConfigured = /^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(telegramBotToken)
     && telegramAllowedUserIds.length >= 1 && telegramAllowedUserIds.length <= 100
-    && telegramAllowedUserIds.every(id => /^[1-9]\\d{0,15}$/.test(id) && Number.isSafeInteger(Number(id)));
+    && telegramAllowedUserIds.every(id => /^[1-9]\d{0,15}$/.test(id) && Number.isSafeInteger(Number(id)));
   if (telegramEnabled && !telegramConfigured) {
     throw new TypeError('Telegram включён, но токен бота или белый список не настроены. Завершите мастер настройки Telegram.');
+  }
   }
   let telegram = null;
   let telegramBotProfile = null;
