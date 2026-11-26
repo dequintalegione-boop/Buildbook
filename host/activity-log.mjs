@@ -104,13 +104,33 @@ export function createActivityLog({ path, limit = DEFAULT_LIMIT, now = () => new
         return event;
       });
     },
-    recent(count = 100, offset = 0) {
+    recent(count = 100, offset = 0, filters = {}) {
       if (!Number.isSafeInteger(count) || count < 1 || count > 500 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000_000) {
         throw new RangeError('Activity log read limit must be between 1 and 500.');
       }
+      if (!filters || typeof filters !== 'object' || Array.isArray(filters)
+        || Object.keys(filters).some(key => !['search', 'status', 'action'].includes(key))) {
+        throw new TypeError('Activity log filters contain invalid fields.');
+      }
+      const search = String(filters.search || '').trim().toLocaleLowerCase();
+      const status = filters.status || 'all';
+      const action = filters.action || 'all';
+      if (search.length > 200 || /[\u0000-\u001f\u007f]/.test(search)
+        || !['all', 'success', 'error'].includes(status)
+        || (action !== 'all' && !/^[a-z0-9._-]{1,64}$/i.test(action))) {
+        throw new TypeError('Activity log filters are invalid.');
+      }
       return serialize(async () => {
         await load();
-        return events.slice().reverse().slice(offset, offset + count).map(event => ({ ...event }));
+        const matching = events.slice().reverse().filter(event => {
+          if (status !== 'all' && event.status !== status) return false;
+          if (action !== 'all' && event.action !== action) return false;
+          if (!search) return true;
+          const searchable = [event.action, event.message, event.telegramUserId, event.updateId, event.operationId]
+            .filter(value => value !== undefined && value !== null).join(' ').toLocaleLowerCase();
+          return searchable.includes(search);
+        });
+        return matching.slice(offset, offset + count).map(event => ({ ...event }));
       });
     },
   });

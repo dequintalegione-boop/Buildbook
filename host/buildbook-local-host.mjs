@@ -120,7 +120,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       return recoveryStatusCache;
     },
     getTelegramMessages: () => telegram ? telegram.inbox.recent(50) : [],
-    getActivityLog: ({ limit = 100, offset = 0 } = {}) => activityLog.recent(limit, offset),
+    getActivityLog: ({ limit = 100, offset = 0, search = '', status = 'all', action = 'all' } = {}) => activityLog.recent(limit, offset, { search, status, action }),
     recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramCommandSettings: () => commandSettingsStore.read(),

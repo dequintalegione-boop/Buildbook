@@ -1259,3 +1259,26 @@ test('command settings API reads and persists strict boolean execution switches'
   });
   assert.equal(invalid.status, 400);
 });
+
+test('activity endpoint validates and forwards server-side search and filters', async t => {
+  let received = null;
+  const { base, request } = await fixture(t, {
+    getActivityLog: async options => {
+      received = options;
+      return [{ id: 'event-1', action: 'telegram_operation_committed', status: 'success', message: 'Операция сохранена.' }];
+    },
+  });
+  const response = await request(base + '/api/activity?limit=25&offset=5&search=expense-42&status=success&action=telegram_operation_committed');
+  assert.equal(response.status, 200);
+  assert.deepEqual(received, {
+    limit: 26,
+    offset: 5,
+    search: 'expense-42',
+    status: 'success',
+    action: 'telegram_operation_committed',
+  });
+  const invalid = await request(base + '/api/activity?search=bad&unexpected=yes');
+  assert.equal(invalid.status, 400);
+  const invalidStatus = await request(base + '/api/activity?status=pending');
+  assert.equal(invalidStatus.status, 400);
+});

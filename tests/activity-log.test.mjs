@@ -111,3 +111,22 @@ test('activity journal stores safe Telegram identifiers without storing message 
     telegramUserId: 'not-an-id',
   }), /invalid fields/i);
 });
+
+test('activity journal filters across the complete history and searches safe identifiers', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-filters-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = createActivityLog({ path: join(dir, 'activity.json') });
+  await log.record({ action: 'telegram_message_accepted', status: 'success', message: 'Сообщение принято.', telegramUserId: '1001001', updateId: 1 });
+  await log.record({ action: 'telegram_operation_committed', status: 'success', message: 'Операция сохранена.', telegramUserId: '2002002', updateId: 2, operationId: 'expense-abc' });
+  await log.record({ action: 'telegram_message_rejected', status: 'error', message: 'Отправитель не в белом списке.', telegramUserId: '3003003', updateId: 3 });
+
+  const matching = await log.recent(10, 0, { search: 'EXPENSE-ABC', status: 'success', action: 'telegram_operation_committed' });
+  assert.equal(matching.length, 1);
+  assert.equal(matching[0].telegramUserId, '2002002');
+  const rejected = await log.recent(10, 0, { search: '3003003', status: 'error' });
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].action, 'telegram_message_rejected');
+  const page = await log.recent(1, 0, { action: 'telegram_message_accepted' });
+  assert.equal(page[0].updateId, 1);
+  assert.throws(() => log.recent(10, 0, { status: 'pending' }), /filters are invalid/i);
+});

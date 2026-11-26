@@ -107,13 +107,22 @@ document.addEventListener('click',function(e){
 },true);
 
 
+function telegramActivityUrl(limit,offset,filters){
+ const params=new URLSearchParams({
+  limit:String(limit),offset:String(offset),
+  search:String(filters?.search||''),
+  status:String(filters?.status||'all'),
+  action:String(filters?.action||'all')
+ });
+ return '/api/activity?'+params.toString();
+}
 async function loadMoreTelegramActivity(){
  if(TELEGRAM_UI.activityLoading||!TELEGRAM_UI.activityHasMore)return;
  TELEGRAM_UI.activityLoading=true;
  const button=document.querySelector('[data-tg-activity-more]');
  if(button){button.disabled=true;button.textContent='Загружаем…'}
  try{
-  const result=await localTelegramRequest('/api/activity?limit=100&offset='+encodeURIComponent(String(TELEGRAM_UI.activityOffset)));
+  const result=await localTelegramRequest(telegramActivityUrl(100,TELEGRAM_UI.activityOffset,TELEGRAM_UI.activityFilters));
   const events=Array.isArray(result?.events)?result.events:[];
   TELEGRAM_UI.activity=TELEGRAM_UI.activity.concat(events);
   TELEGRAM_UI.activityOffset=Number(result?.offset||0)+events.length;
@@ -144,30 +153,50 @@ async function exportTelegramActivity(){
  }catch(error){toast(error.message||'Не удалось экспортировать журнал.')}
 }
 
-function filterTelegramActivity(){
- const panel=document.getElementById('tg-allowlist-panel')||document.querySelector('.tg-dashboard');
- const list=document.querySelector('[data-tg-activity-list]');
- if(!list)return;
- const query=String(document.querySelector('[data-tg-activity-search]')?.value||'').trim().toLowerCase();
- const status=String(document.querySelector('[data-tg-activity-status]')?.value||'all');
- const type=String(document.querySelector('[data-tg-activity-type]')?.value||'all');
- list.querySelectorAll('[data-activity-status]').forEach(row=>{
-  const matchesStatus=status==='all'||row.dataset.activityStatus===status;
-  const matchesQuery=!query||String(row.dataset.activityText||'').toLowerCase().includes(query);
-  const matchesType=type==='all'||row.dataset.activityAction===type;
-  row.hidden=!(matchesStatus&&matchesQuery&&matchesType);
- });
+async function filterTelegramActivity(reset=true){
+ if(TELEGRAM_UI.activityLoading)return;
+ const filters={
+  search:String(document.querySelector('[data-tg-activity-search]')?.value||'').trim(),
+  status:String(document.querySelector('[data-tg-activity-status]')?.value||'all'),
+  action:String(document.querySelector('[data-tg-activity-type]')?.value||'all')
+ };
+ TELEGRAM_UI.activityFilters=filters;
+ TELEGRAM_UI.activityLoading=true;
+ try{
+  const offset=reset?0:TELEGRAM_UI.activityOffset;
+  const result=await localTelegramRequest(telegramActivityUrl(100,offset,filters));
+  const events=Array.isArray(result?.events)?result.events:[];
+  TELEGRAM_UI.activity=reset?events:TELEGRAM_UI.activity.concat(events);
+  TELEGRAM_UI.activityOffset=Number(result?.offset||0)+events.length;
+  TELEGRAM_UI.activityHasMore=result?.hasMore===true;
+ }catch(error){toast(error.message||'Не удалось применить фильтры журнала.')}
+ finally{TELEGRAM_UI.activityLoading=false;render()}
 }
 
 document.addEventListener('click',function(event){
  const more=event.target&&event.target.closest&&event.target.closest('[data-a="tgactivitymore"]');
  if(more){event.preventDefault();loadMoreTelegramActivity();return}
+ const searchButton=event.target&&event.target.closest&&event.target.closest('[data-tg-activity-search-all]');
+ if(searchButton){event.preventDefault();filterTelegramActivity(true);return}
+ const clearButton=event.target&&event.target.closest&&event.target.closest('[data-tg-activity-clear]');
+ if(clearButton){
+  event.preventDefault();
+  const search=document.querySelector('[data-tg-activity-search]');
+  const status=document.querySelector('[data-tg-activity-status]');
+  const type=document.querySelector('[data-tg-activity-type]');
+  if(search)search.value='';
+  if(status)status.value='all';
+  if(type)type.value='all';
+  filterTelegramActivity(true);return;
+ }
  const exportButton=event.target&&event.target.closest&&event.target.closest('[data-tg-activity-export]');
  if(exportButton){event.preventDefault();exportTelegramActivity()}
 },true);
-document.addEventListener('input',function(event){
- if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-search]'))filterTelegramActivity();
-},true);
 document.addEventListener('change',function(event){
- if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status],[data-tg-activity-type]'))filterTelegramActivity();
+ if(event.target&&event.target.matches&&event.target.matches('[data-tg-activity-status],[data-tg-activity-type]'))filterTelegramActivity(true);
+},true);
+document.addEventListener('keydown',function(event){
+ if(event.key==='Enter'&&event.target&&event.target.matches&&event.target.matches('[data-tg-activity-search]')){
+  event.preventDefault();filterTelegramActivity(true);
+ }
 },true);
