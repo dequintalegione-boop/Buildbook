@@ -110,6 +110,9 @@ test('canonical save recovery exposes 20 explicit safety contracts', async t => 
 test('Telegram UI overrides do not replace the single in-app local-host connection flow', () => {
   assert.doesNotMatch(telegramOverrides, /function telegramConnectForm/);
   assert.match(telegramOverrides, /async function telegramAllowlistEditor/);
+  assert.match(telegramOverrides, /data-a="tgallowlist"/);
   assert.match(html, /function telegramConnectForm/);
   assert.match(html, /bootstrap-local/);
+  assert.match(html, /Важное ограничение Windows/);
+  assert.doesNotMatch(html, /github\\.com\\/dequintalegione-boop\\/Buildbook\\/blob\\/main\\/scripts/);
 });
