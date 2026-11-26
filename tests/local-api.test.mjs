@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1014,4 +1014,116 @@ test('rejects Telegram restart when the host has no restart handler', async t =>
   const { base, request } = await fixture(t);
   const response = await request(base + '/api/telegram/restart', { method: 'POST' });
   assert.equal(response.status, 409);
+});
+
+
+test('verifies a Telegram bot token without reflecting the secret and records a sanitized event', async t => {
+  const events = [];
+  const secret = '123456789:AA_this_is_a_test_bot_token_value';
+  let verifiedToken = '';
+  const { base, request } = await fixture(t, {
+    verifyTelegramBot: async token => {
+      verifiedToken = token;
+      return { id: '123456789', firstName: 'Buildbook Bot', username: 'buildbook_test_bot' };
+    },
+    recordActivity: async event => { events.push(event); },
+  });
+
+  const response = await request(base + '/api/telegram/bot/verify', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: secret }),
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body, {
+    ok: true,
+    bot: { id: '123456789', firstName: 'Buildbook Bot', username: 'buildbook_test_bot' },
+  });
+  assert.equal(verifiedToken, secret);
+  assert.equal(JSON.stringify(body).includes(secret), false);
+  assert.deepEqual(events, [{
+    action: 'telegram_bot_verify',
+    status: 'success',
+    message: 'Токен Telegram-бота успешно проверен.',
+  }]);
+});
+
+test('rejects malformed Telegram verification payloads before calling Telegram Bot API', async t => {
+  let calls = 0;
+  const { base, request } = await fixture(t, {
+    verifyTelegramBot: async () => { calls += 1; return { id: '123456789', firstName: 'Bot' }; },
+  });
+  for (const payload of [{ token: 'bad' }, { token: '123456789:AA_valid_token_value_123456', extra: true }, { token: 123 }]) {
+    const response = await request(base + '/api/telegram/bot/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, 0);
+});
+
+test('saves Telegram setup through the authenticated route without returning the bot token', async t => {
+  const events = [];
+  const secret = '123456789:AA_this_is_a_test_bot_token_value';
+  let received = null;
+  const { base, request } = await fixture(t, {
+    configureTelegram: async config => {
+      received = config;
+      return { id: '123456789', firstName: 'Buildbook Bot', username: 'buildbook_test_bot' };
+    },
+    recordActivity: async event => { events.push(event); },
+  });
+
+  const response = await request(base + '/api/telegram/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: secret, userId: '42' }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    configured: true,
+    enabled: false,
+    running: false,
+    bot: { id: '123456789', firstName: 'Buildbook Bot', username: 'buildbook_test_bot' },
+  });
+  assert.deepEqual(received, { token: secret, userId: '42' });
+  assert.equal(JSON.stringify(events).includes(secret), false);
+  assert.deepEqual(events, [{
+    action: 'telegram_setup',
+    status: 'success',
+    message: 'Настройки Telegram-бота сохранены.',
+  }]);
+});
+
+test('rejects Telegram setup without a valid user ID and never invokes the configurator', async t => {
+  let calls = 0;
+  const { base, request } = await fixture(t, {
+    configureTelegram: async () => { calls += 1; return { id: '123456789', firstName: 'Bot' }; },
+  });
+  const response = await request(base + '/api/telegram/setup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: '123456789:AA_this_is_a_test_bot_token_value', userId: '0' }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal(calls, 0);
+});
+
+test('Telegram setup and token verification require an authenticated browser session', async t => {
+  const { base } = await fixture(t);
+  for (const [path, body] of [
+    ['/api/telegram/setup', { token: '123456789:AA_this_is_a_test_bot_token_value', userId: '42' }],
+    ['/api/telegram/bot/verify', { token: '123456789:AA_this_is_a_test_bot_token_value' }],
+  ]) {
+    const response = await fetch(base + path, {
+      method: 'POST',
+      headers: { origin: base, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 401);
+  }
 });
