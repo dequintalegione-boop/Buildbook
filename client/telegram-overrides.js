@@ -80,6 +80,7 @@ async function telegramAllowlistEditor(){
    const count=panel.querySelector('[data-tg-allow-count]');
    if(count)count.textContent='Пользователей: '+savedUsers.length;
    toast('Белый список обновлён. Изменения применены без перезапуска бота.');
+   await refreshTelegramStatus(true);
   }catch(error){
    toast(error.message||'Не удалось сохранить белый список.');
   }finally{
