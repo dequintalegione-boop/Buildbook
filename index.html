@@ -4015,7 +4015,7 @@ function telegramSetupWizard(){
  const tokenBody='<p class="mu">Шаг 1 из 2 · Проверка бота</p><p>Создайте бота через <b>@BotFather</b> в Telegram и вставьте выданный токен. Токен отправляется только локальному хосту для проверки через Telegram Bot API.</p>'+fld('botToken','Токен от BotFather','password','','required autocomplete="off"');
  modal('Мастер подключения Telegram',tokenBody,form=>{
   const token=String(form.elements.botToken.value||'').trim();
-  if(!/^[1-9]\\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
+  if(!/^[1-9]\d{0,15}:[A-Za-z0-9_-]{20,}$/.test(token)||token.length>256)return showModalError(form,'Проверьте формат токена, который выдал BotFather.');
   const overlay=form.closest('.ov'),submit=form.querySelector('button[type="submit"]');
   if(submit){submit.disabled=true;submit.textContent='Проверяем токен…'}
   form.elements.botToken.value='';
@@ -4027,7 +4027,7 @@ function telegramSetupWizard(){
     const userBody='<p class="mu">Шаг 2 из 2 · Разрешённый пользователь</p><div class="sm"><b>'+esc(bot.firstName)+'</b>'+(bot.username?' · @'+esc(bot.username):'')+'<br><small>ID бота: '+esc(bot.id)+'</small></div><p>Введите свой числовой Telegram user ID. Бот будет принимать личные сообщения только от этого пользователя.</p>'+fld('userId','Ваш Telegram user ID','text','','required inputmode="numeric" pattern="[1-9][0-9]{0,15}" autocomplete="off"')+'<p class="mu">Узнать ID можно через надёжного Telegram-бота, который показывает ваш numeric user ID. Username вместо ID не подходит.</p>';
     modal('Мастер подключения Telegram',userBody,userForm=>{
      const userId=String(userForm.elements.userId.value||'').trim();
-     if(!/^[1-9]\\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
+     if(!/^[1-9]\d{0,15}$/.test(userId))return showModalError(userForm,'Введите положительный числовой Telegram user ID.');
      const secondOverlay=userForm.closest('.ov'),saveButton=userForm.querySelector('button[type="submit"]');
      if(saveButton){saveButton.disabled=true;saveButton.textContent='Сохраняем настройки…'}
      localTelegramRequest('/api/telegram/setup',{method:'POST',body:JSON.stringify({token,userId}),timeoutMs:30000})
