@@ -13,7 +13,50 @@ export async function getWindowsRecoveryStatus({ platform = process.platform, ex
     "$settings = $task.Settings; $info = Get-ScheduledTaskInfo -TaskName 'Buildbook Local Host' -ErrorAction Stop; " +
     "$last = if ($info.LastRunTime -and $info.LastRunTime.Year -gt 1901) { $info.LastRunTime.ToString('o') } else { $null }; " +
     "$next = if ($info.NextRunTime -and $info.NextRunTime.Year -gt 1901) { $info.NextRunTime.ToString('o') } else { $null }; " +
-    "$result = [uint32]$info.LastTaskResult; [pscustomobject]@{ installed = $true; state = [string]$task.State; restartCount = [int]$settings.RestartCount; restartInterval = [string]$settings.RestartInterval; lastRunTime = $last; nextRunTime = $next; lastTaskResult = [uint32]$result; lastTaskResultHex = ('0x{0:X8}' -f $result) } | ConvertTo-Json -Compress";
+    "$action = @($task.Actions)[0]; $expectedScript = Join-Path ([string]$action.WorkingDirectory) 'scripts\\start-buildbook-local-host.ps1'; " +
+    "$actionValid = $null -ne $action -and ([string]$action.Execute -match '(?i)(^|\\\\)powershell\\.exe
+  try {
+    const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true,
+      timeout: 7000,
+      maxBuffer: 16 * 1024,
+    });
+    const result = JSON.parse(String(stdout || '').trim());
+    const validOptionalDate = value => value === null || typeof value === 'string'
+      && value.length <= 40 && Number.isFinite(Date.parse(value));
+    const validResult = value => value === null || Number.isSafeInteger(value) && value >= 0 && value <= 0xffffffff;
+    if (!result || typeof result.installed !== 'boolean'
+      || (result.actionValid !== undefined && typeof result.actionValid !== 'boolean')
+      || (result.actionIssue !== undefined && !(result.actionIssue === null || typeof result.actionIssue === 'string' && result.actionIssue.length <= 160))
+      || !Number.isSafeInteger(result.restartCount) || result.restartCount < 0
+      || !(result.restartInterval === null || typeof result.restartInterval === 'string' && result.restartInterval.length <= 64)
+      || !validOptionalDate(result.lastRunTime ?? null) || !validOptionalDate(result.nextRunTime ?? null)
+      || !validResult(result.lastTaskResult ?? null)
+      || !(result.lastTaskResultHex === null || typeof result.lastTaskResultHex === 'string' && /^0x[0-9A-F]{8}$/.test(result.lastTaskResultHex))) {
+      throw new Error('Invalid Task Scheduler status.');
+    }
+    return Object.freeze({
+      supported: true,
+      installed: result.installed,
+      actionValid: result.actionValid ?? false,
+      actionIssue: result.actionIssue ?? null,
+      state: typeof result.state === 'string' ? result.state.slice(0, 32) : 'Unknown',
+      restartCount: result.restartCount,
+      restartInterval: result.restartInterval,
+      lastRunTime: result.lastRunTime ?? null,
+      nextRunTime: result.nextRunTime ?? null,
+      lastTaskResult: result.lastTaskResult ?? null,
+      lastTaskResultHex: result.lastTaskResultHex ?? null,
+    });
+  } catch {
+    return Object.freeze({ supported: true, installed: false, state: 'unavailable', restartCount: 0, restartInterval: null });
+  }
+}
+
+export const BUILDBOOK_RECOVERY_TASK_NAME = TASK_NAME;
+) -and (Test-Path -LiteralPath $expectedScript) -and ([string]$action.Arguments).Contains($expectedScript); " +
+    "$actionIssue = if ($actionValid) { $null } else { 'Задача не указывает на штатный скрипт запуска Buildbook.' }; " +
+    "$result = [uint32]$info.LastTaskResult; [pscustomobject]@{ installed = $true; actionValid = [bool]$actionValid; actionIssue = $actionIssue; state = [string]$task.State; restartCount = [int]$settings.RestartCount; restartInterval = [string]$settings.RestartInterval; lastRunTime = $last; nextRunTime = $next; lastTaskResult = [uint32]$result; lastTaskResultHex = ('0x{0:X8}' -f $result) } | ConvertTo-Json -Compress";
   try {
     const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
       windowsHide: true,
