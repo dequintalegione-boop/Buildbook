@@ -1,8 +1,8 @@
-/* Buildbook service worker — buildbook-59
+/* Buildbook service worker — buildbook-60
  * Network-first shell. Injects telegram-overrides.js only at the REAL document
  * end (never into the first </body> that appears inside JS print templates).
  */
-const C = 'buildbook-59';
+const C = 'buildbook-60';
 const PRECACHE = [
   './',
   './index.html',
