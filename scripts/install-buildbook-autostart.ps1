@@ -1,4 +1,4 @@
-param([switch]$NoStart)
+﻿param([switch]$NoStart)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
