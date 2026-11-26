@@ -130,9 +130,16 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
       if (!token) return { available: false, latencyMs: null, checkedAt: null };
       if (!telegramLatencyCache || Date.now() - telegramLatencyAt > 30_000) {
         const startedAt = Date.now();
-        await telegramBotApi.getMe(token);
-        telegramLatencyCache = { available: true, latencyMs: Math.max(0, Date.now() - startedAt), checkedAt: new Date().toISOString() };
-        telegramLatencyAt = Date.now();
+        try {
+          await telegramBotApi.getMe(token);
+          telegramLatencyCache = { available: true, latencyMs: Math.max(0, Date.now() - startedAt), checkedAt: new Date().toISOString() };
+          telegramLatencyAt = Date.now();
+        } catch (error) {
+          // Keep the last successful sample so the UI can label it stale instead
+          // of replacing it with a misleading "connected" or an empty status.
+          if (telegramLatencyCache) return { ...telegramLatencyCache };
+          throw error;
+        }
       }
       return { ...telegramLatencyCache };
     },
