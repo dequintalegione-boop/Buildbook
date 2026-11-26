@@ -1,7 +1,23 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$sourceRoot = Split-Path -Parent $PSScriptRoot
+$downloadRoot = Join-Path $env:TEMP ('Buildbook-package-' + [guid]::NewGuid().ToString('N'))
+$archivePath = Join-Path $downloadRoot 'buildbook.zip'
+New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+$archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/refs/heads/main.zip'
+try {
+  Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
+  Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadRoot -Force
+} catch {
+  Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
+  throw 'Не удалось скачать установочный пакет Buildbook с GitHub. Проверьте подключение к интернету и повторите попытку.'
+}
+$sourceDirectory = Get-ChildItem -LiteralPath $downloadRoot -Directory | Select-Object -First 1
+if (-not $sourceDirectory) {
+  Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
+  throw 'Архив Buildbook не содержит папку приложения.'
+}
+$sourceRoot = $sourceDirectory.FullName
 $settingsDir = Join-Path $env:LOCALAPPDATA 'Buildbook'
 $settingsPath = Join-Path $settingsDir 'install-path.json'
 $installRoot = $null
@@ -77,7 +93,7 @@ $ready = $false
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
   Start-Sleep -Seconds 1
   try {
-    $health = Invoke-WebRequest -Uri 'http://127.0.0.1:43127/api/health' -UseBasicParsing -TimeoutSec 2
+    $health = Invoke-WebRequest -Uri 'http://127.0.0.1:43127/' -UseBasicParsing -TimeoutSec 2
     if ($health.StatusCode -eq 200) { $ready = $true; break }
   } catch {}
 }
@@ -88,6 +104,7 @@ if (-not $ready) {
 }
 
 Start-Process 'http://127.0.0.1:43127/'
+Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 Write-Host 'Buildbook установлен и локальный хост запущен.'
 Write-Host "Папка установки: $installFull"
