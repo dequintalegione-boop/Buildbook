@@ -268,7 +268,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, getTelegramCommandSettings = null, setTelegramCommandSettings = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -285,6 +285,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   }
   if (getHostRecoveryStatus !== null && typeof getHostRecoveryStatus !== 'function') throw new TypeError('getHostRecoveryStatus must be a function or null.');
   if (getTelegramLatency !== null && typeof getTelegramLatency !== 'function') throw new TypeError('getTelegramLatency must be a function or null.');
+  if (getTelegramCommandSettings !== null && typeof getTelegramCommandSettings !== 'function') throw new TypeError('getTelegramCommandSettings must be a function or null.');
+  if (setTelegramCommandSettings !== null && typeof setTelegramCommandSettings !== 'function') throw new TypeError('setTelegramCommandSettings must be a function or null.');
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
@@ -740,6 +742,48 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 200, { available: true, latencyMs: Math.round(latencyMs), checkedAt: new Date(checkedAt).toISOString() });
       } catch {
         send(response, 502, { available: false, latencyMs: null, checkedAt: null, error: 'Не удалось проверить связь с Telegram Bot API.' });
+      }
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/telegram/command-settings') {
+      if (typeof getTelegramCommandSettings !== 'function') {
+        send(response, 503, { error: 'Настройки обработки команд Telegram недоступны.' });
+        return;
+      }
+      try {
+        send(response, 200, { commands: await getTelegramCommandSettings() });
+      } catch {
+        send(response, 500, { error: 'Не удалось прочитать настройки команд Telegram.' });
+      }
+      return;
+    }
+    if (request.method === 'PUT' && pathname === '/api/telegram/command-settings') {
+      if (typeof setTelegramCommandSettings !== 'function') {
+        send(response, 503, { error: 'Изменение настроек команд Telegram недоступно.' });
+        return;
+      }
+      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        request.resume();
+        return;
+      }
+      try {
+        const body = await readJson(request, 8 * 1024);
+        const allowed = ['income', 'expense', 'stats', 'help'];
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1
+          || !body.commands || typeof body.commands !== 'object' || Array.isArray(body.commands)
+          || Object.keys(body.commands).length !== allowed.length
+          || Object.keys(body.commands).some(key => !allowed.includes(key))
+          || allowed.some(key => typeof body.commands[key] !== 'boolean')) {
+          send(response, 400, { error: 'Передайте логические настройки income, expense, stats и help.' });
+          return;
+        }
+        const commands = await setTelegramCommandSettings(body.commands);
+        await logActivity('telegram_command_settings_update', 'success', 'Настройки обработки команд Telegram обновлены.');
+        send(response, 200, { ok: true, commands });
+      } catch (error) {
+        await logActivity('telegram_command_settings_update', 'error', 'Не удалось обновить настройки команд Telegram.');
+        send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200 ? error.message : 'Не удалось сохранить настройки команд.' });
       }
       return;
     }
