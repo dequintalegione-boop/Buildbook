@@ -490,7 +490,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       try {
         const result = await getTelegramAllowlist();
         const users = Array.isArray(result?.users) ? result.users : [];
-        send(response, 200, { users: users.filter(user => user && /^[1-9]\\d{0,15}$/.test(String(user.id)))
+        send(response, 200, { users: users.filter(user => user && /^[1-9]\d{0,15}$/.test(String(user.id)))
           .map(user => ({ id: String(user.id), comment: typeof user.comment === 'string' ? user.comment.slice(0, 80) : '' })) });
       } catch {
         send(response, 500, { error: 'Не удалось загрузить список разрешённых Telegram-пользователей.' });
@@ -502,7 +502,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 503, { error: 'Управление списком доступа Telegram не подключено к локальному хосту.' });
         return;
       }
-      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
         request.resume();
         return;
@@ -519,7 +519,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         for (const user of body.users) {
           if (!user || typeof user !== 'object' || Array.isArray(user)
             || Object.keys(user).some(key => !['id', 'comment'].includes(key))
-            || typeof user.id !== 'string' || !/^[1-9]\\d{0,15}$/.test(user.id)
+            || typeof user.id !== 'string' || !/^[1-9]\d{0,15}$/.test(user.id)
             || (user.comment !== undefined && (typeof user.comment !== 'string' || user.comment.length > 80))) {
             send(response, 400, { error: 'Проверьте numeric user ID и комментарии (до 80 символов).' });
             return;
