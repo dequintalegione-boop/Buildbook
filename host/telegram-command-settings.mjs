@@ -57,7 +57,7 @@ export function createTelegramCommandSettingsStore(path) {
         try {
           const handle = await open(temporary, 'wx', 0o600);
           try {
-            await handle.writeFile(JSON.stringify({ version: 1, commands: normalized }, null, 2) + '\\n', 'utf8');
+            await handle.writeFile(JSON.stringify({ version: 1, commands: normalized }, null, 2) + '\n', 'utf8');
             await handle.sync();
           } finally {
             await handle.close();
