@@ -73,3 +73,18 @@ test('corrupt optional activity journal does not prevent new events from being r
   await log.record({ action: 'telegram_start', status: 'success', message: 'Telegram запущен.' });
   assert.equal((await log.recent(10)).length, 1);
 });
+
+test('activity journal supports offset pagination without losing chronological ordering', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-pages-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = createActivityLog({ path: join(dir, 'activity.json') });
+  for (let index = 0; index < 7; index += 1) {
+    await log.record({ action: 'page_test', status: 'success', message: 'Event ' + index });
+  }
+  const first = await log.recent(3, 0);
+  const second = await log.recent(3, 3);
+  const third = await log.recent(3, 6);
+  assert.deepEqual(first.map(event => event.message), ['Event 6', 'Event 5', 'Event 4']);
+  assert.deepEqual(second.map(event => event.message), ['Event 3', 'Event 2', 'Event 1']);
+  assert.deepEqual(third.map(event => event.message), ['Event 0']);
+});
