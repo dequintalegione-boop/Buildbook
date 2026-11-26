@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1232,4 +1232,30 @@ test('Telegram latency API handles unconfigured and failed checks without exposi
   const body = await response.json();
   assert.equal(body.available, false);
   assert.equal(JSON.stringify(body).includes('secret token'), false);
+});
+
+test('command settings API reads and persists strict boolean execution switches', async t => {
+  let settings = { income: false, expense: true, stats: false, help: true };
+  const { base, request } = await fixture(t, {
+    getTelegramCommandSettings: async () => ({ ...settings }),
+    setTelegramCommandSettings: async next => { settings = { ...next }; return { ...settings }; },
+  });
+  const read = await request(base + '/api/telegram/command-settings');
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).commands, settings);
+
+  const update = await request(base + '/api/telegram/command-settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commands: { income: true, expense: false, stats: true, help: true } }),
+  });
+  assert.equal(update.status, 200);
+  assert.deepEqual((await update.json()).commands, { income: true, expense: false, stats: true, help: true });
+
+  const invalid = await request(base + '/api/telegram/command-settings', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commands: { income: 'yes', expense: false, stats: true, help: true } }),
+  });
+  assert.equal(invalid.status, 400);
 });
