@@ -88,3 +88,26 @@ test('activity journal supports offset pagination without losing chronological o
   assert.deepEqual(second.map(event => event.message), ['Event 3', 'Event 2', 'Event 1']);
   assert.deepEqual(third.map(event => event.message), ['Event 0']);
 });
+
+test('activity journal stores safe Telegram identifiers without storing message text', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'buildbook-activity-telegram-meta-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const log = createActivityLog({ path: join(dir, 'activity.json') });
+  const event = await log.record({
+    action: 'telegram_operation_committed',
+    status: 'success',
+    message: 'Финансовая операция успешно сохранена в Buildbook.',
+    telegramUserId: '123456789',
+    updateId: 77,
+    operationId: 'transaction-77',
+  });
+  assert.equal(event.telegramUserId, '123456789');
+  assert.equal(event.updateId, 77);
+  assert.equal(event.operationId, 'transaction-77');
+  await assert.rejects(log.record({
+    action: 'telegram_message_accepted',
+    status: 'success',
+    message: 'Принято',
+    telegramUserId: 'not-an-id',
+  }), /invalid fields/i);
+});
