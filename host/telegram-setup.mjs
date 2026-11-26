@@ -28,7 +28,7 @@ export async function configureTelegramHost({
     BUILDBOOK_TELEGRAM_INBOX_PATH: String(env.BUILDBOOK_TELEGRAM_INBOX_PATH || resolve(dataDir, 'telegram-inbox.json')),
     BUILDBOOK_TELEGRAM_OFFSET_PATH: String(env.BUILDBOOK_TELEGRAM_OFFSET_PATH || resolve(dataDir, 'telegram-offset.json')),
     BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: String(env.BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH || resolve(dataDir, 'telegram.lock')),
-    BUILDBOOK_TELEGRAM_ENABLED: 'true',
+    BUILDBOOK_TELEGRAM_ENABLED: 'false',
   };
   const config = readTelegramServiceConfig(candidateEnv);
   const normalizedProfilePaths = new Set([
@@ -50,7 +50,7 @@ export async function configureTelegramHost({
       BUILDBOOK_TELEGRAM_INBOX_PATH: config.inboxPath,
       BUILDBOOK_TELEGRAM_OFFSET_PATH: config.offsetPath,
       BUILDBOOK_TELEGRAM_INSTANCE_LOCK_PATH: config.instanceLockPath,
-      BUILDBOOK_TELEGRAM_ENABLED: 'true',
+      BUILDBOOK_TELEGRAM_ENABLED: 'false',
     },
   });
   for (const key of [
