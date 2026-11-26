@@ -271,7 +271,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -303,6 +303,13 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (!['127.0.0.1', '::1', 'localhost'].includes(host) || (isIP(host) === 0 && host !== 'localhost')) {
     throw new TypeError('Локальный API разрешено привязывать только к loopback-интерфейсу.');
   }
+
+  if (getActivityLog !== null && typeof getActivityLog !== 'function') throw new TypeError('getActivityLog must be a function or null.');
+  if (recordActivity !== null && typeof recordActivity !== 'function') throw new TypeError('recordActivity must be a function or null.');
+  const logActivity = async (action, status, message) => {
+    if (typeof recordActivity !== 'function') return;
+    try { await recordActivity({ action, status, message }); } catch { /* Audit failure must not break a user operation. */ }
+  };
 
   const sessions = new Map();
   const server = createServer({ maxHeaderSize: 8 * 1024 }, async (request, response) => {
@@ -481,6 +488,19 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
       return;
     }
+    if (request.method === 'GET' && pathname === '/api/activity') {
+      try {
+        const events = typeof getActivityLog === 'function' ? await getActivityLog() : [];
+        if (!Array.isArray(events) || events.length > 500) {
+          send(response, 502, { error: 'Журнал действий локального хоста вернул некорректные данные.' });
+          return;
+        }
+        send(response, 200, { events });
+      } catch {
+        send(response, 500, { error: 'Не удалось прочитать журнал действий локального хоста.' });
+      }
+      return;
+    }
     const localActionPrefix = '/api/local-actions/';
     const localAction = pathname.startsWith(localActionPrefix) ? pathname.slice(localActionPrefix.length) : '';
     if (request.method === 'POST' && localAction) {
@@ -492,6 +512,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       try {
         const result = await (launchLocalAction || launchWindowsLocalAction)(action);
         const completed = result?.completed === true;
+        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'success', typeof result?.message === 'string' ? result.message.slice(0, 200) : 'Локальное действие выполнено.');
         send(response, completed ? 200 : 202, {
           ok: true,
           action,
@@ -500,6 +521,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         });
       } catch (error) {
         const unsupported = error?.code === 'LOCAL_ACTION_UNSUPPORTED';
+        await logActivity('local_helper_' + action.replaceAll('-', '_'), 'error', unsupported ? 'Действие недоступно на этой платформе.' : 'Локальное действие завершилось ошибкой.');
         const details = [error?.stderr, error?.stdout, error?.message]
           .map(value => String(value || '').replaceAll('\r', ' ').replaceAll('\n', ' ').replaceAll('\t', ' ').trim())
           .filter(Boolean).join(' | ').slice(0, 800);
@@ -562,8 +584,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           users.push({ id: user.id, comment: user.comment || '' });
         }
         const result = await setTelegramAllowlist(users);
+        await logActivity('telegram_allowlist_update', 'success', 'Белый список пользователей обновлён.');
         send(response, 200, { ok: true, users: Array.isArray(result?.users) ? result.users : users });
       } catch (error) {
+        await logActivity('telegram_allowlist_update', 'error', 'Не удалось обновить белый список пользователей.');
         send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200
           ? error.message : 'Не удалось сохранить список доступа Telegram.' });
       }
@@ -634,9 +658,11 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       try {
         await action();
+        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'success', pathname.endsWith('/start') ? 'Telegram запущен.' : 'Telegram остановлен.');
         const raw = typeof getTelegramStatus === 'function' ? getTelegramStatus() : null;
         send(response, 200, { ok: true, running: raw?.running === true });
       } catch (error) {
+        await logActivity(pathname.endsWith('/start') ? 'telegram_start' : 'telegram_stop', 'error', 'Не удалось изменить состояние Telegram.');
         send(response, 409, { error: error?.message || 'Не удалось изменить состояние Telegram.' });
       }
       return;
@@ -699,8 +725,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           return;
         }
         await setTelegramCommands(body.commands);
+        await logActivity('telegram_commands_update', 'success', 'Команды Telegram обновлены.');
         send(response, 200, { ok: true });
       } catch (error) {
+        await logActivity('telegram_commands_update', 'error', 'Не удалось обновить команды Telegram.');
         send(response, 400, { error: typeof error?.message === 'string' && error.message.length <= 200 ? error.message : 'Не удалось сохранить команды бота.' });
       }
       return;
@@ -783,8 +811,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 502, { error: 'Локальный хост вернул некорректный профиль бота.' });
           return;
         }
+        await logActivity('telegram_setup', 'success', 'Настройки Telegram-бота сохранены.');
         send(response, 200, { ok: true, configured: true, enabled: false, running: false, bot });
       } catch (error) {
+        await logActivity('telegram_setup', 'error', 'Не удалось сохранить настройки Telegram-бота.');
         send(response, error?.code === 'BUILD_BOOK_PROFILE_NOT_READY' ? 409 : 400, {
           error: typeof error?.message === 'string' && error.message.length <= 200
             ? error.message : 'Не удалось сохранить настройки Telegram.',
