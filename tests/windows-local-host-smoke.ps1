@@ -19,10 +19,7 @@ foreach ($path in @($startupScript, $installerScript, $installScript, $uninstall
 
 
 $installerSource = Get-Content -LiteralPath $installerScript -Raw
-if ($installerSource -notmatch 'OpenJS\.NodeJS\.LTS'
-  -or $installerSource -notmatch 'MessageBoxButtons\]::YesNo'
-  -or $installerSource -notmatch 'accept-package-agreements'
-  -or $installerSource -notmatch 'https://nodejs\.org/en/download') {
+if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -notmatch 'MessageBoxButtons\]::YesNo') -or ($installerSource -notmatch 'accept-package-agreements') -or ($installerSource -notmatch 'https://nodejs\.org/en/download')) {
   throw 'The Windows installer must offer consent-based winget setup and retain the official Node.js fallback.'
 }
 
