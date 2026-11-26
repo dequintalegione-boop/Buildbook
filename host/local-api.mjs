@@ -762,7 +762,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 503, { error: 'Изменение настроек команд Telegram недоступно.' });
         return;
       }
-      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
         request.resume();
         return;
