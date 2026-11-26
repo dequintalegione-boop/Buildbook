@@ -102,22 +102,16 @@ test('serves only the fixed public UI allowlist without exposing host data or se
   assert.equal((await fetch(base + '/api/profile')).status, 401);
 });
 
-test('launches only explicitly allowlisted local helper actions', async t => {
+test('rejects legacy detached Telegram helpers; Telegram setup is available through in-app API routes', async t => {
   const launched = [];
   const { base, request } = await fixture(t, {
     launchLocalAction: async action => { launched.push(action); },
   });
-  const opened = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
-  assert.equal(opened.status, 202);
-  assert.deepEqual(await opened.json(), {
-    ok: true,
-    action: 'telegram-manage',
-    message: 'Локальный помощник открыт в отдельном окне.',
-  });
-  assert.deepEqual(launched, ['telegram-manage']);
+  const legacy = await request(base + '/api/local-actions/telegram-manage', { method: 'POST' });
+  assert.equal(legacy.status, 404);
   const denied = await request(base + '/api/local-actions/run-arbitrary-command', { method: 'POST' });
   assert.equal(denied.status, 404);
-  assert.deepEqual(launched, ['telegram-manage']);
+  assert.deepEqual(launched, []);
 });
 
 test('rejects requests without a browser session', async (t) => {
