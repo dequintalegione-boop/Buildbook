@@ -42,6 +42,7 @@ export function createTelegramHostService({
         ...options,
         defaults: { accountId: config.defaultAccountId || null },
       })),
+      ...(typeof getCommandSettings === 'function' ? { getCommandSettings } : {}),
     });
   if (typeof config.botToken !== 'string' || !config.botToken) throw new TypeError('Telegram bot token is required.');
   if (typeof config.botId !== 'string' || !/^\d{1,16}$/.test(config.botId)) throw new TypeError('Telegram bot ID is required.');
