@@ -727,6 +727,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       try {
         const result = await getTelegramLatency();
+        if (result?.available === false) {
+          send(response, 200, { available: false, latencyMs: null, checkedAt: null });
+          return;
+        }
         const latencyMs = result?.latencyMs;
         const checkedAt = result?.checkedAt;
         if (!result || typeof latencyMs !== 'number' || !Number.isFinite(latencyMs) || latencyMs < 0 || latencyMs > 120_000
