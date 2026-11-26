@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+const localHostStartup = await readFile(new URL('../scripts/start-buildbook-local-host.ps1', import.meta.url), 'utf8');
 const telegramOverrides = await readFile(new URL('../client/telegram-overrides.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
@@ -115,4 +116,33 @@ test('Telegram UI overrides do not replace the single in-app local-host connecti
   assert.match(html, /bootstrap-local/);
   assert.match(html, /Важное ограничение Windows/);
   assert.equal(html.includes('github.com/dequintalegione-boop/Buildbook/blob/main/scripts'), false);
+});
+
+
+test('every static data-a action is wired to the dispatcher or the explicit allowlist handler', () => {
+  const start = html.indexOf('function act(a,id){const A={');
+  const end = html.indexOf('A[a]&&A[a]()', start);
+  assert.ok(start >= 0 && end > start);
+  const dispatcher = html.slice(start, end);
+  const keys = new Set([...dispatcher.matchAll(/(?:'([^'\\n]{1,80})'|([A-Za-z_$][A-Za-z0-9_$-]*))\\s*:/g)].map(match => match[1] || match[2]));
+  const actions = [...html.matchAll(/\\bdata-a\\s*=\\s*["']([^"']+)["']/g)].map(match => match[1]).filter(action => !action.includes('${'));
+  const missing = [...new Set(actions)].filter(action => !keys.has(action) && action !== 'tgallowlist');
+  assert.deepEqual(missing, []);
+  assert.match(telegramOverrides, /data-a="tgallowlist"/);
+});
+
+test('local PWA pairing does not ask for a host key and explains the secret only for troubleshooting', () => {
+  const start = html.indexOf('function telegramConnectForm()');
+  const end = html.indexOf('async function closeTelegramSession()', start);
+  const connector = html.slice(start, end);
+  assert.match(connector, /const body=localOrigin/);
+  assert.doesNotMatch(connector, /fld\\('token'/);
+  assert.match(connector, /BUILDBOOK_LOCAL_API_TOKEN/);
+  assert.match(connector, /bootstrap-local/);
+});
+
+test('first local-host launch replaces a copied public placeholder API secret', () => {
+  assert.match(localHostStartup, /REPLACE_/);
+  assert.match(localHostStartup, /randomBytes\\(32\\)/);
+  assert.match(localHostStartup, /Секрет локального API автоматически создан/);
 });
