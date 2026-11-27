@@ -171,9 +171,9 @@ try {
   } | ConvertTo-Json
   [System.IO.File]::WriteAllText((Join-Path $sourceRoot 'buildbook-install.json'), $newMarker, (New-Object System.Text.UTF8Encoding($false)))
   if (-not [System.IO.Path]::IsPathRooted($ReadyFile)) { throw 'Путь подтверждения запуска обновления должен быть абсолютным.' }
+  Write-UpdateLog 'Архив полностью подготовлен. Ожидаю штатную остановку локального хоста.'
   [System.IO.File]::WriteAllText($ReadyFile, 'ready', (New-Object System.Text.UTF8Encoding($false)))
   $readySignaled = $true
-  Write-UpdateLog 'Архив полностью подготовлен. Ожидаю штатную остановку локального хоста.'
 
   $parentDeadline = (Get-Date).AddSeconds(120)
   while ((Get-Date) -lt $parentDeadline) {
@@ -218,10 +218,12 @@ try {
       else { Write-UpdateLog 'ОШИБКА: исходный локальный хост не подтвердил повторный запуск.' }
     } catch { Write-UpdateLog ('ОШИБКА ПОВТОРНОГО ЗАПУСКА: ' + $_.Exception.Message) }
   }
-  try {
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show(('Не удалось обновить Buildbook.' + [Environment]::NewLine + $failure + [Environment]::NewLine + [Environment]::NewLine + 'Подробности: ' + $logPath), 'Buildbook — ошибка обновления', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-  } catch { }
+  if ($readySignaled) {
+    try {
+      Add-Type -AssemblyName System.Windows.Forms
+      [System.Windows.Forms.MessageBox]::Show(('Не удалось обновить Buildbook.' + [Environment]::NewLine + $failure + [Environment]::NewLine + [Environment]::NewLine + 'Подробности: ' + $logPath), 'Buildbook — ошибка обновления', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    } catch { }
+  }
   if (-not $readySignaled) { exit 1 }
 } finally {
   if ($lockStream) { $lockStream.Dispose() }
