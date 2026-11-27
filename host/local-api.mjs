@@ -558,7 +558,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         send(response, 409, { error: 'Установка обновления уже выполняется.' });
         return;
       }
-      if (!/^application\\/json(?:\\s*;\\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
         send(response, 415, { error: 'Для установки обновления требуется JSON-запрос.' });
         return;
       }
