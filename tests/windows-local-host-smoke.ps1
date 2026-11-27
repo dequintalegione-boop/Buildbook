@@ -32,6 +32,10 @@ if ($updaterBytes.Length -lt 3 -or $updaterBytes[0] -ne 0xEF -or $updaterBytes[1
   throw 'The Windows updater must be saved as UTF-8 with BOM for Windows PowerShell 5.1 compatibility.'
 }
 $updaterSource = Get-Content -LiteralPath $updaterScript -Raw -Encoding UTF8
+if (-not $updaterSource.Contains('$scriptInstallRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot')) -or
+    -not $updaterSource.Contains('Путь установки не совпадает с фактическим расположением помощника обновления')) {
+  throw 'The Windows updater must verify its actual installation directory before changing files.'
+}
 foreach ($requiredUpdaterText in @(
   'https://github.com/dequintalegione-boop/Buildbook/archive/',
   'Expand-VerifiedArchive',
