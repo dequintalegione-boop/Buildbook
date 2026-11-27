@@ -1065,21 +1065,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 400, { error: 'Контрольная сумма файла импорта не совпадает.' });
           return;
         }
-        const current = await profileStore.read();
-        if (current.revision !== body.expectedRevision) {
-          const error = Object.assign(new Error('Профиль уже изменён. Повторно проверьте целевой профиль перед импортом.'), {
-            code: 'BUILD_BOOK_STORAGE_CONFLICT',
-            expectedRevision: body.expectedRevision,
-            currentRevision: current.revision,
-          });
-          throw error;
-        }
-        if (current.profile !== null) {
-          send(response, 409, { error: 'Импорт разрешён только в пустой профиль. Сначала сохраните резервную копию и используйте отдельную процедуру восстановления.', code: 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY' });
-          return;
-        }
         const importedProfile = { state: payload.state, logs: payload.logs, photos: payload.photos };
-        const revision = await profileStore.write(importedProfile, body.expectedRevision);
+        // Empty-target validation and the first write must share one store
+        // transaction; a separate read() here would leave a race window.
+        const revision = await profileStore.initializeIfEmpty(importedProfile, body.expectedRevision);
         const verified = await profileStore.read();
         const expectedReadback = createHash('sha256').update(JSON.stringify(importedProfile), 'utf8').digest('hex');
         const actualReadback = verified.profile && typeof verified.profile === 'object'
@@ -1095,7 +1084,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         }
         send(response, 200, { revision, imported: true, verified: true });
       } catch (error) {
-        if (error.code === 'BUILD_BOOK_STORAGE_CONFLICT') {
+        if (error.code === 'BUILD_BOOK_STORAGE_CONFLICT' || error.code === 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY') {
           send(response, 409, {
             error: error.message,
             code: error.code,

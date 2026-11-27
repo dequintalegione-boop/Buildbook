@@ -553,6 +553,7 @@ test('reports a failed canonical read-back after profile import instead of claim
         : { revision: 1, profile: { state: { unexpected: true }, logs: [], photos: {} } };
     },
     async write() { writes += 1; return 1; },
+    async initializeIfEmpty() { writes += 1; return 1; },
   };
   const api = createLocalApiServer({
     profileStore,
