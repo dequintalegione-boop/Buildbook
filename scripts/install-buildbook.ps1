@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $downloadRoot = Join-Path $env:TEMP ('Buildbook-package-' + [guid]::NewGuid().ToString('N'))
