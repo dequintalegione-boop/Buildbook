@@ -9,7 +9,9 @@ $commitUrl = 'https://api.github.com/repos/dequintalegione-boop/Buildbook/commit
 try {
   $commitInfo = Invoke-RestMethod -Uri $commitUrl -Headers @{ 'Accept' = 'application/vnd.github+json'; 'User-Agent' = 'Buildbook-Windows-Installer' } -TimeoutSec 30
   $commitSha = [string]$commitInfo.sha
-  if ($commitSha -notmatch '^[a-fA-F0-9]{40}
+  if ($commitSha -notmatch '^[a-fA-F0-9]{40}$') { throw 'GitHub returned an invalid commit SHA.' }
+  $archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/' + $commitSha + '.zip'
+  Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
   Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadRoot -Force
 } catch {
   Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
