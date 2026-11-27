@@ -4801,13 +4801,29 @@ document.addEventListener('change',e=>{
    if(!target||!Number.isSafeInteger(target.revision)||target.revision<0||!(target.profile===null||isPlainRecord(target.profile))){
     throw new Error('Локальный хост вернул некорректное состояние профиля.');
    }
-   if(target.profile!==null)throw new Error('Целевой профиль локального хоста уже содержит данные. Обычный перенос запрещён, чтобы не перезаписать существующий профиль.');
+   let replaceExisting=false,targetBackupSha256='';
+   if(target.profile!==null){
+    if(!isPlainRecord(target.profile.state)||!Array.isArray(target.profile.logs)||!isPlainRecord(target.profile.photos))throw new Error('Локальный профиль имеет неподдерживаемый формат. Ничего не изменено.');
+    const targetBackupProfile={state:target.profile.state,logs:target.profile.logs,photos:target.profile.photos};
+    const targetSerialized=JSON.stringify(targetBackupProfile);
+    if(typeof targetSerialized!=='string')throw new Error('Не удалось подготовить резервную копию локального профиля.');
+    const targetBytes=new TextEncoder().encode(targetSerialized);
+    if(targetBytes.byteLength>32*1024*1024)throw new Error('Локальный профиль слишком велик для безопасного резервного экспорта (лимит 32 MiB).');
+    const targetDigest=await crypto.subtle.digest('SHA-256',targetBytes);
+    targetBackupSha256=Array.from(new Uint8Array(targetDigest),byte=>byte.toString(16).padStart(2,'0')).join('');
+    const targetBackup={format:'buildbook-local-profile-backup',version:1,exportedAt:new Date().toISOString(),revision:target.revision,profile:targetBackupProfile,sha256:targetBackupSha256};
+    triggerFileDownload(new Blob([JSON.stringify(targetBackup,null,2)],{type:'application/json;charset=utf-8'}),'buildbook-local-host-backup-'+today()+'.json');
+    if(!confirm('На локальном хосте уже есть данные.\n\nСначала скачан отдельный файл резервной копии локального профиля. Убедитесь, что файл появился в загрузках и сохранён.\n\nПосле вашего подтверждения Buildbook сможет заменить тестовый профиль данными из браузера. Если отменить действие, локальные данные останутся без изменений.'))return;
+    replaceExisting=true;
+   }
    const bytes=verified.sizeBytes;
    const size=bytes<1024*1024?(bytes/1024).toFixed(1)+' KiB':(bytes/1024/1024).toFixed(2)+' MiB';
    const details='Схема: '+verified.sourceSchemaVersion+'\nРазмер данных: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\n'+formatSummary(sourceCounts);
-   if(!confirm('Целевой профиль пуст. Будет создана его первая ревизия.\n\n'+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить импорт?'))return;
+   if(!confirm((replaceExisting?'Локальный профиль будет заменён после создания резервной копии.\n\n':'Целевой профиль пуст. Будет создана его первая ревизия.\n\n')+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить?'))return;
    const envelope={format:verified.format,version:verified.version,sourceSchemaVersion:verified.sourceSchemaVersion,exportedAt:verified.exportedAt,payload:verified.payload,sha256:verified.sha256};
-   const imported=await localTelegramRequest('/api/profile/import',{method:'POST',body:JSON.stringify({expectedRevision:target.revision,envelope}),timeoutMs:120_000});
+   const importPath=replaceExisting?'/api/profile/replace':'/api/profile/import';
+   const importBody=replaceExisting?{expectedRevision:target.revision,backupSha256:targetBackupSha256,envelope}:{expectedRevision:target.revision,envelope};
+   const imported=await localTelegramRequest(importPath,{method:'POST',body:JSON.stringify(importBody),timeoutMs:120_000});
    if(!imported||imported.imported!==true||imported.revision!==target.revision+1)throw new Error('Хост не подтвердил ожидаемый результат импорта.');
    const readback=await localTelegramRequest('/api/profile');
    if(!readback||readback.revision!==imported.revision||!isPlainRecord(readback.profile))throw new Error('Импорт записан, но повторное чтение профиля не подтвердило ревизию. Не переключайте приложение на хост до проверки.');
