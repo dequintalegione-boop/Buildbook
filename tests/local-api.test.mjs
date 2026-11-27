@@ -1303,6 +1303,43 @@ test('update status endpoint returns only the trusted update metadata to an auth
   assert.deepEqual(await response.json(), expected);
 });
 
+test('update download redirects only to the pinned official archive after a fresh availability check', async t => {
+  const sha = 'a'.repeat(40);
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: true,
+      latestCommit: sha,
+    }),
+  });
+  const response = await request(base + '/api/updates/download', { redirect: 'manual' });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('location'), 'https://github.com/dequintalegione-boop/Buildbook/archive/' + sha + '.zip');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('update download refuses when the latest version is already installed or installation is untracked', async t => {
+  for (const status of [
+    { repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: true, updateAvailable: false, latestCommit: 'a'.repeat(40) },
+    { repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: false, updateAvailable: null, latestCommit: 'a'.repeat(40) },
+  ]) {
+    const { base, request } = await fixture(t, { getUpdateStatus: async () => status });
+    const response = await request(base + '/api/updates/download', { redirect: 'manual' });
+    assert.equal(response.status, 409);
+    assert.match((await response.json()).error, /нет подтверждённого обновления/);
+  }
+});
+
+test('update download requires an authenticated browser session', async t => {
+  const { base } = await fixture(t, {
+    getUpdateStatus: async () => ({ repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: true, updateAvailable: true, latestCommit: 'a'.repeat(40) }),
+  });
+  const response = await fetch(base + '/api/updates/download', { redirect: 'manual' });
+  assert.equal(response.status, 401);
+});
+
 test('update status endpoint returns a bounded error when GitHub is unavailable', async t => {
   const { base, request } = await fixture(t, {
     getUpdateStatus: async () => { throw Object.assign(new Error('GitHub temporarily unavailable.'), { code: 'BUILDBOOK_UPDATE_NETWORK_ERROR' }); },
