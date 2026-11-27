@@ -519,9 +519,10 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
         // Re-check the trusted upstream commit at click time. The browser cannot
         // supply a URL or SHA, so this endpoint can only redirect to our repo.
         const status = await getUpdateStatus();
+        const trackedUpdateAvailable = status?.installationTracked === true && status.updateAvailable === true;
+        const untrackedInstallCanDownloadLatest = status?.installationTracked === false && status.updateAvailable === null;
         if (!status || status.repository !== 'dequintalegione-boop/Buildbook'
-          || status.branch !== 'main' || status.installationTracked !== true
-          || status.updateAvailable !== true
+          || status.branch !== 'main' || (!trackedUpdateAvailable && !untrackedInstallCanDownloadLatest)
           || typeof status.latestCommit !== 'string' || !/^[a-f0-9]{40}$/i.test(status.latestCommit)) {
           send(response, 409, { error: 'Сейчас нет подтверждённого обновления для этой установки. Сначала проверьте наличие новой версии.' });
           return;
