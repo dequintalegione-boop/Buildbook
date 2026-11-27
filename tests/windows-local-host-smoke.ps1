@@ -36,6 +36,8 @@ foreach ($requiredUpdaterText in @(
   'https://github.com/dequintalegione-boop/Buildbook/archive/',
   'Expand-VerifiedArchive',
   'ExternalAttributes',
+  '$ReadyFile',
+  '$readySignaled = $true',
   'buildbook-install.json',
   'backup-',
   "'/MIR'",
