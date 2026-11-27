@@ -4198,7 +4198,7 @@ async function checkBuildbookUpdates(){
   LAST_BUILD_UPDATE_STATUS=result;
   if(!result.installationTracked){
    show('Последняя версия main: '+result.latestCommit.slice(0,12)+'. Версия текущей установки не зарегистрирована, поэтому сравнить версии нельзя. Автоматическая установка доступна только для установки, зарегистрированной штатным установщиком.');
-   if(downloadButton)downloadButton.disabled=false;
+   if(downloadButton)downloadButton.disabled=true;
   }else if(result.updateAvailable){
    show('Доступно обновление: '+result.installedCommit.slice(0,12)+' → '+result.latestCommit.slice(0,12)+'. '+(result.latestMessage||'Новая версия доступна.')+' Нажмите «Установить обновление», чтобы обновить Buildbook в один клик.');
    if(downloadButton)downloadButton.disabled=false;
@@ -4216,11 +4216,13 @@ async function checkBuildbookUpdates(){
 async function waitForBuildbookRestart(expectedCommit){
  const statusNode=document.querySelector('[data-update-status]');
  const show=message=>{if(statusNode)statusNode.textContent=message};
+ let sawHostStop=false;
  for(let attempt=0;attempt<120;attempt++){
   await new Promise(resolve=>setTimeout(resolve,1000));
   try{
-   const health=await fetch(location.origin+'/api/health',{credentials:'include',cache:'no-store'});
-   if(!health.ok)continue;
+   const page=await fetch(location.origin+'/',{credentials:'include',cache:'no-store'});
+   if(!page.ok){sawHostStop=true;continue}
+   if(!sawHostStop)continue;
    const status=await getBuildbookUpdateStatus();
    if(status.installedCommit===expectedCommit){
     show('Buildbook успешно обновлён до '+expectedCommit.slice(0,12)+'. Перезагружаем интерфейс…');
@@ -4230,7 +4232,7 @@ async function waitForBuildbookRestart(expectedCommit){
    setTimeout(()=>location.reload(),1200);
    return;
   }catch(error){
-   // The host may be starting and its API session may not yet be ready.
+   sawHostStop=true;
   }
  }
  show('Обновление ещё выполняется, но локальный хост пока не ответил. Не запускайте второе обновление. Журнал: %LOCALAPPDATA%\\Buildbook\\updates\\update.log');
