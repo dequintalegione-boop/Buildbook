@@ -4769,7 +4769,7 @@ document.addEventListener('change',e=>{
    const bytes=verified.sizeBytes;
    const size=bytes<1024*1024?(bytes/1024).toFixed(1)+' KiB':(bytes/1024/1024).toFixed(2)+' MiB';
    const details='Схема: '+verified.sourceSchemaVersion+'\nРазмер данных: '+size+'\nДата экспорта: '+verified.exportedAt+'\n\n'+formatSummary(sourceCounts);
-   if(!confirm((replaceExisting?'Локальный профиль будет заменён после создания резервной копии.\\n\\n':'Целевой профиль пуст. Будет создана его первая ревизия.\\n\\n')+details+'\\n\\nИсходный профиль IndexedDB останется без изменений. Продолжить?'))return;
+   if(!confirm((replaceExisting?'Локальный профиль будет заменён после создания резервной копии.\n\n':'Целевой профиль пуст. Будет создана его первая ревизия.\n\n')+details+'\n\nИсходный профиль IndexedDB останется без изменений. Продолжить?'))return;
    const envelope={format:verified.format,version:verified.version,sourceSchemaVersion:verified.sourceSchemaVersion,exportedAt:verified.exportedAt,payload:verified.payload,sha256:verified.sha256};
    const importPath=replaceExisting?'/api/profile/replace':'/api/profile/import';
    const importBody=replaceExisting?{expectedRevision:target.revision,backupSha256:targetBackupSha256,envelope}:{expectedRevision:target.revision,envelope};
