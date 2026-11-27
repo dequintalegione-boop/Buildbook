@@ -47,6 +47,32 @@ test('serializes concurrent writes and allows only one matching revision', async
   assert.equal((await store.read()).revision, 1);
 });
 
+test('initializes a profile only when the canonical target is empty', async (t) => {
+  const { store } = await fixture(t);
+  const profile = { state: { tx: [] }, logs: [], photos: {} };
+  assert.equal(await store.initializeIfEmpty(profile, 0), 1);
+  assert.deepEqual(await store.read(), { revision: 1, profile });
+  await assert.rejects(store.initializeIfEmpty({ marker: 'must-not-replace' }, 1), error => {
+    assert.equal(error.code, 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY');
+    assert.equal(error.currentRevision, 1);
+    return true;
+  });
+  assert.deepEqual((await store.read()).profile, profile);
+});
+
+test('serializes empty-profile initialization against concurrent writes', async (t) => {
+  const { store } = await fixture(t);
+  const results = await Promise.allSettled([
+    store.initializeIfEmpty({ marker: 'import' }, 0),
+    store.write({ marker: 'concurrent-write' }, 0),
+  ]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(result => result.status === 'rejected' && result.reason.code === 'BUILD_BOOK_STORAGE_CONFLICT').length, 1);
+  const current = await store.read();
+  assert.equal(current.revision, 1);
+  assert.ok(['import', 'concurrent-write'].includes(current.profile.marker));
+});
+
 test('rejects malformed profile values and invalid expected revisions', async (t) => {
   const { store } = await fixture(t);
   await assert.rejects(store.write([], 0), TypeError);

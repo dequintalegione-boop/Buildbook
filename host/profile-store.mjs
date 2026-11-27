@@ -118,6 +118,46 @@ export function createProfileStore(filePath) {
       });
     },
 
+    async initializeIfEmpty(profile, expectedRevision) {
+      if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+        throw new TypeError('Профиль должен быть объектом.');
+      }
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        throw new TypeError('Не задана корректная версия профиля.');
+      }
+      let serializedProfile;
+      try { serializedProfile = JSON.stringify(profile); } catch {
+        throw new TypeError('Профиль должен содержать только сериализуемые JSON-данные.');
+      }
+      if (typeof serializedProfile !== 'string' || Buffer.byteLength(serializedProfile, 'utf8') > MAX_PROFILE_BYTES) {
+        throw new RangeError('Размер профиля превышает допустимые 32 MiB.');
+      }
+      return serialize(async () => {
+        const current = await readDisk();
+        if (current.revision !== expectedRevision) {
+          const error = new Error(`Профиль изменился во время переноса (ожидалась ревизия ${expectedRevision}, текущая ${current.revision}). Повторно проверьте целевой профиль и запустите перенос ещё раз.`);
+          error.name = 'BuildbookStorageConflictError';
+          error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+          error.expectedRevision = expectedRevision;
+          error.currentRevision = current.revision;
+          throw error;
+        }
+        if (current.profile !== null) {
+          const error = new Error('Импорт разрешён только в пустой профиль. Существующие данные не изменены.');
+          error.code = 'BUILD_BOOK_IMPORT_TARGET_NOT_EMPTY';
+          error.expectedRevision = expectedRevision;
+          error.currentRevision = current.revision;
+          throw error;
+        }
+        if (current.revision >= Number.MAX_SAFE_INTEGER) {
+          throw new RangeError('Исчерпан диапазон ревизий профиля.');
+        }
+        const revision = current.revision + 1;
+        await writeDisk({ version: 1, revision, profile: JSON.parse(serializedProfile) });
+        return revision;
+      });
+    },
+
     async write(profile, expectedRevision) {
       if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
         throw new TypeError('Профиль должен быть объектом.');
