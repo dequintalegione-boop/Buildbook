@@ -1455,3 +1455,49 @@ test('one-click update requires an authenticated session and a configured update
   });
   assert.equal((await fetch(base + '/api/updates/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
 });
+
+
+test('one-click update leaves the host running when the updater cannot prepare the archive', async t => {
+  let shutdown = 0;
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: true,
+      latestCommit: 'b'.repeat(40),
+    }),
+    launchUpdateInstall: async () => { throw new Error('Updater preflight failed.'); },
+    onUpdateInstallStarted: () => { shutdown += 1; },
+  });
+  const response = await request(base + '/api/updates/install', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /Updater preflight failed/);
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.equal(shutdown, 0);
+});
+
+test('one-click update refuses when the installation is already current', async t => {
+  let launched = 0;
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: false,
+      latestCommit: 'c'.repeat(40),
+    }),
+    launchUpdateInstall: async () => { launched += 1; },
+  });
+  const response = await request(base + '/api/updates/install', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 409);
+  assert.equal(launched, 0);
+});
