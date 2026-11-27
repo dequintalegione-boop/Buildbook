@@ -31,7 +31,7 @@ $hostPort = 43127
 $envPath = Join-Path $InstallRoot '.env'
 if (Test-Path -LiteralPath $envPath -PathType Leaf) {
   $envText = Get-Content -LiteralPath $envPath -Raw
-  $portMatch = [regex]::Match($envText, '(?m)^BUILDBOOK_LOCAL_API_PORT=(\\d+)\\s*([string]$Message) {
+  $portMatch = [regex]::Match($envText, '(?m)^BUILDBOOK_LOCAL_API_PORT=(\d+)\s*([string]$Message) {
   Add-Content -LiteralPath $logPath -Value ([DateTime]::UtcNow.ToString('o') + ' ' + $Message) -Encoding UTF8
 }
 function Invoke-Robocopy([string]$Source, [string]$Destination, [string[]]$ExtraArguments) {
