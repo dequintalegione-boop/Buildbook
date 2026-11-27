@@ -19,7 +19,13 @@ foreach ($path in @($startupScript, $installerScript, $installScript, $uninstall
 }
 
 
-$installerSource = Get-Content -LiteralPath $installerScript -Raw
+# Windows PowerShell 5.1 treats UTF-8 scripts without a BOM as ANSI. Keep the
+# downloaded installer explicitly UTF-8-with-BOM so Cyrillic strings parse safely.
+$installerBytes = [System.IO.File]::ReadAllBytes($installerScript)
+if ($installerBytes.Length -lt 3 -or $installerBytes[0] -ne 0xEF -or $installerBytes[1] -ne 0xBB -or $installerBytes[2] -ne 0xBF) {
+  throw 'The Windows installer must be saved as UTF-8 with BOM for Windows PowerShell 5.1 compatibility.'
+}
+$installerSource = Get-Content -LiteralPath $installerScript -Raw -Encoding UTF8
 if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -notmatch 'MessageBoxButtons\]::YesNo') -or ($installerSource -notmatch 'accept-package-agreements') -or ($installerSource -notmatch 'https://nodejs\.org/en/download')) {
   throw 'The Windows installer must offer consent-based winget setup and retain the official Node.js fallback.'
 }
