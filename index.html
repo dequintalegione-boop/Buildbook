@@ -4260,7 +4260,7 @@ async function installBuildbookUpdate(){
    return;
   }
   show('Подтверждена версия '+status.latestCommit.slice(0,12)+'. Запускаем безопасную установку. Сначала будет подготовлен архив и резервная копия, затем локальный хост перезапустится…');
-  const result=await localTelegramRequest('/api/updates/install',{method:'POST',body:'{}',timeoutMs:15000});
+  const result=await localTelegramRequest('/api/updates/install',{method:'POST',body:'{}',timeoutMs:110000});
   if(!result.restarting||result.commit!==status.latestCommit)throw new Error('Локальный хост вернул неподтверждённый результат запуска обновления.');
   if(button)button.textContent='Устанавливаем…';
   show('Обновление '+result.commit.slice(0,12)+' запущено. Не закрывайте компьютер. Buildbook автоматически перезапустится после установки.');
