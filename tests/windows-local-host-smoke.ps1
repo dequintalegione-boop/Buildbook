@@ -13,7 +13,8 @@ foreach ($path in @($startupScript, $installerScript, $installScript, $uninstall
   $parseErrors = $null
   [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
   if ($parseErrors.Count -gt 0) {
-    throw "PowerShell syntax validation failed for \${path}: $($parseErrors[0].Message)"
+    $parseError = $parseErrors[0]
+    throw "PowerShell syntax validation failed for ${path} at line $($parseError.Extent.StartLineNumber), column $($parseError.Extent.StartColumnNumber): $($parseError.Message) Near: $($parseError.Extent.Text)"
   }
 }
 
@@ -30,6 +31,13 @@ if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPat
     -not $installerSource.Contains("GetFileName(" + '$selectedRoot') -or
     -not $installerSource.Contains("-ieq 'Buildbook'")) {
   throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
+}
+
+if (-not $installerSource.Contains("https://api.github.com/repos/dequintalegione-boop/Buildbook/commits/main") -or
+    -not $installerSource.Contains("'https://github.com/dequintalegione-boop/Buildbook/archive/' + " + '$commitSha' + " + '.zip'") -or
+    -not $installerSource.Contains("Join-Path " + '$installFull' + " 'buildbook-install.json'") -or
+    -not $installerSource.Contains("repository = 'dequintalegione-boop/Buildbook'")) {
+  throw 'The Windows installer must pin the downloaded archive to a verified main commit and record its installation metadata.'
 }
 
 # Guard against the Telegram panel's previous temporal-dead-zone regression.

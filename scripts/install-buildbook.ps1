@@ -4,9 +4,13 @@ Set-StrictMode -Version Latest
 $downloadRoot = Join-Path $env:TEMP ('Buildbook-package-' + [guid]::NewGuid().ToString('N'))
 $archivePath = Join-Path $downloadRoot 'buildbook.zip'
 New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
-$archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/refs/heads/main.zip'
+$commitUrl = 'https://api.github.com/repos/dequintalegione-boop/Buildbook/commits/main'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try {
+  $commitInfo = Invoke-RestMethod -Uri $commitUrl -Headers @{ 'Accept' = 'application/vnd.github+json'; 'User-Agent' = 'Buildbook-Windows-Installer' } -TimeoutSec 30
+  $commitSha = [string]$commitInfo.sha
+  if ($commitSha -notmatch '^[a-fA-F0-9]{40}$') { throw 'GitHub returned an invalid commit SHA.' }
+  $archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/' + $commitSha + '.zip'
   Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
   Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadRoot -Force
 } catch {
@@ -70,6 +74,24 @@ if ($sourceFull -ne $installFull) {
   & robocopy.exe $sourceFull $installFull /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XD '.git' 'node_modules' 'data' /XF '.env' 'local-host.log' '*.tmp' | Out-Null
   $copyExit = $LASTEXITCODE
   if ($copyExit -gt 7) { throw "Не удалось скопировать файлы Buildbook (robocopy: $copyExit)." }
+}
+
+# Record the exact trusted source commit so the in-app updater can compare
+# this installation with the repository's current main commit.
+$installMetadataPath = Join-Path $installFull 'buildbook-install.json'
+$tempMetadataPath = $installMetadataPath + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+try {
+  $installMetadata = @{
+    schemaVersion = 1
+    repository = 'dequintalegione-boop/Buildbook'
+    branch = 'main'
+    commit = $commitSha.ToLowerInvariant()
+    installedAt = [DateTime]::UtcNow.ToString('o')
+  } | ConvertTo-Json
+  [System.IO.File]::WriteAllText($tempMetadataPath, $installMetadata, (New-Object System.Text.UTF8Encoding($false)))
+  Move-Item -LiteralPath $tempMetadataPath -Destination $installMetadataPath -Force
+} finally {
+  if (Test-Path -LiteralPath $tempMetadataPath) { Remove-Item -LiteralPath $tempMetadataPath -Force }
 }
 
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null

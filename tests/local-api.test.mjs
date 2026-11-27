@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null, getUpdateStatus: options.getUpdateStatus || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1281,4 +1281,42 @@ test('activity endpoint validates and forwards server-side search and filters', 
   assert.equal(invalid.status, 400);
   const invalidStatus = await request(base + '/api/activity?status=pending');
   assert.equal(invalidStatus.status, 400);
+});
+
+
+test('update status endpoint returns only the trusted update metadata to an authenticated session', async t => {
+  const expected = {
+    repository: 'dequintalegione-boop/Buildbook',
+    branch: 'main',
+    checkedAt: '2026-11-27T12:00:00.000Z',
+    installedCommit: 'b'.repeat(40),
+    installedAt: '2026-11-20T10:00:00.000Z',
+    latestCommit: 'a'.repeat(40),
+    latestCommittedAt: '2026-11-27T10:00:00.000Z',
+    latestMessage: 'Release update',
+    installationTracked: true,
+    updateAvailable: true,
+  };
+  const { base, request } = await fixture(t, { getUpdateStatus: async () => expected });
+  const response = await request(base + '/api/updates/status');
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), expected);
+});
+
+test('update status endpoint returns a bounded error when GitHub is unavailable', async t => {
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => { throw Object.assign(new Error('GitHub temporarily unavailable.'), { code: 'BUILDBOOK_UPDATE_NETWORK_ERROR' }); },
+  });
+  const response = await request(base + '/api/updates/status');
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), {
+    error: 'GitHub temporarily unavailable.',
+    code: 'BUILDBOOK_UPDATE_NETWORK_ERROR',
+  });
+});
+
+test('update status endpoint is not available without an authenticated browser session', async t => {
+  const { base } = await fixture(t, { getUpdateStatus: async () => ({ updateAvailable: false }) });
+  const response = await fetch(base + '/api/updates/status');
+  assert.equal(response.status, 401);
 });

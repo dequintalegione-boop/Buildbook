@@ -269,7 +269,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, getTelegramCommandSettings = null, setTelegramCommandSettings = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, getTelegramCommandSettings = null, setTelegramCommandSettings = null, getUpdateStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -288,6 +288,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (getTelegramLatency !== null && typeof getTelegramLatency !== 'function') throw new TypeError('getTelegramLatency must be a function or null.');
   if (getTelegramCommandSettings !== null && typeof getTelegramCommandSettings !== 'function') throw new TypeError('getTelegramCommandSettings must be a function or null.');
   if (setTelegramCommandSettings !== null && typeof setTelegramCommandSettings !== 'function') throw new TypeError('setTelegramCommandSettings must be a function or null.');
+  if (getUpdateStatus !== null && typeof getUpdateStatus !== 'function') throw new TypeError('getUpdateStatus must be a function or null.');
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
@@ -489,6 +490,24 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
     // API credential. All other routes require the HttpOnly browser session.
     if (!sessionMatches) {
       send(response, 401, { error: 'Требуется действующая сессия локального API.' });
+      return;
+    }
+    if (request.method === 'GET' && pathname === '/api/updates/status') {
+      if (typeof getUpdateStatus !== 'function') {
+        send(response, 503, { error: 'Проверка обновлений не подключена к локальному хосту.' });
+        return;
+      }
+      try {
+        send(response, 200, await getUpdateStatus());
+      } catch (error) {
+        const code = ['BUILDBOOK_UPDATE_NETWORK_ERROR', 'BUILDBOOK_UPDATE_SOURCE_ERROR', 'BUILDBOOK_UPDATE_INVALID_RESPONSE'].includes(error?.code)
+          ? error.code : 'BUILDBOOK_UPDATE_CHECK_FAILED';
+        send(response, 502, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось проверить наличие обновлений.',
+          code,
+        });
+      }
       return;
     }
     if (request.method === 'GET' && pathname === '/api/activity') {

@@ -12,6 +12,7 @@ import { getWindowsRecoveryStatus } from './windows-recovery.mjs';
 import { createTelegramAllowlistHandlers } from './telegram-allowlist-handlers.mjs';
 import { createActivityLog } from './activity-log.mjs';
 import { createTelegramCommandSettingsStore } from './telegram-command-settings.mjs';
+import { createUpdateChecker } from './update-checker.mjs';
 
 function parsePort(env) {
   const raw = env.BUILDBOOK_LOCAL_API_PORT;
@@ -47,6 +48,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
   const activityLog = createActivityLog({ path: resolve(dirname(profilePath), 'host-activity.json') });
   const commandSettingsStore = createTelegramCommandSettingsStore(resolve(dirname(profilePath), 'telegram-command-settings.json'));
   const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const getUpdateStatus = createUpdateChecker({ installRoot: appRoot, fetchImpl });
   const telegramEnabledRaw = String(env.BUILDBOOK_TELEGRAM_ENABLED ?? 'false').trim().toLowerCase();
   if (!['true', 'false'].includes(telegramEnabledRaw)) throw new TypeError('BUILDBOOK_TELEGRAM_ENABLED must be true or false.');
   let telegramEnabled = telegramEnabledRaw === 'true';
@@ -124,6 +126,7 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     recordActivity: event => activityLog.record(event),
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramCommandSettings: () => commandSettingsStore.read(),
+    getUpdateStatus,
     setTelegramCommandSettings: commands => commandSettingsStore.write(commands),
     getTelegramLatency: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
