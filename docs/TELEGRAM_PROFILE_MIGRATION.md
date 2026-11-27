@@ -2,7 +2,7 @@
 
 ## Status
 
-The authenticated host import endpoint, browser export-envelope utility, and guarded browser-to-host import flow are implemented. The export utility is `client/profile-export.js` and exposes `BuildbookProfileExport.createEnvelope(profile)` / `serialize(profile)`; it exports only state/logs/photos, computes SHA-256 with Web Crypto, and excludes host metadata and credentials. Settings lets the user select a transfer file, validate its schema/size/checksum, confirm that a separate ordinary backup has been saved, inspect the source record counts, and check that the authenticated local host profile is empty. Import uses the observed target revision (compare-and-swap), then reads the profile back and verifies its SHA-256 digest. The original IndexedDB profile is not changed. The backup prompt is a user attestation; the browser cannot independently prove that a downloaded backup was saved to durable storage.
+The authenticated host import endpoint, browser export-envelope utility, and guarded browser-to-host import flow are implemented. The export utility is `client/profile-export.js` and exposes `BuildbookProfileExport.createEnvelope(profile)` / `serialize(profile)`; it exports only state/logs/photos, computes SHA-256 with Web Crypto, and excludes host metadata and credentials. Settings lets the user select a transfer file, validate its schema/size/checksum, confirm that a separate ordinary browser backup has been saved, inspect source record counts, and read the authenticated local host profile. If the host profile is populated, the UI automatically downloads a separate full-profile backup containing its revision and SHA-256 digest, asks the user to confirm that the file was saved, and offers an explicit replacement confirmation. The replacement endpoint verifies that the backup digest still matches the current host profile and uses the observed revision (compare-and-swap) before writing; it then reads the profile back and verifies the imported SHA-256 digest. The original IndexedDB profile is not changed. The backup prompt is a user attestation; the browser cannot independently prove that a downloaded backup was saved to durable storage.
 
 The ordinary UI can then switch to that canonical profile after an explicit confirmation. Startup uses the session-cookie runtime, fails closed when the session or profile is unavailable, and does not fall back to IndexedDB. Switching back is a separate explicit action. `Buildbook-standalone.html` and `?test=1` stay on IndexedDB. Telegram polling remains off until the operator sets `BUILDBOOK_TELEGRAM_ENABLED=true` after checking that the UI is on this same profile. Automatic verification of the backup file on disk, and a separate Windows service installer, are still not implemented.
 
@@ -31,7 +31,7 @@ The ordinary UI can then switch to that canonical profile after an explicit conf
 
 ## Import envelope
 
-The current host import endpoint is `POST /api/profile/import` (authenticated, loopback-only). It accepts the version-1 envelope below only for source schema version 5 and imports only into an empty canonical profile. The API body limit is 34 MiB; the profile store independently enforces its 32 MiB profile limit. The endpoint returns a revision on success, HTTP 409 for a populated target or revision conflict, and rejects unsupported schemas or checksum mismatches without writing.
+The normal host import endpoint is `POST /api/profile/import` (authenticated, loopback-only). It accepts the version-1 envelope below only for source schema version 5 and imports only into an empty canonical profile. The separate recovery endpoint is `POST /api/profile/replace`; it requires the exact current target revision and the SHA-256 digest of a separately exported target backup before replacing a populated profile. Both endpoints enforce the 34 MiB API body limit and 32 MiB profile limit, validate the envelope, and verify the resulting profile by reading it back. A stale revision or backup mismatch returns HTTP 409 without writing.
 
 The envelope should contain only:
 - a fixed format identifier and version;
@@ -44,7 +44,7 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 ## Conflict and recovery behavior
 
 - Empty canonical profile + valid backup + matching expected revision: allow import.
-- Non-empty canonical profile: refuse normal import and offer export/backup or a separately designed recovery procedure.
+- Non-empty canonical profile: refuse the normal import endpoint. The recovery endpoint allows replacement only when the submitted backup digest matches the exact current target profile and the expected revision still matches.
 - Unsupported schema, invalid binary descriptor, oversized payload, digest mismatch, duplicate stable IDs, or malformed JSON: reject without changing the canonical profile.
 - Revision conflict during import: reject without retrying against the new revision; require the user to review the current target again.
 - Interrupted import: atomic profile-store replacement must leave either the old complete profile or the new complete profile, never a partial profile.
@@ -52,7 +52,7 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 
 ## Implementation status
 
-1. [Implemented] Version-1 transfer-envelope validation and authenticated host import; schema 5, SHA-256, empty-target requirement, and revision compare-and-swap.
+1. [Implemented] Version-1 transfer-envelope validation and authenticated host import; schema 5, SHA-256, empty-target requirement, and revision compare-and-swap.\n2. [Implemented] Separate authenticated recovery endpoint for populated targets; it verifies the exported target backup digest and expected revision before replacement, then verifies the read-back profile.
 2. [Implemented] Separate browser backup/export flow and explicit user confirmations before transfer.
 3. [Implemented] Import preview, confirmation, host-side import, and browser read-back/checksum verification. The source IndexedDB profile is not modified.
 4. [Implemented] The UI offers a separate storage-mode switch only after successful verification. The existing IndexedDB profile remains untouched as a fallback/backup; the standalone build continues to use IndexedDB.
