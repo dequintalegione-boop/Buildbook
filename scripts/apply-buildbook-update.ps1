@@ -50,7 +50,7 @@ function Invoke-Robocopy([string]$Source, [string]$Destination, [string[]]$Extra
 function Start-BuildbookHost {
   $startupScript = Join-Path $InstallRoot 'scripts\start-buildbook-local-host.ps1'
   if (-not (Test-Path -LiteralPath $startupScript -PathType Leaf)) { throw 'В обновлении отсутствует штатный скрипт запуска Buildbook.' }
-  $scriptArguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $startupScript)
+  $scriptArguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $startupScript + '"'
   $script:hostLauncher = Start-Process -FilePath 'powershell.exe' -ArgumentList $scriptArguments -WorkingDirectory $InstallRoot -WindowStyle Hidden -PassThru
 }
 function Wait-BuildbookHost([int]$TimeoutSeconds) {
