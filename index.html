@@ -4220,8 +4220,8 @@ async function waitForBuildbookRestart(expectedCommit){
  for(let attempt=0;attempt<120;attempt++){
   await new Promise(resolve=>setTimeout(resolve,1000));
   try{
-   const page=await fetch(location.origin+'/',{credentials:'include',cache:'no-store'});
-   if(!page.ok){sawHostStop=true;continue}
+   const probe=await fetch(location.origin+'/api/health?update_probe='+Date.now(),{credentials:'include',cache:'no-store'});
+   if(!probe.ok&&probe.status!==401){sawHostStop=true;continue}
    if(!sawHostStop)continue;
    let status=null;
    try{status=await getBuildbookUpdateStatus()}catch(error){}
