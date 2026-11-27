@@ -1,4 +1,8 @@
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { access, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
@@ -29,6 +33,87 @@ function required(env, key) {
   const value = String(env[key] ?? '').trim();
   if (!value) throw new TypeError(key + ' is required.');
   return value;
+}
+
+async function launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }) {
+  if (process.platform !== 'win32') {
+    const error = new Error('Автоматическая установка обновлений доступна только в Windows.');
+    error.code = 'BUILDBOOK_UPDATE_UNSUPPORTED_PLATFORM';
+    throw error;
+  }
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new TypeError('Для установки требуется подтверждённый SHA коммита.');
+  }
+  const scriptPath = resolve(appRoot, 'scripts', 'apply-buildbook-update.ps1');
+  await access(scriptPath);
+  const readyFile = join(tmpdir(), 'buildbook-update-ready-' + process.pid + '-' + randomUUID() + '.tmp');
+  const child = spawn('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-WindowStyle', 'Hidden', '-File', scriptPath,
+    '-InstallRoot', appRoot,
+    '-CommitSha', commitSha.toLowerCase(),
+    '-ParentProcessId', String(process.pid),
+    '-ReadyFile', readyFile,
+  ], {
+    cwd: appRoot,
+    detached: true,
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+
+  let exitCode = null;
+  child.once('exit', code => {
+    exitCode = code;
+    if (code !== 0) {
+      try { onError(new Error('Updater process exited with code ' + code), { phase: 'update-process' }); } catch {}
+    }
+  });
+
+  try {
+    await new Promise((resolveSpawn, rejectSpawn) => {
+      child.once('spawn', resolveSpawn);
+      child.once('error', rejectSpawn);
+    });
+    await new Promise((resolveReady, rejectReady) => {
+      let settled = false;
+      const finish = error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (error) rejectReady(error);
+        else resolveReady();
+      };
+      const timeout = setTimeout(() => finish(new Error('Помощник обновления не подтвердил готовность за 105 секунд. Локальный хост не будет остановлен.')), 105_000);
+      child.once('error', error => {
+        try { onError(error, { phase: 'update-launch' }); } catch {}
+        finish(error);
+      });
+      const checkReady = async () => {
+        if (settled) return;
+        try {
+          await access(readyFile);
+          finish();
+          return;
+        } catch {}
+        if (exitCode !== null) {
+          finish(new Error('Помощник обновления завершился до подготовки архива. Проверьте журнал обновления.'));
+          return;
+        }
+        setTimeout(checkReady, 100);
+      };
+      void checkReady();
+    });
+    if (exitCode !== null) throw new Error('Помощник обновления завершился до остановки локального хоста.');
+  } catch (error) {
+    child.kill();
+    throw error;
+  } finally {
+    await unlink(readyFile).catch(() => {});
+  }
+
+  if (!child.pid) throw new Error('Не удалось запустить помощник безопасного обновления Windows.');
+  child.unref();
+  return { pid: child.pid };
 }
 
 /**
@@ -127,6 +212,12 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramCommandSettings: () => commandSettingsStore.read(),
     getUpdateStatus,
+    launchUpdateInstall: commitSha => launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }),
+    onUpdateInstallStarted: () => {
+      setTimeout(() => {
+        stop().catch(error => { try { onError(error, { phase: 'update-shutdown' }); } catch {} });
+      }, 700);
+    },
     setTelegramCommandSettings: commands => commandSettingsStore.write(commands),
     getTelegramLatency: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');

@@ -84,6 +84,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate Windows startup, secret ACL and Task Scheduler
-        shell: pwsh
+      - name: Validate Windows startup, secret ACL and Task Scheduler with Windows PowerShell 5.1
+        shell: powershell
         run: ./tests/windows-local-host-smoke.ps1

@@ -269,7 +269,7 @@ function originAllowed(request) {
  * Localhost-only HTTP API. Keep it bound to loopback; do not expose it to LAN.
  * Browser clients read/write the canonical profile through this API, never the file.
  */
-export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, getTelegramCommandSettings = null, setTelegramCommandSettings = null, getUpdateStatus = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
+export function createLocalApiServer({ profileStore, accessToken, getTelegramStatus, startTelegram, stopTelegram, restartTelegram = null, verifyTelegramBot = null, configureTelegram = null, getTelegramMessages = null, getTelegramBotProfile = null, getTelegramCommands = null, setTelegramCommands = null, getTelegramAllowlist = null, setTelegramAllowlist = null, getHostRecoveryStatus = null, getActivityLog = null, recordActivity = null, getTelegramLatency = null, getTelegramCommandSettings = null, setTelegramCommandSettings = null, getUpdateStatus = null, launchUpdateInstall = null, onUpdateInstallStarted = null, launchLocalAction = null, host = '127.0.0.1', port = 0, staticRoot = null, sessionTtlMs = SESSION_TTL_MS, now = Date.now } = {}) {
   if (!Number.isSafeInteger(sessionTtlMs) || sessionTtlMs < 1 || sessionTtlMs > SESSION_TTL_MS || typeof now !== 'function') {
     throw new TypeError('Срок браузерной сессии должен быть от 1 мс до 12 часов.');
   }
@@ -289,6 +289,8 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   if (getTelegramCommandSettings !== null && typeof getTelegramCommandSettings !== 'function') throw new TypeError('getTelegramCommandSettings must be a function or null.');
   if (setTelegramCommandSettings !== null && typeof setTelegramCommandSettings !== 'function') throw new TypeError('setTelegramCommandSettings must be a function or null.');
   if (getUpdateStatus !== null && typeof getUpdateStatus !== 'function') throw new TypeError('getUpdateStatus must be a function or null.');
+  if (launchUpdateInstall !== null && typeof launchUpdateInstall !== 'function') throw new TypeError('launchUpdateInstall must be a function or null.');
+  if (onUpdateInstallStarted !== null && typeof onUpdateInstallStarted !== 'function') throw new TypeError('onUpdateInstallStarted must be a function or null.');
   if (getTelegramBotProfile !== null && typeof getTelegramBotProfile !== 'function') throw new TypeError('getTelegramBotProfile must be a function or null.');
   if (getTelegramCommands !== null && typeof getTelegramCommands !== 'function') throw new TypeError('getTelegramCommands must be a function or null.');
   if (setTelegramCommands !== null && typeof setTelegramCommands !== 'function') throw new TypeError('setTelegramCommands must be a function or null.');
@@ -315,6 +317,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
   };
 
   const sessions = new Map();
+  let updateInstallInProgress = false;
   const server = createServer({ maxHeaderSize: 8 * 1024 }, async (request, response) => {
     if (!requestHostAllowed(request)) {
       send(response, 403, { error: 'Запрос отклонён: доступ разрешён только с локального интерфейса.' });
@@ -542,6 +545,62 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           error: typeof error?.message === 'string' && error.message.length <= 200
             ? error.message : 'Не удалось подготовить загрузку обновления.',
           code,
+        });
+      }
+      return;
+    }
+    if (request.method === 'POST' && pathname === '/api/updates/install') {
+      if (typeof getUpdateStatus !== 'function' || typeof launchUpdateInstall !== 'function') {
+        send(response, 503, { error: 'Автоматическая установка обновлений не подключена к этому локальному хосту.' });
+        return;
+      }
+      if (updateInstallInProgress) {
+        send(response, 409, { error: 'Установка обновления уже выполняется.' });
+        return;
+      }
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(request.headers['content-type'] || ''))) {
+        send(response, 415, { error: 'Для установки обновления требуется JSON-запрос.' });
+        return;
+      }
+      try {
+        const body = await readJson(request, 1024);
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 0) {
+          send(response, 400, { error: 'Запрос установки не должен содержать параметры.' });
+          return;
+        }
+      } catch (error) {
+        send(response, error.status || 400, { error: error.status ? error.message : 'Некорректный запрос установки.' });
+        return;
+      }
+      try {
+        const status = await getUpdateStatus();
+        if (!status || status.repository !== 'dequintalegione-boop/Buildbook' || status.branch !== 'main'
+          || status.installationTracked !== true || status.updateAvailable !== true
+          || typeof status.latestCommit !== 'string' || !/^[a-f0-9]{40}$/i.test(status.latestCommit)) {
+          send(response, 409, { error: status?.installationTracked === false
+            ? 'Эта установка не зарегистрирована для автоматического обновления. Переустановите Buildbook штатным установщиком.'
+            : 'Подтверждённое обновление не найдено. Сначала повторите проверку версии.' });
+          return;
+        }
+        updateInstallInProgress = true;
+        try {
+          await launchUpdateInstall(status.latestCommit.toLowerCase());
+        } catch (error) {
+          updateInstallInProgress = false;
+          throw error;
+        }
+        send(response, 202, { ok: true, commit: status.latestCommit.toLowerCase(), restarting: true });
+        if (typeof onUpdateInstallStarted === 'function') {
+          setTimeout(() => {
+            try { onUpdateInstallStarted(); } catch { /* The updater process is already running. */ }
+          }, 500);
+        }
+      } catch (error) {
+        updateInstallInProgress = false;
+        send(response, 502, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось запустить безопасную установку обновления.',
+          code: 'BUILDBOOK_UPDATE_INSTALL_LAUNCH_FAILED',
         });
       }
       return;

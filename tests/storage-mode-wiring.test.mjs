@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
 const localHostStartup = await readFile(new URL('../scripts/start-buildbook-local-host.ps1', import.meta.url), 'utf8');
+const safeUpdater = await readFile(new URL('../scripts/apply-buildbook-update.ps1', import.meta.url), 'utf8');
 const telegramOverrides = await readFile(new URL('../client/telegram-overrides.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
@@ -197,17 +198,44 @@ test('Windows local host startup restricts .env access to the current account', 
 });
 
 
-test('update controls renew an expired local-host session instead of trusting stale Telegram UI state', () => {
+test('update controls renew an expired local-host session and install updates with one click', () => {
   const start = html.indexOf('async function getBuildbookUpdateStatus()');
   const end = html.indexOf('function sets()', start);
   assert.ok(start >= 0 && end > start);
   const updater = html.slice(start, end);
-  assert.match(updater, /localTelegramRequest\('\/api\/updates\/status'/);
-  assert.match(updater, /if\(error\.status!==401\)throw error/);
-  assert.match(updater, /localTelegramRequest\('\/api\/session\/bootstrap-local'/);
-  assert.match(updater, /const result=await localTelegramRequest\('\/api\/updates\/status'/);
-  assert.doesNotMatch(updater, /await autoConnectLocalHost\(\)/);
-  assert.match(updater, /async function downloadBuildbookUpdate\(\)/);
-  assert.match(updater, /const status=await getBuildbookUpdateStatus\(\)/);
-  assert.match(updater, /location\.assign\('\/api\/updates\/download'\)/);
+  assert.ok(updater.includes("const statusUrl='/api/updates/status?fresh='+Date.now()"));
+  assert.ok(updater.includes('localTelegramRequest(statusUrl'));
+  assert.ok(updater.includes('if(error.status!==401)throw error'));
+  assert.ok(updater.includes("localTelegramRequest('/api/session/bootstrap-local'"));
+  assert.ok(updater.includes('async function installBuildbookUpdate()'));
+  assert.ok(updater.includes("localTelegramRequest('/api/updates/install'"));
+  assert.ok(updater.includes("method:'POST',body:'{}'"));
+  assert.ok(updater.includes('timeoutMs:110000'));
+  assert.ok(updater.includes('async function waitForBuildbookRestart(expectedCommit)'));
+  assert.ok(updater.includes('sawHostStop'));
+  assert.ok(updater.includes('/api/health?update_probe='));
+  assert.ok(updater.includes('caches.keys'));
+  assert.ok(serviceWorker.includes("const C = 'buildbook-77'"));
+  const apiBypass = serviceWorker.indexOf("if (url.pathname.startsWith('/api/'))");
+  const fetchHandler = serviceWorker.indexOf("self.addEventListener('fetch'");
+  const cacheHandler = serviceWorker.indexOf('caches.open(C).then((cache)', fetchHandler);
+  assert.ok(apiBypass >= 0 && apiBypass < cacheHandler);
+  assert.ok(updater.includes('status.installedCommit===expectedCommit'));
+  assert.equal(updater.includes("location.assign('/api/updates/download')"), false);
+  assert.ok(html.includes('Установить обновление'));
+});
+
+test('safe updater stages the pinned archive, preserves user data and can roll back', () => {
+  assert.ok(safeUpdater.includes('https://github.com/dequintalegione-boop/Buildbook/archive/'));
+  assert.ok(safeUpdater.includes('Expand-VerifiedArchive'));
+  assert.ok(safeUpdater.includes('ExternalAttributes'));
+  assert.ok(safeUpdater.includes('$ReadyFile'));
+  assert.ok(safeUpdater.includes('$readySignaled = $true'));
+  assert.ok(safeUpdater.includes('buildbook-install.json'));
+  assert.ok(safeUpdater.includes('backup-'));
+  assert.ok(safeUpdater.includes("'/MIR'"));
+  assert.ok(safeUpdater.includes("'/XD', '.git', 'node_modules', 'data', 'updates'"));
+  assert.ok(safeUpdater.includes("'/XF', '.env', 'local-host.log', '*.tmp'"));
+  assert.ok(safeUpdater.includes('Выполняю откат к резервной копии'));
+  assert.ok(safeUpdater.includes('Wait-BuildbookHost'));
 });

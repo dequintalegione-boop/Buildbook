@@ -1,8 +1,8 @@
-/* Buildbook service worker — buildbook-76
+/* Buildbook service worker — buildbook-77
  * Network-first shell. Injects telegram-overrides.js only at the REAL document
  * end (never into the first </body> that appears inside JS print templates).
  */
-const C = 'buildbook-76';
+const C = 'buildbook-77';
 const PRECACHE = [
   './',
   './index.html',
@@ -79,6 +79,12 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  // API responses contain live state and session-dependent data. Never cache them.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   if (isHtmlShell(event.request, url) || url.pathname.endsWith('/sw.js')) {
     event.respondWith(

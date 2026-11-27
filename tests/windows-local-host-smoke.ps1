@@ -1,14 +1,15 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $startupScript = Join-Path $root 'scripts\start-buildbook-local-host.ps1'
 $installerScript = Join-Path $root 'scripts\install-buildbook.ps1'
+$updaterScript = Join-Path $root 'scripts\apply-buildbook-update.ps1'
 $installScript = Join-Path $root 'scripts\install-buildbook-autostart.ps1'
 $uninstallScript = Join-Path $root 'scripts\uninstall-buildbook-autostart.ps1'
 $taskName = 'Buildbook Local Host'
 $launcher = $null
 $nodeProcessId = $null
 
-foreach ($path in @($startupScript, $installerScript, $installScript, $uninstallScript)) {
+foreach ($path in @($startupScript, $installerScript, $updaterScript, $installScript, $uninstallScript)) {
   $tokens = $null
   $parseErrors = $null
   [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
@@ -26,6 +27,30 @@ if ($installerBytes.Length -lt 3 -or $installerBytes[0] -ne 0xEF -or $installerB
   throw 'The Windows installer must be saved as UTF-8 with BOM for Windows PowerShell 5.1 compatibility.'
 }
 $installerSource = Get-Content -LiteralPath $installerScript -Raw -Encoding UTF8
+$updaterBytes = [System.IO.File]::ReadAllBytes($updaterScript)
+if ($updaterBytes.Length -lt 3 -or $updaterBytes[0] -ne 0xEF -or $updaterBytes[1] -ne 0xBB -or $updaterBytes[2] -ne 0xBF) {
+  throw 'The Windows updater must be saved as UTF-8 with BOM for Windows PowerShell 5.1 compatibility.'
+}
+$updaterSource = Get-Content -LiteralPath $updaterScript -Raw -Encoding UTF8
+foreach ($requiredUpdaterText in @(
+  'https://github.com/dequintalegione-boop/Buildbook/archive/',
+  'Expand-VerifiedArchive',
+  'ExternalAttributes',
+  '$ReadyFile',
+  '$readySignaled = $true',
+  'buildbook-install.json',
+  'backup-',
+  "'/MIR'",
+  "'/XD', '.git', 'node_modules', 'data', 'updates'",
+  "'/XF', '.env', 'local-host.log', '*.tmp'",
+  'Выполняю откат к резервной копии.',
+  'Start-BuildbookHost',
+  'Wait-BuildbookHost'
+)) {
+  if (-not $updaterSource.Contains($requiredUpdaterText)) {
+    throw "The safe updater is missing a required verification or recovery step: $requiredUpdaterText"
+  }
+}
 if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -notmatch 'MessageBoxButtons\]::YesNo') -or ($installerSource -notmatch 'accept-package-agreements') -or ($installerSource -notmatch 'https://nodejs\.org/en/download')) {
   throw 'The Windows installer must offer consent-based winget setup and retain the official Node.js fallback.'
 }
