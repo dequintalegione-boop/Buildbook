@@ -24,10 +24,10 @@ The ordinary UI can then switch to that canonical profile after an explicit conf
 1. User downloads a separate ordinary JSON backup and the dedicated **Export for local host** transfer file from Settings.
 2. User selects the transfer file with **Проверить файл переноса**. The app validates the format, schema version, size limit, and SHA-256 digest before contacting the host.
 3. The app asks the user to confirm that the separate backup was saved. This is an explicit user attestation, not an automated filesystem verification.
-4. The app authenticates to the already-connected local host and reads its canonical profile. If it is populated, the app exports the user-data fields (state, logs, photos) to a separate JSON backup, excluding host metadata and credentials, including the observed revision and SHA-256 digest, and asks the user to confirm that the file was saved.
-5. The app displays source schema/date/size and record counts, then asks for a separate final confirmation. For a populated target, the host verifies that the backup digest matches the exact current profile and performs a compare-and-swap replacement. If the target changed after backup or the digest differs, the operation is rejected without writing.
+4. The app authenticates to the already-connected local host and reads its canonical profile. If it is populated, the app exports the user-data fields (state, logs, photos) to a separate JSON backup with the observed revision and SHA-256 digest. Host metadata and credentials are excluded. The app asks the user to confirm that the file was saved.
+5. The app displays source schema/date/size and record counts, then asks for a separate final confirmation. For a populated target, the host verifies that the backup digest matches the exact current user-data snapshot and performs a compare-and-swap replacement. If the target changed after backup or the digest differs, the operation is rejected without writing.
 6. The app reads the canonical profile back and verifies the new revision and SHA-256 digest. A mismatch is reported as a recovery issue; the app does not switch storage.
-7. The old IndexedDB profile remains intact. The app continues using IndexedDB until a separate reviewed storage-mode/startup-selection stage is implemented.
+7. The old IndexedDB profile remains intact. Only after successful read-back verification does the app offer the user an explicit switch to the canonical local profile.
 
 ## Import envelope
 
