@@ -24,14 +24,14 @@ The ordinary UI can then switch to that canonical profile after an explicit conf
 1. User downloads a separate ordinary JSON backup and the dedicated **Export for local host** transfer file from Settings.
 2. User selects the transfer file with **Проверить файл переноса**. The app validates the format, schema version, size limit, and SHA-256 digest before contacting the host.
 3. The app asks the user to confirm that the separate backup was saved. This is an explicit user attestation, not an automated filesystem verification.
-4. The app authenticates to the already-connected local host and reads its canonical profile. If it is populated, the app exports that exact profile to a separate JSON backup, including the observed revision and SHA-256 digest, and asks the user to confirm that the file was saved.
+4. The app authenticates to the already-connected local host and reads its canonical profile. If it is populated, the app exports the user-data fields (state, logs, photos) to a separate JSON backup, excluding host metadata and credentials, including the observed revision and SHA-256 digest, and asks the user to confirm that the file was saved.
 5. The app displays source schema/date/size and record counts, then asks for a separate final confirmation. For a populated target, the host verifies that the backup digest matches the exact current profile and performs a compare-and-swap replacement. If the target changed after backup or the digest differs, the operation is rejected without writing.
 6. The app reads the canonical profile back and verifies the new revision and SHA-256 digest. A mismatch is reported as a recovery issue; the app does not switch storage.
 7. The old IndexedDB profile remains intact. The app continues using IndexedDB until a separate reviewed storage-mode/startup-selection stage is implemented.
 
 ## Import envelope
 
-The normal host import endpoint is `POST /api/profile/import` (authenticated, loopback-only). It accepts the version-1 envelope below only for source schema version 5 and imports only into an empty canonical profile. The separate recovery endpoint is `POST /api/profile/replace`; it requires the exact current target revision and the SHA-256 digest of a separately exported target backup before replacing a populated profile. Both endpoints enforce the 34 MiB API body limit and 32 MiB profile limit, validate the envelope, and verify the resulting profile by reading it back. A stale revision or backup mismatch returns HTTP 409 without writing.
+The normal host import endpoint is `POST /api/profile/import` (authenticated, loopback-only). It accepts the version-1 envelope below only for source schema version 5 and imports only into an empty canonical profile. The separate recovery endpoint is `POST /api/profile/replace`; it requires the exact current target revision and the SHA-256 digest of a separately exported target user-data backup before replacing a populated profile. Both endpoints enforce the 34 MiB API body limit and 32 MiB profile limit, validate the envelope, and verify the resulting profile by reading it back. A stale revision or backup mismatch returns HTTP 409 without writing.
 
 The envelope should contain only:
 - a fixed format identifier and version;
@@ -44,7 +44,7 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 ## Conflict and recovery behavior
 
 - Empty canonical profile + valid backup + matching expected revision: allow import.
-- Non-empty canonical profile: refuse the normal import endpoint. The recovery endpoint allows replacement only when the submitted backup digest matches the exact current target profile and the expected revision still matches.
+- Non-empty canonical profile: refuse the normal import endpoint. The recovery endpoint allows replacement only when the submitted backup digest matches the exact current target user-data snapshot and the expected revision still matches.
 - Unsupported schema, invalid binary descriptor, oversized payload, digest mismatch, duplicate stable IDs, or malformed JSON: reject without changing the canonical profile.
 - Revision conflict during import: reject without retrying against the new revision; require the user to review the current target again.
 - Interrupted import: atomic profile-store replacement must leave either the old complete profile or the new complete profile, never a partial profile.
@@ -53,7 +53,7 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 ## Implementation status
 
 1. [Implemented] Version-1 transfer-envelope validation and authenticated host import; schema 5, SHA-256, empty-target requirement, and revision compare-and-swap.
-2. [Implemented] Separate authenticated recovery endpoint for populated targets; it verifies the exported target backup digest and expected revision before replacement, then verifies the read-back profile.
+2. [Implemented] Separate authenticated recovery endpoint for populated targets; it verifies the exported target user-data backup digest and expected revision before replacement, then verifies the read-back profile.
 3. [Implemented] Separate browser backup/export flow and explicit user confirmations before transfer.
 4. [Implemented] Import preview, confirmation, host-side import, and browser read-back/checksum verification. The source IndexedDB profile is not modified.
 5. [Implemented] The UI offers a separate storage-mode switch only after successful verification. The existing IndexedDB profile remains untouched as a fallback/backup; the standalone build continues to use IndexedDB.
