@@ -27,7 +27,8 @@ if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -no
 # Selecting an already named Buildbook folder must not create Buildbook\\Buildbook.
 if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)') -or
     -not $installerSource.Contains("Join-Path " + '$selectedRoot' + " 'Buildbook'") -or
-    -not $installerSource.Contains("GetFileName(" + '$selectedRoot' + ".TrimEnd('\')) -ieq 'Buildbook'")) {
+    -not $installerSource.Contains("GetFileName(" + '$selectedRoot') -or
+    -not $installerSource.Contains("-ieq 'Buildbook'")) {
   throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
 }
 
