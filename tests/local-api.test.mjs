@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = createProfileStore(join(dir, 'profile.json'));
   const token = 'test-local-api-token-0123456789abcdef';
-  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null, getUpdateStatus: options.getUpdateStatus || null });
+  const api = createLocalApiServer({ profileStore: store, accessToken: token, launchLocalAction: options.launchLocalAction || null, getTelegramStatus: options.getTelegramStatus || null, startTelegram: options.startTelegram || null, stopTelegram: options.stopTelegram || null, restartTelegram: options.restartTelegram || null, verifyTelegramBot: options.verifyTelegramBot || null, configureTelegram: options.configureTelegram || null, getActivityLog: options.getActivityLog || null, recordActivity: options.recordActivity || null, getTelegramAllowlist: options.getTelegramAllowlist || null, setTelegramAllowlist: options.setTelegramAllowlist || null, getTelegramLatency: options.getTelegramLatency || null, getTelegramCommandSettings: options.getTelegramCommandSettings || null, setTelegramCommandSettings: options.setTelegramCommandSettings || null, getUpdateStatus: options.getUpdateStatus || null, launchUpdateInstall: options.launchUpdateInstall || null, onUpdateInstallStarted: options.onUpdateInstallStarted || null });
   const address = await api.listen();
   t.after(() => api.close());
   const base = `http://127.0.0.1:${address.port}`;
@@ -1369,4 +1369,89 @@ test('update status endpoint is not available without an authenticated browser s
   const { base } = await fixture(t, { getUpdateStatus: async () => ({ updateAvailable: false }) });
   const response = await fetch(base + '/api/updates/status');
   assert.equal(response.status, 401);
+});
+
+
+test('one-click update installation launches only a freshly confirmed tracked main commit', async t => {
+  const sha = 'e'.repeat(40);
+  const launched = [];
+  const shutdown = [];
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: true,
+      latestCommit: sha,
+    }),
+    launchUpdateInstall: async commit => { launched.push(commit); },
+    onUpdateInstallStarted: () => { shutdown.push(true); },
+  });
+  const response = await request(base + '/api/updates/install', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), { ok: true, commit: sha, restarting: true });
+  assert.deepEqual(launched, [sha]);
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assert.deepEqual(shutdown, [true]);
+});
+
+test('one-click update refuses untracked or already-current installations', async t => {
+  let launched = 0;
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: false,
+      updateAvailable: null,
+      latestCommit: 'f'.repeat(40),
+    }),
+    launchUpdateInstall: async () => { launched += 1; },
+  });
+  const response = await request(base + '/api/updates/install', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /не зарегистрирована/);
+  assert.equal(launched, 0);
+});
+
+test('one-click update rejects caller-supplied commit or installation parameters', async t => {
+  let launched = 0;
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: true,
+      latestCommit: 'a'.repeat(40),
+    }),
+    launchUpdateInstall: async () => { launched += 1; },
+  });
+  const response = await request(base + '/api/updates/install', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit: '0'.repeat(40), installRoot: 'C:\\\\unsafe' }),
+  });
+  assert.equal(response.status, 400);
+  assert.equal(launched, 0);
+});
+
+test('one-click update requires an authenticated session and a configured updater', async t => {
+  const { base } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: true,
+      updateAvailable: true,
+      latestCommit: 'a'.repeat(40),
+    }),
+    launchUpdateInstall: async () => {},
+  });
+  assert.equal((await fetch(base + '/api/updates/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
 });
