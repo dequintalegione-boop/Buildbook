@@ -25,9 +25,9 @@ if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -no
 
 # A first-time install always places the project in its own Buildbook folder.
 # Selecting an already named Buildbook folder must not create Buildbook\\Buildbook.
-if (($installerSource -notmatch "\$selectedRoot\s*=\s*\[System\.IO\.Path\]::GetFullPath") -or
-    ($installerSource -notmatch "Join-Path\s+\$selectedRoot\s+'Buildbook'") -or
-    ($installerSource -notmatch "GetFileName\(\$selectedRoot\.TrimEnd\('\\\\'\)\)\s+-ieq\s+'Buildbook'")) {
+if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)') -or
+    -not $installerSource.Contains("Join-Path " + '$selectedRoot' + " 'Buildbook'") -or
+    -not $installerSource.Contains("GetFileName(" + '$selectedRoot' + ".TrimEnd('\')) -ieq 'Buildbook'")) {
   throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
 }
 
