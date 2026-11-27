@@ -4160,8 +4160,9 @@ function telegram(){
 async function getBuildbookUpdateStatus(){
  if(!isLocalHostOrigin())throw new Error('Проверка доступна только в установленной локальной версии Buildbook по адресу http://127.0.0.1:43127.');
  TELEGRAM_UI.baseUrl=location.origin;
+ const statusUrl='/api/updates/status?fresh='+Date.now();
  try{
-  const result=await localTelegramRequest('/api/updates/status',{timeoutMs:12000});
+  const result=await localTelegramRequest(statusUrl,{timeoutMs:12000});
   TELEGRAM_UI.connected=true;
   TELEGRAM_UI.error='';
   return result;
@@ -4173,7 +4174,7 @@ async function getBuildbookUpdateStatus(){
   // Telegram screen's rate-limited background auto-connect.
   TELEGRAM_UI.connected=false;
   await localTelegramRequest('/api/session/bootstrap-local',{method:'POST',body:'{}',timeoutMs:5000});
-  const result=await localTelegramRequest('/api/updates/status',{timeoutMs:12000});
+  const result=await localTelegramRequest(statusUrl,{timeoutMs:12000});
   TELEGRAM_UI.connected=true;
   TELEGRAM_UI.error='';
   return result;
