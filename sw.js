@@ -80,6 +80,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // API responses contain live state and session-dependent data. Never cache them.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (isHtmlShell(event.request, url) || url.pathname.endsWith('/sw.js')) {
     event.respondWith(
       fetch(event.request)
