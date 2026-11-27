@@ -40,7 +40,8 @@ if (-not $installRoot) {
   $dialog.Description = 'Выберите папку, внутри которой будет автоматически создана папка Buildbook. Например, при выборе D:\Apps приложение установится в D:\Apps\Buildbook. Путь сохранится для следующих обновлений.'
   $dialog.ShowNewFolderButton = $true
   $defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs'
-  if (Test-Path -LiteralPath $defaultRoot) { $dialog.SelectedPath = $defaultRoot }
+  New-Item -ItemType Directory -Path $defaultRoot -Force | Out-Null
+  $dialog.SelectedPath = $defaultRoot
   if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
     throw 'Установка отменена: папка не выбрана.'
   }
