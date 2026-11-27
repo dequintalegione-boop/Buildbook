@@ -195,3 +195,19 @@ test('Windows local host startup restricts .env access to the current account', 
   assert.match(localHostStartup, /\/grant:r/);
   assert.match(localHostStartup, /не будет запущен с небезопасными правами/);
 });
+
+
+test('update controls renew an expired local-host session instead of trusting stale Telegram UI state', () => {
+  const start = html.indexOf('async function getBuildbookUpdateStatus()');
+  const end = html.indexOf('function sets()', start);
+  assert.ok(start >= 0 && end > start);
+  const updater = html.slice(start, end);
+  assert.match(updater, /localTelegramRequest\('\/api\/updates\/status'/);
+  assert.match(updater, /if\(error\.status!==401\)throw error/);
+  assert.match(updater, /localTelegramRequest\('\/api\/session\/bootstrap-local'/);
+  assert.match(updater, /const result=await localTelegramRequest\('\/api\/updates\/status'/);
+  assert.doesNotMatch(updater, /await autoConnectLocalHost\(\)/);
+  assert.match(updater, /async function downloadBuildbookUpdate\(\)/);
+  assert.match(updater, /const status=await getBuildbookUpdateStatus\(\)/);
+  assert.match(updater, /location\.assign\('\/api\/updates\/download'\)/);
+});
