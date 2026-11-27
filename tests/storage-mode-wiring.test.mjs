@@ -215,6 +215,9 @@ test('update controls renew an expired local-host session and install updates wi
   assert.ok(updater.includes('/api/health?update_probe='));
   assert.ok(updater.includes('caches.keys'));
   assert.ok(serviceWorker.includes("const C = 'buildbook-77'"));
+  const apiBypass = serviceWorker.indexOf("if (url.pathname.startsWith('/api/'))");
+  const cacheHandler = serviceWorker.indexOf('caches.open(C).then((cache)');
+  assert.ok(apiBypass >= 0 && apiBypass < cacheHandler);
   assert.ok(updater.includes('status.installedCommit===expectedCommit'));
   assert.equal(updater.includes("location.assign('/api/updates/download')"), false);
   assert.ok(html.includes('Установить обновление'));
