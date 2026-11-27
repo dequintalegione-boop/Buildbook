@@ -4755,13 +4755,15 @@ document.addEventListener('change',e=>{
    }
    let replaceExisting=false,targetBackupSha256='';
    if(target.profile!==null){
-    const targetSerialized=JSON.stringify(target.profile);
+    if(!isPlainRecord(target.profile.state)||!Array.isArray(target.profile.logs)||!isPlainRecord(target.profile.photos))throw new Error('Локальный профиль имеет неподдерживаемый формат. Ничего не изменено.');
+    const targetBackupProfile={state:target.profile.state,logs:target.profile.logs,photos:target.profile.photos};
+    const targetSerialized=JSON.stringify(targetBackupProfile);
     if(typeof targetSerialized!=='string')throw new Error('Не удалось подготовить резервную копию локального профиля.');
     const targetBytes=new TextEncoder().encode(targetSerialized);
     if(targetBytes.byteLength>32*1024*1024)throw new Error('Локальный профиль слишком велик для безопасного резервного экспорта (лимит 32 MiB).');
     const targetDigest=await crypto.subtle.digest('SHA-256',targetBytes);
     targetBackupSha256=Array.from(new Uint8Array(targetDigest),byte=>byte.toString(16).padStart(2,'0')).join('');
-    const targetBackup={format:'buildbook-local-profile-backup',version:1,exportedAt:new Date().toISOString(),revision:target.revision,profile:target.profile,sha256:targetBackupSha256};
+    const targetBackup={format:'buildbook-local-profile-backup',version:1,exportedAt:new Date().toISOString(),revision:target.revision,profile:targetBackupProfile,sha256:targetBackupSha256};
     triggerFileDownload(new Blob([JSON.stringify(targetBackup,null,2)],{type:'application/json;charset=utf-8'}),'buildbook-local-host-backup-'+today()+'.json');
     if(!confirm('На локальном хосте уже есть данные.\n\nСначала скачан отдельный файл резервной копии локального профиля. Убедитесь, что файл появился в загрузках и сохранён.\n\nПосле вашего подтверждения Buildbook сможет заменить тестовый профиль данными из браузера. Если отменить действие, локальные данные останутся без изменений.'))return;
     replaceExisting=true;
