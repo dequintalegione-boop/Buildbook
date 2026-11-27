@@ -253,7 +253,7 @@ test('replaces a populated local profile only when its exact backup and revision
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ expectedRevision, profile }),
   });
-  const original = { state: { marker: 'demo' }, logs: [{ id: 'demo-log' }], photos: { demo: [] } };
+  const original = { state: { marker: 'demo' }, logs: [{ id: 'demo-log' }], photos: { demo: [] }, hostMetadata: { keep: true } };
   assert.equal((await put(original, 0)).status, 200);
   const current = await (await request(base + '/api/profile')).json();
   const backupSha256 = createHash('sha256').update(JSON.stringify(current.profile), 'utf8').digest('hex');
@@ -287,7 +287,7 @@ test('replaces a populated local profile only when its exact backup and revision
     replaced: true,
     verified: true,
   });
-  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, payload);
+  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, { ...payload, hostMetadata: { keep: true } });
 
   const stale = await replace({ expectedRevision: current.revision, backupSha256, envelope });
   assert.equal(stale.status, 409);
