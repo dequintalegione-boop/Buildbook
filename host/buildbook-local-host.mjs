@@ -1,4 +1,6 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createProfileStore } from './profile-store.mjs';
 import { createLocalApiServer } from './local-api.mjs';
@@ -29,6 +31,42 @@ function required(env, key) {
   const value = String(env[key] ?? '').trim();
   if (!value) throw new TypeError(key + ' is required.');
   return value;
+}
+
+async function launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }) {
+  if (process.platform !== 'win32') {
+    const error = new Error('Автоматическая установка обновлений доступна только в Windows.');
+    error.code = 'BUILDBOOK_UPDATE_UNSUPPORTED_PLATFORM';
+    throw error;
+  }
+  if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
+    throw new TypeError('Для установки требуется подтверждённый SHA коммита.');
+  }
+  const scriptPath = resolve(appRoot, 'scripts', 'apply-buildbook-update.ps1');
+  await access(scriptPath);
+  const child = spawn('powershell.exe', [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-WindowStyle', 'Hidden', '-File', scriptPath,
+    '-InstallRoot', appRoot,
+    '-CommitSha', commitSha.toLowerCase(),
+    '-ParentProcessId', String(process.pid),
+  ], {
+    cwd: appRoot,
+    detached: true,
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+  child.once('error', error => {
+    try { onError(error, { phase: 'update-launch' }); } catch {}
+  });
+  child.once('exit', code => {
+    if (code !== 0) {
+      try { onError(new Error('Updater process exited with code ' + code), { phase: 'update-process' }); } catch {}
+    }
+  });
+  if (!child.pid) throw new Error('Не удалось запустить помощник безопасного обновления Windows.');
+  child.unref();
+  return { pid: child.pid };
 }
 
 /**
@@ -127,6 +165,12 @@ export function createBuildbookLocalHost({ env = process.env, fetchImpl = global
     ...createTelegramAllowlistHandlers({ env, appRoot, getTelegram: () => telegram }),
     getTelegramCommandSettings: () => commandSettingsStore.read(),
     getUpdateStatus,
+    launchUpdateInstall: commitSha => launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }),
+    onUpdateInstallStarted: () => {
+      setTimeout(() => {
+        stop().catch(error => { try { onError(error, { phase: 'update-shutdown' }); } catch {} });
+      }, 700);
+    },
     setTelegramCommandSettings: commands => commandSettingsStore.write(commands),
     getTelegramLatency: async () => {
       const token = String(env.BUILDBOOK_TELEGRAM_BOT_TOKEN || '');
