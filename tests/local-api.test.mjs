@@ -292,7 +292,7 @@ test('replaces a populated local profile only when its exact backup and revision
   const stale = await replace({ expectedRevision: current.revision, backupSha256, envelope });
   assert.equal(stale.status, 409);
   assert.equal((await stale.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');
-  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, payload);
+  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, { ...payload, hostMetadata: { keep: true } });
 });
 
 test('reports stale revision as HTTP 409 without replacing data', async (t) => {
