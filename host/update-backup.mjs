@@ -183,6 +183,7 @@ export async function restoreUpdateBackup({ installRoot, backupPath } = {}) {
     }
   }
 
+  let removedFiles = 0;
   for (const entry of verified) {
     const targetPath = entry.targetPath || join(installReal, ...entry.path.split('/'));
     // Re-check path components immediately before the write to reject a swapped symlink.
@@ -195,7 +196,8 @@ export async function restoreUpdateBackup({ installRoot, backupPath } = {}) {
       await rename(tempPath, destination);
     } else if (currentTarget) {
       await rm(currentTarget, { force: true });
+      removedFiles += 1;
     }
   }
-  return Object.freeze({ backupId: manifest.backupId, restoredFiles: verified.filter(entry => entry.existed).length, removedFiles: verified.filter(entry => !entry.existed && entry.targetPath).length });
+  return Object.freeze({ backupId: manifest.backupId, restoredFiles: verified.filter(entry => entry.existed).length, removedFiles });
 }
