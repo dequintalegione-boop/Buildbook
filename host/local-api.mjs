@@ -1124,7 +1124,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 400, { error: 'Контрольная сумма файла импорта не совпадает.' });
           return;
         }
-        const importedProfile = { ...current.profile, state: payload.state, logs: payload.logs, photos: payload.photos };
+        const importedProfile = { state: payload.state, logs: payload.logs, photos: payload.photos };
         // Empty-target validation and the first write must share one store
         // transaction; a separate read() here would leave a race window.
         const revision = await profileStore.initializeIfEmpty(importedProfile, body.expectedRevision);
@@ -1227,7 +1227,7 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           return;
         }
 
-        const importedProfile = { state: payload.state, logs: payload.logs, photos: payload.photos };
+        const importedProfile = { ...current.profile, state: payload.state, logs: payload.logs, photos: payload.photos };
         const revision = await profileStore.write(importedProfile, body.expectedRevision);
         const verified = await profileStore.read();
         const expectedReadback = createHash('sha256').update(JSON.stringify(importedProfile), 'utf8').digest('hex');
