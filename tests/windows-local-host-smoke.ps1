@@ -120,6 +120,10 @@ try {
   if (-not $action.Arguments.Contains($startupScript)) {
     throw 'The scheduled task does not point to the fixed Buildbook startup script.'
   }
+  $recoveryOutput = & node --input-type=module -e "import { getWindowsRecoveryStatus } from './host/windows-recovery.mjs'; const status = await getWindowsRecoveryStatus(); if (!status.installed || !status.actionValid) { console.error(JSON.stringify(status)); process.exit(1); } console.log(JSON.stringify(status));"
+  if ($LASTEXITCODE -ne 0) {
+    throw "The recovery diagnostic rejected the freshly installed Task Scheduler configuration: $recoveryOutput"
+  }
 }
 finally {
   & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $uninstallScript

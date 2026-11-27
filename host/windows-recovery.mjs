@@ -24,17 +24,33 @@ $info = Get-ScheduledTaskInfo -TaskName 'Buildbook Local Host' -ErrorAction Stop
 $last = if ($info.LastRunTime -and $info.LastRunTime.Year -gt 1901) { $info.LastRunTime.ToString('o') } else { $null }
 $next = if ($info.NextRunTime -and $info.NextRunTime.Year -gt 1901) { $info.NextRunTime.ToString('o') } else { $null }
 $action = @($task.Actions) | Select-Object -First 1
-$actionValid = $false
+$scriptValid = $false
 if ($null -ne $action -and -not [string]::IsNullOrWhiteSpace([string]$action.WorkingDirectory)) {
   $expectedScript = Join-Path ([string]$action.WorkingDirectory) 'scripts\start-buildbook-local-host.ps1'
-  $actionValid = ([string]$action.Execute -match '(?i)(^|\\)powershell\.exe$') -and (Test-Path -LiteralPath $expectedScript) -and ([string]$action.Arguments).Contains($expectedScript)
+  $scriptValid = ([string]$action.Execute -match '(?i)(^|\\)powershell\.exe$') -and (Test-Path -LiteralPath $expectedScript) -and ([string]$action.Arguments).Contains($expectedScript)
 }
-$actionIssue = if ($actionValid) { $null } else { 'Задача не указывает на штатный скрипт запуска Buildbook.' }
+$triggerValid = @($task.Triggers | Where-Object {
+  $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled -ne $false
+}).Count -gt 0
+$principalValid = [string]$task.Principal.RunLevel -eq 'Limited'
+$restartCount = [int]$settings.RestartCount
+$restartInterval = [string]$settings.RestartInterval
+$restartPolicyValid = $restartCount -ge 5 -and $restartInterval -match '^(PT1M|00:01:00|0:01:00)$'
+$multipleInstancesValid = [string]$settings.MultipleInstances -eq 'IgnoreNew'
+$executionLimitValid = [string]$settings.ExecutionTimeLimit -match '^(PT0S|00:00:00|0:00:00)$'
+$actionValid = $scriptValid -and $triggerValid -and $principalValid -and $restartPolicyValid -and $multipleInstancesValid -and $executionLimitValid
+$actionIssue = if (-not $scriptValid) { 'Задача не указывает на штатный скрипт запуска Buildbook.' }
+  elseif (-not $triggerValid) { 'Для автозапуска не настроен триггер входа пользователя Windows.' }
+  elseif (-not $principalValid) { 'Задача должна запускаться с обычными правами текущего пользователя.' }
+  elseif (-not $restartPolicyValid) { 'Не настроены пять повторов запуска с интервалом в одну минуту.' }
+  elseif (-not $multipleInstancesValid) { 'Не включена защита от параллельных экземпляров локального хоста.' }
+  elseif (-not $executionLimitValid) { 'Для фонового хоста задано ограничение времени выполнения задачи.' }
+  else { $null }
 $result = [uint32]$info.LastTaskResult
 [pscustomobject]@{
   installed = $true; actionValid = [bool]$actionValid; actionIssue = $actionIssue
-  state = [string]$task.State; restartCount = [int]$settings.RestartCount
-  restartInterval = [string]$settings.RestartInterval; lastRunTime = $last; nextRunTime = $next
+  state = [string]$task.State; restartCount = $restartCount
+  restartInterval = $restartInterval; lastRunTime = $last; nextRunTime = $next
   lastTaskResult = [uint32]$result; lastTaskResultHex = ('0x{0:X8}' -f $result)
 } | ConvertTo-Json -Compress
 `;
