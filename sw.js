@@ -2,7 +2,7 @@
  * Network-first shell. Injects telegram-overrides.js only at the REAL document
  * end (never into the first </body> that appears inside JS print templates).
  */
-const C = 'buildbook-76';
+const C = 'buildbook-77';
 const PRECACHE = [
   './',
   './index.html',
