@@ -219,7 +219,6 @@ Write-Host "Папка установки: $installFull"
 Write-Host "Сохранённый путь: $settingsPath"
 Write-Host 'При повторном запуске установщик использует сохранённую папку и не запрашивает её снова.'
 Write-Host 'Настройте Telegram через мастер во вкладке Telegram. Автозапуск можно включить там же.'
-) { throw 'GitHub returned an invalid commit SHA.' }
   $archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/' + $commitSha + '.zip'
   Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
   Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadRoot -Force
