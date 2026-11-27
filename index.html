@@ -4176,7 +4176,8 @@ async function checkBuildbookUpdates(){
   const result=await localTelegramRequest('/api/updates/status',{timeoutMs:12000});
   LAST_BUILD_UPDATE_STATUS=result;
   if(!result.installationTracked){
-   show('Последняя сборка main: '+result.latestCommit.slice(0,12)+'. Текущая установка не содержит отметку версии, поэтому наличие обновления определить нельзя. Обратитесь к инструкции ручного обновления.');
+   show('Последняя версия main: '+result.latestCommit.slice(0,12)+'. Версия текущей установки не зарегистрирована, поэтому сравнить версии нельзя. Можно скачать последний официальный архив и применить его вручную.');
+   if(downloadButton)downloadButton.disabled=false;
   }else if(result.updateAvailable){
    show('Доступно обновление: '+result.installedCommit.slice(0,12)+' → '+result.latestCommit.slice(0,12)+'. '+(result.latestMessage||'Новая версия доступна.')+' Нажмите «Загрузить обновление», чтобы скачать ZIP-архив. Установка автоматически не выполняется.');
    if(downloadButton)downloadButton.disabled=false;
@@ -4198,8 +4199,10 @@ function downloadBuildbookUpdate(){
   if(statusNode)statusNode.textContent='Загрузка доступна только в установленной локальной версии Buildbook.';
   return;
  }
- if(!LAST_BUILD_UPDATE_STATUS?.installationTracked||LAST_BUILD_UPDATE_STATUS.updateAvailable!==true){
-  if(statusNode)statusNode.textContent='Сначала нажмите «Проверить обновления» и убедитесь, что новая версия доступна.';
+ const trackedUpdateAvailable=LAST_BUILD_UPDATE_STATUS?.installationTracked===true&&LAST_BUILD_UPDATE_STATUS.updateAvailable===true;
+ const latestCanBeDownloaded=LAST_BUILD_UPDATE_STATUS?.installationTracked===false&&LAST_BUILD_UPDATE_STATUS.updateAvailable===null;
+ if(!trackedUpdateAvailable&&!latestCanBeDownloaded){
+  if(statusNode)statusNode.textContent='Сначала нажмите «Проверить обновления».';
   if(button)button.disabled=true;
   return;
  }
