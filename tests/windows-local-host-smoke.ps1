@@ -32,6 +32,13 @@ if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPat
   throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
 }
 
+if (-not $installerSource.Contains("https://api.github.com/repos/dequintalegione-boop/Buildbook/commits/main") -or
+    -not $installerSource.Contains("'https://github.com/dequintalegione-boop/Buildbook/archive/' + $commitSha + '.zip'") -or
+    -not $installerSource.Contains("Join-Path $installFull 'buildbook-install.json'") -or
+    -not $installerSource.Contains("repository = 'dequintalegione-boop/Buildbook'")) {
+  throw 'The Windows installer must pin the downloaded archive to a verified main commit and record its installation metadata.'
+}
+
 # Guard against the Telegram panel's previous temporal-dead-zone regression.
 $indexSource = Get-Content -LiteralPath (Join-Path $root 'index.html') -Raw
 $latencyDeclaration = $indexSource.IndexOf('const latencyInfo=')
