@@ -13,7 +13,8 @@ foreach ($path in @($startupScript, $installerScript, $installScript, $uninstall
   $parseErrors = $null
   [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors) | Out-Null
   if ($parseErrors.Count -gt 0) {
-    throw "PowerShell syntax validation failed for \${path}: $($parseErrors[0].Message)"
+    $parseError = $parseErrors[0]
+    throw "PowerShell syntax validation failed for ${path} at line $($parseError.Extent.StartLineNumber), column $($parseError.Extent.StartColumnNumber): $($parseError.Message) Near: $($parseError.Extent.Text)"
   }
 }
 
