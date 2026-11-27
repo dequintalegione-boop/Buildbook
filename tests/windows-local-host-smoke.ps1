@@ -23,6 +23,22 @@ if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -no
   throw 'The Windows installer must offer consent-based winget setup and retain the official Node.js fallback.'
 }
 
+# A first-time install always places the project in its own Buildbook folder.
+# Selecting an already named Buildbook folder must not create Buildbook\\Buildbook.
+if (($installerSource -notmatch "\$selectedRoot\s*=\s*\[System\.IO\.Path\]::GetFullPath") -or
+    ($installerSource -notmatch "Join-Path\s+\$selectedRoot\s+'Buildbook'") -or
+    ($installerSource -notmatch "GetFileName\(\$selectedRoot\.TrimEnd\('\\\\'\)\)\s+-ieq\s+'Buildbook'")) {
+  throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
+}
+
+# Guard against the Telegram panel's previous temporal-dead-zone regression.
+$indexSource = Get-Content -LiteralPath (Join-Path $root 'index.html') -Raw
+$latencyDeclaration = $indexSource.IndexOf('const latencyInfo=')
+$statusCardDeclaration = $indexSource.IndexOf('const statusCard=', $latencyDeclaration)
+if ($latencyDeclaration -lt 0 -or $statusCardDeclaration -lt 0 -or $latencyDeclaration -ge $statusCardDeclaration) {
+  throw 'Telegram latencyInfo must be declared before statusCard renders it.'
+}
+
 try {
   $stdout = Join-Path $env:RUNNER_TEMP 'buildbook-host-stdout.log'
   $stderr = Join-Path $env:RUNNER_TEMP 'buildbook-host-stderr.log'
