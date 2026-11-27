@@ -1156,6 +1156,114 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       return;
     }
+    if (request.method === 'POST' && pathname === '/api/profile/replace') {
+      const declaredLength = request.headers['content-length'];
+      if (declaredLength !== undefined && (!/^\d+$/.test(String(declaredLength)) || Number(declaredLength) > MAX_BODY_BYTES)) {
+        send(response, Number(declaredLength) > MAX_BODY_BYTES ? 413 : 400, { error: 'Некорректный или слишком большой Content-Length.' });
+        request.resume();
+        return;
+      }
+      const contentType = String(request.headers['content-type'] || '').trim().toLowerCase();
+      if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/.test(contentType)) {
+        send(response, 415, { error: 'Ожидается Content-Type: application/json.' });
+        return;
+      }
+      try {
+        const body = await readJson(request);
+        const envelope = body?.envelope;
+        const payload = envelope?.payload;
+        const hasExactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
+          && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
+        const validExportDate = isValidExportDate(envelope?.exportedAt)
+          && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(envelope.exportedAt)
+          && Number.isFinite(Date.parse(envelope.exportedAt));
+        if (!hasExactKeys(body, ['expectedRevision', 'backupSha256', 'envelope'])
+          || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0
+          || typeof body.backupSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(body.backupSha256)
+          || !hasExactKeys(envelope, ['format', 'version', 'sourceSchemaVersion', 'exportedAt', 'payload', 'sha256'])
+          || envelope.format !== 'buildbook-profile-export' || envelope.version !== 1
+          || envelope.sourceSchemaVersion !== SUPPORTED_PROFILE_SCHEMA_VERSION || !validExportDate
+          || !hasExactKeys(payload, ['state', 'logs', 'photos'])
+          || !payload.state || typeof payload.state !== 'object' || Array.isArray(payload.state)
+          || !Array.isArray(payload.logs)
+          || !payload.photos || typeof payload.photos !== 'object' || Array.isArray(payload.photos)
+          || typeof envelope.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.sha256)) {
+          send(response, 400, { error: 'Файл замены имеет неподдерживаемый или некорректный формат.' });
+          return;
+        }
+        const serializedPayload = JSON.stringify(payload);
+        if (Buffer.byteLength(serializedPayload, 'utf8') > 32 * 1024 * 1024) {
+          send(response, 413, { error: 'Данные профиля превышают допустимые 32 MiB.' });
+          return;
+        }
+        const digest = createHash('sha256').update(serializedPayload, 'utf8').digest('hex');
+        const suppliedDigest = Buffer.from(envelope.sha256, 'ascii');
+        const expectedDigest = Buffer.from(digest, 'ascii');
+        if (suppliedDigest.length !== expectedDigest.length || !timingSafeEqual(suppliedDigest, expectedDigest)) {
+          send(response, 400, { error: 'Контрольная сумма файла замены не совпадает.' });
+          return;
+        }
+
+        // A populated target may be replaced only after the browser exports
+        // its exact current snapshot. The revision check in write() closes the
+        // race between this backup verification and the atomic replacement.
+        const current = await profileStore.read();
+        if (current.revision !== body.expectedRevision) {
+          const error = new Error('Локальный профиль изменился после создания резервной копии. Скачайте новую копию и повторите замену.');
+          error.code = 'BUILD_BOOK_STORAGE_CONFLICT';
+          error.expectedRevision = body.expectedRevision;
+          error.currentRevision = current.revision;
+          throw error;
+        }
+        if (!current.profile || typeof current.profile !== 'object' || Array.isArray(current.profile)) {
+          send(response, 409, { error: 'Целевой профиль уже пуст. Повторно проверьте его состояние и выполните обычный перенос.', code: 'BUILD_BOOK_REPLACE_TARGET_EMPTY' });
+          return;
+        }
+        if (!current.profile.state || typeof current.profile.state !== 'object' || Array.isArray(current.profile.state)
+          || !Array.isArray(current.profile.logs)
+          || !current.profile.photos || typeof current.profile.photos !== 'object' || Array.isArray(current.profile.photos)) {
+          send(response, 409, { error: 'Текущий локальный профиль имеет неподдерживаемую структуру. Данные не заменены.', code: 'BUILD_BOOK_REPLACE_TARGET_INVALID' });
+          return;
+        }
+        const currentBackupPayload = { state: current.profile.state, logs: current.profile.logs, photos: current.profile.photos };
+        const currentDigest = createHash('sha256').update(JSON.stringify(currentBackupPayload), 'utf8').digest('hex');
+        const suppliedBackupDigest = Buffer.from(body.backupSha256, 'ascii');
+        const expectedBackupDigest = Buffer.from(currentDigest, 'ascii');
+        if (suppliedBackupDigest.length !== expectedBackupDigest.length || !timingSafeEqual(suppliedBackupDigest, expectedBackupDigest)) {
+          send(response, 409, { error: 'Резервная копия не совпадает с текущим локальным профилем. Данные не заменены; скачайте копию заново.', code: 'BUILD_BOOK_REPLACE_BACKUP_MISMATCH' });
+          return;
+        }
+
+        const importedProfile = { ...current.profile, state: payload.state, logs: payload.logs, photos: payload.photos };
+        const revision = await profileStore.write(importedProfile, body.expectedRevision);
+        const verified = await profileStore.read();
+        const expectedReadback = createHash('sha256').update(JSON.stringify(importedProfile), 'utf8').digest('hex');
+        const actualReadback = verified.profile && typeof verified.profile === 'object'
+          ? createHash('sha256').update(JSON.stringify(verified.profile), 'utf8').digest('hex')
+          : '';
+        if (verified.revision !== revision || actualReadback !== expectedReadback) {
+          send(response, 500, {
+            error: 'Замена записана, но контрольное чтение не подтвердило целостность профиля. Не переключайте хранилище; сохраните обе резервные копии и обратитесь к восстановлению.',
+            code: 'BUILD_BOOK_REPLACE_READBACK_FAILED',
+            revision,
+          });
+          return;
+        }
+        send(response, 200, { revision, imported: true, replaced: true, verified: true });
+      } catch (error) {
+        if (error.code === 'BUILD_BOOK_STORAGE_CONFLICT') {
+          send(response, 409, {
+            error: error.message,
+            code: error.code,
+            expectedRevision: error.expectedRevision,
+            currentRevision: error.currentRevision,
+          });
+          return;
+        }
+        send(response, error.status || 500, { error: error.status ? error.message : 'Не удалось безопасно заменить локальный профиль.' });
+      }
+      return;
+    }
     if (request.method === 'GET' && pathname === '/api/profile') {
       try {
         send(response, 200, await profileStore.read());
