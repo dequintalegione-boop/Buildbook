@@ -510,6 +510,42 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
       }
       return;
     }
+    if (request.method === 'GET' && pathname === '/api/updates/download') {
+      if (typeof getUpdateStatus !== 'function') {
+        send(response, 503, { error: 'Загрузка обновления не подключена к локальному хосту.' });
+        return;
+      }
+      try {
+        // Re-check the trusted upstream commit at click time. The browser cannot
+        // supply a URL or SHA, so this endpoint can only redirect to our repo.
+        const status = await getUpdateStatus();
+        const trackedUpdateAvailable = status?.installationTracked === true && status.updateAvailable === true;
+        const untrackedInstallCanDownloadLatest = status?.installationTracked === false && status.updateAvailable === null;
+        if (!status || status.repository !== 'dequintalegione-boop/Buildbook'
+          || status.branch !== 'main' || (!trackedUpdateAvailable && !untrackedInstallCanDownloadLatest)
+          || typeof status.latestCommit !== 'string' || !/^[a-f0-9]{40}$/i.test(status.latestCommit)) {
+          send(response, 409, { error: 'Сейчас нет подтверждённого обновления для этой установки. Сначала проверьте наличие новой версии.' });
+          return;
+        }
+        const archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/' + status.latestCommit.toLowerCase() + '.zip';
+        response.writeHead(302, {
+          location: archiveUrl,
+          'cache-control': 'no-store',
+          'referrer-policy': 'no-referrer',
+          'x-content-type-options': 'nosniff',
+        });
+        response.end();
+      } catch (error) {
+        const code = ['BUILDBOOK_UPDATE_NETWORK_ERROR', 'BUILDBOOK_UPDATE_SOURCE_ERROR', 'BUILDBOOK_UPDATE_INVALID_RESPONSE'].includes(error?.code)
+          ? error.code : 'BUILDBOOK_UPDATE_DOWNLOAD_FAILED';
+        send(response, 502, {
+          error: typeof error?.message === 'string' && error.message.length <= 200
+            ? error.message : 'Не удалось подготовить загрузку обновления.',
+          code,
+        });
+      }
+      return;
+    }
     if (request.method === 'GET' && pathname === '/api/activity') {
       try {
         const query = new URL(request.url || '/', 'http://localhost').searchParams;
