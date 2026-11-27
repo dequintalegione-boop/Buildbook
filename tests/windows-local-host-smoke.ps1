@@ -34,8 +34,8 @@ if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPat
 }
 
 if (-not $installerSource.Contains("https://api.github.com/repos/dequintalegione-boop/Buildbook/commits/main") -or
-    -not $installerSource.Contains("'https://github.com/dequintalegione-boop/Buildbook/archive/' + $commitSha + '.zip'") -or
-    -not $installerSource.Contains("Join-Path $installFull 'buildbook-install.json'") -or
+    -not $installerSource.Contains("'https://github.com/dequintalegione-boop/Buildbook/archive/' + " + '$commitSha' + " + '.zip'") -or
+    -not $installerSource.Contains("Join-Path " + '$installFull' + " 'buildbook-install.json'") -or
     -not $installerSource.Contains("repository = 'dequintalegione-boop/Buildbook'")) {
   throw 'The Windows installer must pin the downloaded archive to a verified main commit and record its installation metadata.'
 }
