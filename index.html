@@ -4160,7 +4160,9 @@ function telegram(){
 async function getBuildbookUpdateStatus(){
  if(!isLocalHostOrigin())throw new Error('Проверка доступна только в установленной локальной версии Buildbook по адресу http://127.0.0.1:43127.');
  TELEGRAM_UI.baseUrl=location.origin;
- const statusUrl='/api/updates/status?fresh='+Date.now();
+ // localTelegramRequest already uses cache: 'no-store'; a query parameter is
+ // rejected by the local API's strict URL validation and is not needed here.
+ const statusUrl='/api/updates/status';
  try{
   const result=await localTelegramRequest(statusUrl,{timeoutMs:12000});
   TELEGRAM_UI.connected=true;
