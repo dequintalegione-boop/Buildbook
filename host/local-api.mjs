@@ -1219,7 +1219,14 @@ export function createLocalApiServer({ profileStore, accessToken, getTelegramSta
           send(response, 409, { error: 'Целевой профиль уже пуст. Повторно проверьте его состояние и выполните обычный перенос.', code: 'BUILD_BOOK_REPLACE_TARGET_EMPTY' });
           return;
         }
-        const currentDigest = createHash('sha256').update(JSON.stringify(current.profile), 'utf8').digest('hex');
+        if (!current.profile.state || typeof current.profile.state !== 'object' || Array.isArray(current.profile.state)
+          || !Array.isArray(current.profile.logs)
+          || !current.profile.photos || typeof current.profile.photos !== 'object' || Array.isArray(current.profile.photos)) {
+          send(response, 409, { error: 'Текущий локальный профиль имеет неподдерживаемую структуру. Данные не заменены.', code: 'BUILD_BOOK_REPLACE_TARGET_INVALID' });
+          return;
+        }
+        const currentBackupPayload = { state: current.profile.state, logs: current.profile.logs, photos: current.profile.photos };
+        const currentDigest = createHash('sha256').update(JSON.stringify(currentBackupPayload), 'utf8').digest('hex');
         const suppliedBackupDigest = Buffer.from(body.backupSha256, 'ascii');
         const expectedBackupDigest = Buffer.from(currentDigest, 'ascii');
         if (suppliedBackupDigest.length !== expectedBackupDigest.length || !timingSafeEqual(suppliedBackupDigest, expectedBackupDigest)) {
