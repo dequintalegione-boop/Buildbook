@@ -37,14 +37,23 @@ if (Test-Path -LiteralPath $settingsPath) {
 if (-not $installRoot) {
   Add-Type -AssemblyName System.Windows.Forms
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = 'Выберите папку, в которую Buildbook будет установлен. Путь сохранится и не будет запрашиваться при следующих обновлениях.'
+  $dialog.Description = 'Выберите папку, внутри которой будет автоматически создана папка Buildbook. Например, при выборе D:\Apps приложение установится в D:\Apps\Buildbook. Путь сохранится для следующих обновлений.'
   $dialog.ShowNewFolderButton = $true
-  $defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs\Buildbook'
-  if (Test-Path -LiteralPath $defaultRoot) { $dialog.SelectedPath = $defaultRoot }
+  $defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs'
+  New-Item -ItemType Directory -Path $defaultRoot -Force | Out-Null
+  $dialog.SelectedPath = $defaultRoot
   if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
     throw 'Установка отменена: папка не выбрана.'
   }
-  $installRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)
+  $selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)
+  # The user selects a parent directory; Buildbook creates/uses its own
+  # project folder. If the selected directory is already named Buildbook,
+  # avoid creating a nested Buildbook\\Buildbook path.
+  if ([System.IO.Path]::GetFileName($selectedRoot.TrimEnd('\\')) -ieq 'Buildbook') {
+    $installRoot = $selectedRoot
+  } else {
+    $installRoot = Join-Path $selectedRoot 'Buildbook'
+  }
 }
 
 $sourceFull = [System.IO.Path]::GetFullPath($sourceRoot).TrimEnd('\')
