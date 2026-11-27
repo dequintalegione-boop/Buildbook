@@ -209,6 +209,7 @@ test('update controls renew an expired local-host session and install updates wi
   assert.ok(updater.includes('async function installBuildbookUpdate()'));
   assert.ok(updater.includes("localTelegramRequest('/api/updates/install'"));
   assert.ok(updater.includes("method:'POST',body:'{}'"));
+  assert.ok(updater.includes('timeoutMs:110000'));
   assert.ok(updater.includes('async function waitForBuildbookRestart(expectedCommit)'));
   assert.ok(updater.includes('sawHostStop'));
   assert.ok(updater.includes('status.installedCommit===expectedCommit'));
@@ -220,6 +221,8 @@ test('safe updater stages the pinned archive, preserves user data and can roll b
   assert.ok(safeUpdater.includes('https://github.com/dequintalegione-boop/Buildbook/archive/'));
   assert.ok(safeUpdater.includes('Expand-VerifiedArchive'));
   assert.ok(safeUpdater.includes('ExternalAttributes'));
+  assert.ok(safeUpdater.includes('$ReadyFile'));
+  assert.ok(safeUpdater.includes('$readySignaled = $true'));
   assert.ok(safeUpdater.includes('buildbook-install.json'));
   assert.ok(safeUpdater.includes('backup-'));
   assert.ok(safeUpdater.includes("'/MIR'"));
