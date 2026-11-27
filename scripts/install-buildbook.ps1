@@ -38,26 +38,32 @@ if (Test-Path -LiteralPath $settingsPath) {
   }
 }
 
-if (-not $installRoot) {
-  Add-Type -AssemblyName System.Windows.Forms
-  $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = 'Выберите папку, внутри которой будет автоматически создана папка Buildbook. Например, при выборе D:\Apps приложение установится в D:\Apps\Buildbook. Путь сохранится для следующих обновлений.'
-  $dialog.ShowNewFolderButton = $true
-  $defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs'
-  New-Item -ItemType Directory -Path $defaultRoot -Force | Out-Null
-  $dialog.SelectedPath = $defaultRoot
-  if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
-    throw 'Установка отменена: папка не выбрана.'
+# Ask for the destination on every run. The previously used parent folder is
+# preselected for convenience, but the user can choose another location.
+$previousInstallRoot = $installRoot
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Каждый запуск установщика требует подтвердить папку. Выберите папку, внутри которой будет создана папка Buildbook, либо выберите саму существующую папку Buildbook. Например: D:\Apps → D:\Apps\Buildbook.'
+$dialog.ShowNewFolderButton = $true
+$defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs'
+if ($previousInstallRoot) {
+  $previousParent = Split-Path -Parent $previousInstallRoot
+  if ($previousParent -and (Test-Path -LiteralPath $previousParent -PathType Container)) {
+    $defaultRoot = $previousParent
   }
-  $selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)
-  # The user selects a parent directory; Buildbook creates/uses its own
-  # project folder. If the selected directory is already named Buildbook,
-  # avoid creating a nested Buildbook\\Buildbook path.
-  if ([System.IO.Path]::GetFileName($selectedRoot.TrimEnd('\\')) -ieq 'Buildbook') {
-    $installRoot = $selectedRoot
-  } else {
-    $installRoot = Join-Path $selectedRoot 'Buildbook'
-  }
+}
+New-Item -ItemType Directory -Path $defaultRoot -Force | Out-Null
+$dialog.SelectedPath = $defaultRoot
+if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
+  throw 'Установка отменена: папка не выбрана.'
+}
+$selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)
+# Selecting a folder named Buildbook means it is the exact destination;
+# otherwise create/use a dedicated Buildbook subfolder.
+if ([System.IO.Path]::GetFileName($selectedRoot.TrimEnd('\\')) -ieq 'Buildbook') {
+  $installRoot = $selectedRoot
+} else {
+  $installRoot = Join-Path $selectedRoot 'Buildbook'
 }
 
 $sourceFull = [System.IO.Path]::GetFullPath($sourceRoot).TrimEnd('\')
@@ -69,11 +75,39 @@ if ($installFull.StartsWith($sourceFull + '\', [System.StringComparison]::Ordina
   throw 'Папка установки не должна находиться внутри исходной папки проекта.'
 }
 
+$existingHost = $false
+$probe = New-Object System.Net.Sockets.TcpClient
+try {
+  $connect = $probe.BeginConnect('127.0.0.1', 43127, $null, $null)
+  if ($connect.AsyncWaitHandle.WaitOne(500)) {
+    $probe.EndConnect($connect)
+    $existingHost = $true
+  }
+} catch {
+  $existingHost = $false
+} finally {
+  $probe.Close()
+}
+if ($existingHost) {
+  Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
+  throw 'Сначала остановите уже работающий локальный хост Buildbook, затем повторно запустите установщик. Это предотвращает копирование поверх активной версии.'
+}
+
+
 New-Item -ItemType Directory -Path $installFull -Force | Out-Null
 if ($sourceFull -ne $installFull) {
   & robocopy.exe $sourceFull $installFull /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XD '.git' 'node_modules' 'data' /XF '.env' 'local-host.log' '*.tmp' | Out-Null
   $copyExit = $LASTEXITCODE
   if ($copyExit -gt 7) { throw "Не удалось скопировать файлы Buildbook (robocopy: $copyExit)." }
+}
+# If the destination changed, preserve the existing local host configuration
+# without overwriting an already configured destination. Profile data is stored
+# separately under LOCALAPPDATA and is not copied or replaced here.
+if ($previousInstallRoot -and
+    ([System.IO.Path]::GetFullPath($previousInstallRoot).TrimEnd('\\') -ne $installFull) -and
+    (Test-Path -LiteralPath (Join-Path $previousInstallRoot '.env') -PathType Leaf) -and
+    -not (Test-Path -LiteralPath (Join-Path $installFull '.env'))) {
+  Copy-Item -LiteralPath (Join-Path $previousInstallRoot '.env') -Destination (Join-Path $installFull '.env')
 }
 
 # Record the exact trusted source commit so the in-app updater can compare
@@ -174,23 +208,6 @@ if (-not $nodeReady) {
   }
 }
 
-$existingHost = $false
-$probe = New-Object System.Net.Sockets.TcpClient
-try {
-  $connect = $probe.BeginConnect('127.0.0.1', 43127, $null, $null)
-  if ($connect.AsyncWaitHandle.WaitOne(500)) {
-    $probe.EndConnect($connect)
-    $existingHost = $true
-  }
-} catch {
-  $existingHost = $false
-} finally {
-  $probe.Close()
-}
-if ($existingHost) {
-  Remove-Item -LiteralPath $downloadRoot -Recurse -Force -ErrorAction SilentlyContinue
-  throw 'Сначала остановите уже работающий локальный хост Buildbook, затем повторно запустите установщик. Это предотвращает копирование поверх активной версии.'
-}
 
 $startScript = Join-Path $installFull 'scripts\start-buildbook-local-host.ps1'
 if (-not (Test-Path -LiteralPath $startScript)) { throw 'В выбранной папке не найден штатный скрипт запуска Buildbook.' }
@@ -217,5 +234,5 @@ Write-Host ''
 Write-Host 'Buildbook установлен и локальный хост запущен.'
 Write-Host "Папка установки: $installFull"
 Write-Host "Сохранённый путь: $settingsPath"
-Write-Host 'При повторном запуске установщик использует сохранённую папку и не запрашивает её снова.'
+Write-Host 'При каждом запуске установщик повторно спрашивает папку; ранее выбранное расположение предлагается по умолчанию.'
 Write-Host 'Настройте Telegram через мастер во вкладке Telegram. Автозапуск можно включить там же.'

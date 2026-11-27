@@ -44,18 +44,23 @@ async function launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }) {
   if (typeof commitSha !== 'string' || !/^[a-f0-9]{40}$/i.test(commitSha)) {
     throw new TypeError('Для установки требуется подтверждённый SHA коммита.');
   }
-  const scriptPath = resolve(appRoot, 'scripts', 'apply-buildbook-update.ps1');
+  const resolvedAppRoot = resolve(appRoot);
+  const scriptPath = resolve(resolvedAppRoot, 'scripts', 'apply-buildbook-update.ps1');
+  const scriptInstallRoot = resolve(dirname(scriptPath), '..');
+  if (scriptInstallRoot !== resolvedAppRoot) {
+    throw new Error('Путь помощника обновления не совпадает с папкой установленного Buildbook.');
+  }
   await access(scriptPath);
   const readyFile = join(tmpdir(), 'buildbook-update-ready-' + process.pid + '-' + randomUUID() + '.tmp');
   const child = spawn('powershell.exe', [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
     '-WindowStyle', 'Hidden', '-File', scriptPath,
-    '-InstallRoot', appRoot,
+    '-InstallRoot', resolvedAppRoot,
     '-CommitSha', commitSha.toLowerCase(),
     '-ParentProcessId', String(process.pid),
     '-ReadyFile', readyFile,
   ], {
-    cwd: appRoot,
+    cwd: resolvedAppRoot,
     detached: true,
     windowsHide: true,
     stdio: 'ignore',

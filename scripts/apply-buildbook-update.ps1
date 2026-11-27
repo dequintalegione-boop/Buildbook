@@ -16,6 +16,10 @@ Set-StrictMode -Version Latest
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $CommitSha = $CommitSha.ToLowerInvariant()
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
+$scriptInstallRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\\')
+if (-not $InstallRoot.Equals($scriptInstallRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw 'Путь установки не совпадает с фактическим расположением помощника обновления. Обновление отменено, файлы не изменялись.'
+}
 if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) { throw 'Папка установки Buildbook не найдена.' }
 if ($InstallRoot -eq [System.IO.Path]::GetPathRoot($InstallRoot).TrimEnd('\')) { throw 'Обновление запрещено для корня диска.' }
 
@@ -142,6 +146,7 @@ try {
     throw 'Файл сведений об установке повреждён. Автоматическое обновление отменено.'
   }
 
+  Write-UpdateLog ('Папка установки подтверждена: ' + $InstallRoot + '.')
   Write-UpdateLog ('Подготовка обновления до ' + $CommitSha + '.')
   New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
   $archivePath = Join-Path $tempRoot 'buildbook.zip'
