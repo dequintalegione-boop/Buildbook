@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $startupScript = Join-Path $root 'scripts\start-buildbook-local-host.ps1'
 $installerScript = Join-Path $root 'scripts\install-buildbook.ps1'
