@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
 const localHostStartup = await readFile(new URL('../scripts/start-buildbook-local-host.ps1', import.meta.url), 'utf8');
+const safeUpdater = await readFile(new URL('../scripts/apply-buildbook-update.ps1', import.meta.url), 'utf8');
 const telegramOverrides = await readFile(new URL('../client/telegram-overrides.js', import.meta.url), 'utf8');
 
 test('canonical storage is opt-in and ordinary IndexedDB remains the default', () => {
@@ -197,17 +198,33 @@ test('Windows local host startup restricts .env access to the current account', 
 });
 
 
-test('update controls renew an expired local-host session instead of trusting stale Telegram UI state', () => {
+test('update controls renew an expired local-host session and install updates with one click', () => {
   const start = html.indexOf('async function getBuildbookUpdateStatus()');
   const end = html.indexOf('function sets()', start);
   assert.ok(start >= 0 && end > start);
   const updater = html.slice(start, end);
-  assert.match(updater, /localTelegramRequest\('\/api\/updates\/status'/);
-  assert.match(updater, /if\(error\.status!==401\)throw error/);
-  assert.match(updater, /localTelegramRequest\('\/api\/session\/bootstrap-local'/);
-  assert.match(updater, /const result=await localTelegramRequest\('\/api\/updates\/status'/);
-  assert.doesNotMatch(updater, /await autoConnectLocalHost\(\)/);
-  assert.match(updater, /async function downloadBuildbookUpdate\(\)/);
-  assert.match(updater, /const status=await getBuildbookUpdateStatus\(\)/);
-  assert.match(updater, /location\.assign\('\/api\/updates\/download'\)/);
+  assert.match(updater, /localTelegramRequest\\('\/api\/updates\/status'/);
+  assert.match(updater, /if\\(error\\.status!==401\\)throw error/);
+  assert.match(updater, /localTelegramRequest\\('\/api\/session\/bootstrap-local'/);
+  assert.match(updater, /async function installBuildbookUpdate\\(\\)/);
+  assert.match(updater, /localTelegramRequest\\('\/api\/updates\/install'/);
+  assert.match(updater, /method:'POST',body:'\\{\\}'/);
+  assert.match(updater, /async function waitForBuildbookRestart\\(expectedCommit\\)/);
+  assert.match(updater, /sawHostStop/);
+  assert.match(updater, /status\\.installedCommit===expectedCommit/);
+  assert.doesNotMatch(updater, /location\\.assign\\('\/api\/updates\/download'\\)/);
+  assert.match(html, /Установить обновление/);
+});
+
+test('safe updater stages the pinned archive, preserves user data and can roll back', () => {
+  assert.match(safeUpdater, /https:\/\/github\\.com\/dequintalegione-boop\/Buildbook\/archive\//);
+  assert.match(safeUpdater, /Expand-VerifiedArchive/);
+  assert.match(safeUpdater, /ExternalAttributes/);
+  assert.match(safeUpdater, /Buildbook-install/);
+  assert.match(safeUpdater, /backup-/);
+  assert.match(safeUpdater, /'\\/MIR'/);
+  assert.match(safeUpdater, /'\\/XD', '\\.git', 'node_modules', 'data', 'updates'/);
+  assert.match(safeUpdater, /'\\/XF', '\\.env', 'local-host\\.log'/);
+  assert.match(safeUpdater, /Выполняю откат к резервной копии/);
+  assert.match(safeUpdater, /Wait-BuildbookHost/);
 });
