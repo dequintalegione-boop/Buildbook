@@ -220,11 +220,11 @@ test('safe updater stages the pinned archive, preserves user data and can roll b
   assert.match(safeUpdater, /https:\/\/github\\.com\/dequintalegione-boop\/Buildbook\/archive\//);
   assert.match(safeUpdater, /Expand-VerifiedArchive/);
   assert.match(safeUpdater, /ExternalAttributes/);
-  assert.match(safeUpdater, /Buildbook-install/);
+  assert.ok(safeUpdater.includes('buildbook-install.json'));
   assert.match(safeUpdater, /backup-/);
-  assert.match(safeUpdater, /'\\/MIR'/);
-  assert.match(safeUpdater, /'\\/XD', '\\.git', 'node_modules', 'data', 'updates'/);
-  assert.match(safeUpdater, /'\\/XF', '\\.env', 'local-host\\.log'/);
+  assert.ok(safeUpdater.includes("'/MIR'"));
+  assert.ok(safeUpdater.includes("'/XD', '.git', 'node_modules', 'data', 'updates'"));
+  assert.ok(safeUpdater.includes("'/XF', '.env', 'local-host.log'"));
   assert.match(safeUpdater, /Выполняю откат к резервной копии/);
   assert.match(safeUpdater, /Wait-BuildbookHost/);
 });
