@@ -37,7 +37,7 @@ if (Test-Path -LiteralPath $settingsPath) {
 if (-not $installRoot) {
   Add-Type -AssemblyName System.Windows.Forms
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-  $dialog.Description = 'Выберите папку, внутри которой будет автоматически создана папка Buildbook. Например, при выборе D:\\Apps приложение установится в D:\\Apps\\Buildbook. Путь сохранится для следующих обновлений.'
+  $dialog.Description = 'Выберите папку, внутри которой будет автоматически создана папка Buildbook. Например, при выборе D:\Apps приложение установится в D:\Apps\Buildbook. Путь сохранится для следующих обновлений.'
   $dialog.ShowNewFolderButton = $true
   $defaultRoot = Join-Path $env:LOCALAPPDATA 'Programs'
   if (Test-Path -LiteralPath $defaultRoot) { $dialog.SelectedPath = $defaultRoot }
