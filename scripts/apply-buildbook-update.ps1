@@ -130,13 +130,6 @@ try {
   }
 
   Write-UpdateLog ('Подготовка обновления до ' + $CommitSha + '.')
-  $parentDeadline = (Get-Date).AddSeconds(120)
-  while ((Get-Date) -lt $parentDeadline) {
-    if (-not (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue)) { break }
-    Start-Sleep -Milliseconds 500
-  }
-  if (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue) { throw 'Локальный хост не завершился вовремя. Файлы приложения не изменялись.' }
-
   New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
   $archivePath = Join-Path $tempRoot 'buildbook.zip'
   $archiveUrl = 'https://github.com/dequintalegione-boop/Buildbook/archive/' + $CommitSha + '.zip'
@@ -148,14 +141,28 @@ try {
   $stageRoot = Join-Path $tempRoot 'stage'
   New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
   $sourceRoot = Expand-VerifiedArchive -ArchivePath $archivePath -Destination $stageRoot
-  foreach ($requiredPath in @('index.html', 'host\run-buildbook-local-host.mjs', 'scripts\start-buildbook-local-host.ps1', 'buildbook-install.json')) {
+  foreach ($requiredPath in @('index.html', 'host\run-buildbook-local-host.mjs', 'scripts\start-buildbook-local-host.ps1')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $requiredPath) -PathType Leaf)) { throw ('В архиве отсутствует обязательный файл: ' + $requiredPath) }
   }
-  $newMarker = Get-Content -LiteralPath (Join-Path $sourceRoot 'buildbook-install.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($newMarker.schemaVersion -ne 1 -or $newMarker.repository -ne 'dequintalegione-boop/Buildbook' -or
-    $newMarker.branch -ne 'main' -or ([string]$newMarker.commit).ToLowerInvariant() -ne $CommitSha) {
-    throw 'Содержимое архива не соответствует подтверждённому коммиту GitHub.'
+  $archiveSha = $rootName.Substring('Buildbook-'.Length)
+  if (-not $CommitSha.StartsWith($archiveSha, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Архив GitHub не соответствует запрошенному коммиту.'
   }
+  $newMarker = @{
+    schemaVersion = 1
+    repository = 'dequintalegione-boop/Buildbook'
+    branch = 'main'
+    commit = $CommitSha
+    installedAt = [DateTime]::UtcNow.ToString('o')
+  } | ConvertTo-Json
+  [System.IO.File]::WriteAllText((Join-Path $sourceRoot 'buildbook-install.json'), $newMarker, (New-Object System.Text.UTF8Encoding($false)))
+
+  $parentDeadline = (Get-Date).AddSeconds(120)
+  while ((Get-Date) -lt $parentDeadline) {
+    if (-not (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue)) { break }
+    Start-Sleep -Milliseconds 500
+  }
+  if (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue) { throw 'Локальный хост не завершился вовремя. Файлы приложения не изменялись.' }
 
   Write-UpdateLog 'Архив проверен. Создаю резервную копию файлов приложения.'
   Invoke-Robocopy -Source $InstallRoot -Destination $backupRoot -ExtraArguments @('/E', '/COPY:DAT', '/DCOPY:DAT', '/R:2', '/W:1', '/XD', '.git', 'node_modules', 'data', 'updates', '/XF', '.env', 'local-host.log', '*.tmp')
@@ -184,8 +191,14 @@ try {
       if (Wait-BuildbookHost -TimeoutSeconds 60) { Write-UpdateLog 'Откат завершён. Предыдущая версия Buildbook снова запущена.' }
       else { Write-UpdateLog 'КРИТИЧЕСКАЯ ОШИБКА: откат выполнен, но предыдущий локальный хост не подтвердил запуск.' }
     } catch { Write-UpdateLog ('КРИТИЧЕСКАЯ ОШИБКА ОТКАТА: ' + $_.Exception.Message) }
-  } elseif ($backupCreated) {
-    Write-UpdateLog 'Установка не начиналась; исходные файлы оставлены без изменений.'
+  } elseif (-not (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue)) {
+    if ($backupCreated) { Write-UpdateLog 'Установка файлов не начиналась; исходные файлы оставлены без изменений.' }
+    try {
+      Write-UpdateLog 'Возобновляю исходный локальный хост после отменённого обновления.'
+      Start-BuildbookHost
+      if (Wait-BuildbookHost -TimeoutSeconds 60) { Write-UpdateLog 'Исходная версия Buildbook снова запущена.' }
+      else { Write-UpdateLog 'ОШИБКА: исходный локальный хост не подтвердил повторный запуск.' }
+    } catch { Write-UpdateLog ('ОШИБКА ПОВТОРНОГО ЗАПУСКА: ' + $_.Exception.Message) }
   }
   try {
     Add-Type -AssemblyName System.Windows.Forms
