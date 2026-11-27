@@ -56,6 +56,10 @@ async function launchWindowsBuildbookUpdate({ appRoot, commitSha, onError }) {
     windowsHide: true,
     stdio: 'ignore',
   });
+  await new Promise((resolveSpawn, rejectSpawn) => {
+    child.once('spawn', resolveSpawn);
+    child.once('error', rejectSpawn);
+  });
   child.once('error', error => {
     try { onError(error, { phase: 'update-launch' }); } catch {}
   });
