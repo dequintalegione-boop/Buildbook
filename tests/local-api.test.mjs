@@ -246,6 +246,55 @@ test('writes profile and returns incremented revision', async (t) => {
   });
 });
 
+test('replaces a populated local profile only when its exact backup and revision are confirmed', async t => {
+  const { base, request } = await fixture(t);
+  const put = async (profile, expectedRevision) => request(base + '/api/profile', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ expectedRevision, profile }),
+  });
+  const original = { state: { marker: 'demo' }, logs: [{ id: 'demo-log' }], photos: { demo: [] } };
+  assert.equal((await put(original, 0)).status, 200);
+  const current = await (await request(base + '/api/profile')).json();
+  const backupSha256 = createHash('sha256').update(JSON.stringify(current.profile), 'utf8').digest('hex');
+  const payload = { state: { marker: 'real-profile' }, logs: [{ id: 'real-log' }], photos: { real: [] } };
+  const serialized = JSON.stringify(payload);
+  const sha256 = createHash('sha256').update(serialized, 'utf8').digest('hex');
+  const envelope = {
+    format: 'buildbook-profile-export',
+    version: 1,
+    sourceSchemaVersion: 5,
+    exportedAt: '2026-11-28T00:00:00.000Z',
+    payload,
+    sha256,
+  };
+  const replace = body => request(base + '/api/profile/replace', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const mismatch = await replace({ expectedRevision: current.revision, backupSha256: '0'.repeat(64), envelope });
+  assert.equal(mismatch.status, 409);
+  assert.equal((await mismatch.json()).code, 'BUILD_BOOK_REPLACE_BACKUP_MISMATCH');
+  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, original);
+
+  const response = await replace({ expectedRevision: current.revision, backupSha256, envelope });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    revision: current.revision + 1,
+    imported: true,
+    replaced: true,
+    verified: true,
+  });
+  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, payload);
+
+  const stale = await replace({ expectedRevision: current.revision, backupSha256, envelope });
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, 'BUILD_BOOK_STORAGE_CONFLICT');
+  assert.deepEqual((await (await request(base + '/api/profile')).json()).profile, payload);
+});
+
 test('reports stale revision as HTTP 409 without replacing data', async (t) => {
   const { base, request } = await fixture(t);
   const put = profile => request(`${base}/api/profile`, {
