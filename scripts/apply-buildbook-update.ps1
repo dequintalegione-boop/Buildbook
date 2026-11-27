@@ -6,7 +6,9 @@
   [ValidateRange(1, 2147483647)]
   [int]$ParentProcessId,
   [Parameter(Mandatory = $true)]
-  [string]$InstallRoot
+  [string]$InstallRoot,
+  [Parameter(Mandatory = $true)]
+  [string]$ReadyFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -167,6 +169,9 @@ try {
     installedAt = [DateTime]::UtcNow.ToString('o')
   } | ConvertTo-Json
   [System.IO.File]::WriteAllText((Join-Path $sourceRoot 'buildbook-install.json'), $newMarker, (New-Object System.Text.UTF8Encoding($false)))
+  if (-not [System.IO.Path]::IsPathRooted($ReadyFile)) { throw 'Путь подтверждения запуска обновления должен быть абсолютным.' }
+  [System.IO.File]::WriteAllText($ReadyFile, 'ready', (New-Object System.Text.UTF8Encoding($false)))
+  Write-UpdateLog 'Архив полностью подготовлен. Ожидаю штатную остановку локального хоста.'
 
   $parentDeadline = (Get-Date).AddSeconds(120)
   while ((Get-Date) -lt $parentDeadline) {
