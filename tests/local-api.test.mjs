@@ -1320,16 +1320,28 @@ test('update download redirects only to the pinned official archive after a fres
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
-test('update download refuses when the latest version is already installed or installation is untracked', async t => {
-  for (const status of [
-    { repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: true, updateAvailable: false, latestCommit: 'a'.repeat(40) },
-    { repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: false, updateAvailable: null, latestCommit: 'a'.repeat(40) },
-  ]) {
-    const { base, request } = await fixture(t, { getUpdateStatus: async () => status });
-    const response = await request(base + '/api/updates/download', { redirect: 'manual' });
-    assert.equal(response.status, 409);
-    assert.match((await response.json()).error, /нет подтверждённого обновления/);
-  }
+test('update download refuses when the latest version is already installed', async t => {
+  const status = { repository: 'dequintalegione-boop/Buildbook', branch: 'main', installationTracked: true, updateAvailable: false, latestCommit: 'a'.repeat(40) };
+  const { base, request } = await fixture(t, { getUpdateStatus: async () => status });
+  const response = await request(base + '/api/updates/download', { redirect: 'manual' });
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /нет подтверждённого обновления/);
+});
+
+test('untracked older installations can download the latest official archive without claiming an update comparison', async t => {
+  const sha = 'd'.repeat(40);
+  const { base, request } = await fixture(t, {
+    getUpdateStatus: async () => ({
+      repository: 'dequintalegione-boop/Buildbook',
+      branch: 'main',
+      installationTracked: false,
+      updateAvailable: null,
+      latestCommit: sha,
+    }),
+  });
+  const response = await request(base + '/api/updates/download', { redirect: 'manual' });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('location'), 'https://github.com/dequintalegione-boop/Buildbook/archive/' + sha + '.zip');
 });
 
 test('update download requires an authenticated browser session', async t => {
