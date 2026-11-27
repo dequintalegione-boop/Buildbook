@@ -55,13 +55,16 @@ if (($installerSource -notmatch 'OpenJS\.NodeJS\.LTS') -or ($installerSource -no
   throw 'The Windows installer must offer consent-based winget setup and retain the official Node.js fallback.'
 }
 
-# A first-time install always places the project in its own Buildbook folder.
-# Selecting an already named Buildbook folder must not create Buildbook\\Buildbook.
-if (-not $installerSource.Contains('$selectedRoot = [System.IO.Path]::GetFullPath($dialog.SelectedPath)') -or
+# Every installer run must show the destination picker, default to the prior
+# install's parent when available, and preserve the existing host .env on moves.
+if (-not $installerSource.Contains('$dialog.ShowDialog()') -or
+    -not $installerSource.Contains('$previousInstallRoot = $installRoot') -or
+    -not $installerSource.Contains('$dialog.SelectedPath = $defaultRoot') -or
     -not $installerSource.Contains("Join-Path " + '$selectedRoot' + " 'Buildbook'") -or
     -not $installerSource.Contains("GetFileName(" + '$selectedRoot') -or
-    -not $installerSource.Contains("-ieq 'Buildbook'")) {
-  throw 'The Windows installer must create/use a dedicated Buildbook directory inside the selected parent folder.'
+    -not $installerSource.Contains("-ieq 'Buildbook'") -or
+    -not $installerSource.Contains("Copy-Item -LiteralPath (Join-Path " + '$previousInstallRoot' + " '.env')")) {
+  throw 'The Windows installer must ask for the destination every time and preserve host configuration when moving the installation.'
 }
 
 if (-not $installerSource.Contains("https://api.github.com/repos/dequintalegione-boop/Buildbook/commits/main") -or
