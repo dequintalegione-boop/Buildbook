@@ -55,8 +55,8 @@ It must not contain a caller-selected destination path, host metadata, Telegram 
 1. [Implemented] Version-1 transfer-envelope validation and authenticated host import; schema 5, SHA-256, empty-target requirement, and revision compare-and-swap.
 2. [Implemented] Separate authenticated recovery endpoint for populated targets; it verifies the exported target backup digest and expected revision before replacement, then verifies the read-back profile.
 3. [Implemented] Separate browser backup/export flow and explicit user confirmations before transfer.
-3. [Implemented] Import preview, confirmation, host-side import, and browser read-back/checksum verification. The source IndexedDB profile is not modified.
+4. [Implemented] Import preview, confirmation, host-side import, and browser read-back/checksum verification. The source IndexedDB profile is not modified.
 5. [Implemented] The UI offers a separate storage-mode switch only after successful verification. The existing IndexedDB profile remains untouched as a fallback/backup; the standalone build continues to use IndexedDB.
-5. [Documented] Recovery behavior for conflicts, expired sessions, and failed verification is described in the local API and setup guides. Confirm the Windows recovery procedure on a real Windows machine before release.
-6. [Pending] End-to-end verification on Windows with a real local profile and Telegram bot, including restart/recovery scenarios.
-7. Tests have not been run in this work session. Run the relevant suites only after the user authorizes testing.
+6. [Documented] Recovery behavior for conflicts, expired sessions, and failed verification is described in the local API and setup guides. Confirm the Windows recovery procedure on a real Windows machine before release.
+7. [Pending] End-to-end verification on Windows with a real local profile and Telegram bot, including restart/recovery scenarios.
+8. Tests have not been run in this work session. Run the relevant suites only after the user authorizes testing.
