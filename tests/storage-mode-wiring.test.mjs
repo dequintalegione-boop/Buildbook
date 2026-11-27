@@ -204,7 +204,7 @@ test('update controls renew an expired local-host session and install updates wi
   assert.ok(start >= 0 && end > start);
   const updater = html.slice(start, end);
   assert.ok(updater.includes("const statusUrl='/api/updates/status'"));
-  assert.ok(updater.includes("cache: 'no-store'") || html.includes("cache: 'no-store'"));
+  assert.ok(html.includes("cache:'no-store'"));
   assert.ok(updater.includes('localTelegramRequest(statusUrl'));
   assert.ok(updater.includes('if(error.status!==401)throw error'));
   assert.ok(updater.includes("localTelegramRequest('/api/session/bootstrap-local'"));
