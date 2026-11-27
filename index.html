@@ -4223,11 +4223,14 @@ async function waitForBuildbookRestart(expectedCommit){
    const page=await fetch(location.origin+'/',{credentials:'include',cache:'no-store'});
    if(!page.ok){sawHostStop=true;continue}
    if(!sawHostStop)continue;
-   const status=await getBuildbookUpdateStatus();
-   if(status.installedCommit===expectedCommit){
+   let status=null;
+   try{status=await getBuildbookUpdateStatus()}catch(error){}
+   if(status&&status.installedCommit===expectedCommit){
     show('Buildbook успешно обновлён до '+expectedCommit.slice(0,12)+'. Очищаем старый кеш интерфейса и перезагружаем страницу…');
-   }else{
+   }else if(status){
     show('Новая версия не запустилась. Buildbook восстановил предыдущую версию из резервной копии. Подробности: %LOCALAPPDATA%\\Buildbook\\updates\\update.log');
+   }else{
+    show('Локальный хост снова запущен. Не удалось повторно проверить SHA из-за отсутствия связи с GitHub; перезагружаем интерфейс, а версию можно проверить позже.');
    }
    if('caches' in window){
     try{
@@ -4240,6 +4243,13 @@ async function waitForBuildbookRestart(expectedCommit){
   }catch(error){
    sawHostStop=true;
   }
+ }
+ if(!sawHostStop){
+  try{
+   const status=await getBuildbookUpdateStatus();
+   show('Локальный хост не перезапускался. Текущая версия: '+(status.installedCommit||'не определена')+'. Проверьте журнал обновления и повторите попытку позже.');
+   return;
+  }catch(error){}
  }
  show('Обновление ещё выполняется, но локальный хост пока не ответил. Не запускайте второе обновление. Журнал: %LOCALAPPDATA%\\Buildbook\\updates\\update.log');
 }
