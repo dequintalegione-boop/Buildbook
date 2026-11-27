@@ -256,7 +256,8 @@ test('replaces a populated local profile only when its exact backup and revision
   const original = { state: { marker: 'demo' }, logs: [{ id: 'demo-log' }], photos: { demo: [] }, hostMetadata: { keep: true } };
   assert.equal((await put(original, 0)).status, 200);
   const current = await (await request(base + '/api/profile')).json();
-  const backupPayload = { state: current.profile.state, logs: current.profile.logs, photos: current.profile.photos };\n  const backupSha256 = createHash('sha256').update(JSON.stringify(backupPayload), 'utf8').digest('hex');
+  const backupPayload = { state: current.profile.state, logs: current.profile.logs, photos: current.profile.photos };
+  const backupSha256 = createHash('sha256').update(JSON.stringify(backupPayload), 'utf8').digest('hex');
   const payload = { state: { marker: 'real-profile' }, logs: [{ id: 'real-log' }], photos: { real: [] } };
   const serialized = JSON.stringify(payload);
   const sha256 = createHash('sha256').update(serialized, 'utf8').digest('hex');
